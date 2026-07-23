@@ -9,8 +9,9 @@ services:
     restart: unless-stopped
     ports:
       # Mapeamos el puerto interno al mismo puerto externo hacia el host (NPM)
-      - "3000:3000"
+      - "3002:3002"
     environment:
+      - PORT=3002
       # Variables inyectadas; sobrescriben al .env si es necesario.
       # REGLA ESTRICTA: La URL de conexión apunta al nombre del contenedor (db)
       - DATABASE_URL=mysql://${DB_USER:-tomassiuser}:${DB_PASS:-secret}@db:3306/${DB_NAME:-tomassidb}
