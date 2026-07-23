@@ -12,9 +12,6 @@ services:
       - "3002:3002"
     environment:
       - PORT=3002
-      # Variables inyectadas; sobrescriben al .env si es necesario.
-      # REGLA ESTRICTA: La URL de conexión apunta al nombre del contenedor (db)
-      - DATABASE_URL=mysql://${DB_USER:-tomassiuser}:${DB_PASS:-secret}@db:3306/${DB_NAME:-tomassidb}
       - NODE_ENV=production
     env_file:
       - .env
@@ -29,17 +26,17 @@ services:
     container_name: db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-root}
-      MYSQL_DATABASE: ${DB_NAME:-tomassidb}
-      MYSQL_USER: ${DB_USER:-tomassiuser}
-      MYSQL_PASSWORD: ${DB_PASS:-secret}
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: sanudb
+      MYSQL_USER: sanuuser
+      MYSQL_PASSWORD: password_seguro
     volumes:
       # Persistencia de los datos de la base de datos
       - db_data:/var/lib/mysql
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -prootpassword"]
       interval: 10s
       timeout: 5s
       retries: 5
