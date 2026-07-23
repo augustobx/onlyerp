@@ -7,6 +7,7 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   // Esto permite que el JavaScript y los Server Actions funcionen a través de ngrok
   allowedDevOrigins: [
     'fernlike-acclimatisable-magaly.ngrok-free.dev',
