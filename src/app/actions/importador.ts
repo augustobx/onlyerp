@@ -72,9 +72,10 @@ export async function importarProductosExcel(formData: FormData) {
             let rawPrecioStr = String(row[2] ?? "0").replace(",", ".");
 
             let rawPrecio = parseFloat(rawPrecioStr || "0");
+            let alicuotaIva = 21;
             
-            if (tipoPrecio === "PRECIO_FINAL" && !isNaN(rawPrecio)) {
-                rawPrecio = parseFloat((rawPrecio / 1.21).toFixed(2));
+            if (tipoPrecio === "PRECIO_FINAL") {
+                alicuotaIva = 0;
             }
 
             // Validación mínima de la fila
@@ -119,6 +120,7 @@ export async function importarProductosExcel(formData: FormData) {
                     update: {
                         nombre_producto: rawNombre,
                         precio_costo: rawPrecio,
+                        alicuota_iva: alicuotaIva,
                         proveedorId: proveedorObj.id,
                         marcaId: marcaObj.id,
                         categoriaId: categoriaObj.id,
@@ -128,7 +130,7 @@ export async function importarProductosExcel(formData: FormData) {
                         codigo_barras: "0",
                         nombre_producto: rawNombre,
                         precio_costo: rawPrecio,
-                        alicuota_iva: 21,
+                        alicuota_iva: alicuotaIva,
                         tipo_medicion: "UNIDAD",
                         moneda: "ARS",
                         proveedorId: proveedorObj.id,
