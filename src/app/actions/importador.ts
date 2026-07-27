@@ -46,19 +46,21 @@ export async function importarProductosExcel(formData: FormData) {
                 continue;
             }
 
-            const rawCodigo = String(row[0] || "").trim();
-            const rawNombre = String(row[1] || "").trim();
-            let rawPrecio = parseFloat(String(row[2] || "0").replace(",", "."));
+            const rawCodigo = String(row[0] ?? "").trim();
+            const rawNombre = String(row[1] ?? "").trim();
+            let rawPrecioStr = String(row[2] ?? "0").replace(",", ".");
+            let rawPrecio = parseFloat(rawPrecioStr || "0");
             
             if (tipoPrecio === "PRECIO_FINAL" && !isNaN(rawPrecio)) {
                 rawPrecio = parseFloat((rawPrecio / 1.21).toFixed(2));
             }
 
-            const rawStock = parseFloat(String(row[3] || "0").replace(",", "."));
-            const rawMarcaName = String(row[4] || "GENÉRICO").trim().toUpperCase();
-            const rawCategoriaName = String(row[5] || "SIN CATEGORÍA").trim().toUpperCase();
+            const rawStockStr = String(row[3] ?? "0").replace(",", ".");
+            const rawStock = parseFloat(rawStockStr || "0");
+            const rawMarcaName = String(row[4] ?? "GENÉRICO").trim().toUpperCase() || "GENÉRICO";
+            const rawCategoriaName = String(row[5] ?? "SIN CATEGORÍA").trim().toUpperCase() || "SIN CATEGORÍA";
             // Columna G (Índice 6) se ignora
-            const rawProveedorName = String(row[7] || "PROVEEDOR GENÉRICO").trim().toUpperCase();
+            const rawProveedorName = String(row[7] ?? "PROVEEDOR GENÉRICO").trim().toUpperCase() || "PROVEEDOR GENÉRICO";
 
             // Validación mínima de la fila
             if (!rawCodigo || !rawNombre || isNaN(rawPrecio)) {
@@ -219,13 +221,13 @@ export async function importarClientesExcel(formData: FormData) {
                 continue;
             }
 
-            const rawNombre = String(row[0] || "").trim();
-            const rawTipo = String(row[1] || "").trim().toLowerCase();
-            const rawCUIT = String(row[2] || "").trim();
-            const rawDNI = String(row[3] || "").trim();
-            const rawDireccion = String(row[4] || "").trim();
+            const rawNombre = String(row[0] ?? "").trim();
+            const rawTipo = String(row[1] ?? "").trim().toLowerCase();
+            const rawCUIT = String(row[2] ?? "").trim();
+            const rawDNI = String(row[3] ?? "").trim();
+            const rawDireccion = String(row[4] ?? "").trim();
             // Col F, G ignoradas (Índices 5, 6)
-            const rawTelefono = String(row[7] || "").trim();
+            const rawTelefono = String(row[7] ?? "").trim();
 
             let condicionIvaParseada = "Consumidor Final";
             if (rawTipo.includes("inscripto")) {
