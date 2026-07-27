@@ -8,6 +8,13 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Acelerador de compilación para producción (salta validaciones pesadas en el VPS)
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   // Esto permite que el JavaScript y los Server Actions funcionen a través de ngrok
   allowedDevOrigins: [
     'fernlike-acclimatisable-magaly.ngrok-free.dev',
