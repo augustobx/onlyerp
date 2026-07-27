@@ -180,7 +180,7 @@ export default function ImportadorPage() {
 
                                 <div className="space-y-2 border-t pt-4">
                                     <Label className="font-bold text-slate-700">3. ¿Qué tipo de precio tiene el Excel?</Label>
-                                    <Select value={tipoPrecio} onValueChange={(val) => setTipoPrecio(val)}>
+                                    <Select value={tipoPrecio} onValueChange={(val) => setTipoPrecio(val as string)}>
                                         <SelectTrigger className="h-11" disabled={isPending}>
                                             <SelectValue placeholder="Seleccioná el tipo de precio..." />
                                         </SelectTrigger>
