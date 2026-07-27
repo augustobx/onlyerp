@@ -31,6 +31,16 @@ export async function importarProductosExcel(formData: FormData) {
             return { success: false, error: "El archivo parece estar vacío o no tiene registros." };
         }
 
+        // Función para generar un código determinista
+        const generarCodigoInteligente = (nombre: string, categoria: string, proveedor: string) => {
+            const text = `${nombre.trim().toUpperCase()}|${categoria.trim().toUpperCase()}|${proveedor.trim().toUpperCase()}`;
+            let hash = 5381;
+            for (let i = 0; i < text.length; i++) {
+                hash = (hash * 33) ^ text.charCodeAt(i);
+            }
+            return "AUT-" + (hash >>> 0).toString(16).toUpperCase().padStart(8, "0");
+        };
+
         let fallas = 0;
         let procesados = 0;
         let saltados = 0;
@@ -46,21 +56,26 @@ export async function importarProductosExcel(formData: FormData) {
                 continue;
             }
 
-            const rawCodigo = String(row[0] ?? "").trim();
             const rawNombre = String(row[1] ?? "").trim();
-            let rawPrecioStr = String(row[2] ?? "0").replace(",", ".");
-            let rawPrecio = parseFloat(rawPrecioStr || "0");
-            
-            if (tipoPrecio === "PRECIO_FINAL" && !isNaN(rawPrecio)) {
-                rawPrecio = parseFloat((rawPrecio / 1.21).toFixed(2));
-            }
-
             const rawStockStr = String(row[3] ?? "0").replace(",", ".");
             const rawStock = parseFloat(rawStockStr || "0");
             const rawMarcaName = String(row[4] ?? "GENÉRICO").trim().toUpperCase() || "GENÉRICO";
             const rawCategoriaName = String(row[5] ?? "SIN CATEGORÍA").trim().toUpperCase() || "SIN CATEGORÍA";
             // Columna G (Índice 6) se ignora
             const rawProveedorName = String(row[7] ?? "PROVEEDOR GENÉRICO").trim().toUpperCase() || "PROVEEDOR GENÉRICO";
+
+            let rawCodigo = String(row[0] ?? "").trim();
+            if (!rawCodigo && rawNombre) {
+                rawCodigo = generarCodigoInteligente(rawNombre, rawCategoriaName, rawProveedorName);
+            }
+
+            let rawPrecioStr = String(row[2] ?? "0").replace(",", ".");
+
+            let rawPrecio = parseFloat(rawPrecioStr || "0");
+            
+            if (tipoPrecio === "PRECIO_FINAL" && !isNaN(rawPrecio)) {
+                rawPrecio = parseFloat((rawPrecio / 1.21).toFixed(2));
+            }
 
             // Validación mínima de la fila
             if (!rawCodigo || !rawNombre || isNaN(rawPrecio)) {
