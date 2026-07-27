@@ -64,6 +64,7 @@ export async function importarProductosExcel(formData: FormData) {
 
             // Validación mínima de la fila
             if (!rawCodigo || !rawNombre || isNaN(rawPrecio)) {
+                console.error(`Fila ${i} falló validación - Código: "${rawCodigo}", Nombre: "${rawNombre}", Precio: "${rawPrecioStr}" (parseado como ${rawPrecio})`);
                 fallas++;
                 continue;
             }
