@@ -40,7 +40,8 @@ export async function importarProductosExcel(formData: FormData) {
             const row = rows[i];
             
             // Si la fila está vacía, la ignoramos.
-            if (!row || row.length === 0 || !row[0]) {
+            const isEmpty = !row || row.length === 0 || row.every((cell: any) => cell === null || cell === undefined || String(cell).trim() === "");
+            if (isEmpty) {
                 saltados++;
                 continue;
             }
@@ -212,7 +213,8 @@ export async function importarClientesExcel(formData: FormData) {
         for (let i = 1; i < rows.length; i++) {
             const row = rows[i];
             
-            if (!row || row.length === 0 || !row[0]) {
+            const isEmpty = !row || row.length === 0 || row.every((cell: any) => cell === null || cell === undefined || String(cell).trim() === "");
+            if (isEmpty) {
                 saltados++;
                 continue;
             }
