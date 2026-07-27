@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { buscarClientes, buscarProductos, obtenerListasPrecio, obtenerMarcas, obtenerCategorias, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
 import { registrarPedidoPWA, obtenerPedidosVendedor, accionarPedidoVendedor } from "@/app/actions/pedidos";
 import { registrarClientePWA } from "@/app/actions/clientes";
-import { getClientSession } from "@/app/actions/auth";
+import { getClientSession, logout } from "@/app/actions/auth";
 import { getClientesDeudores, getFichaCuentaCorriente, registrarPagoCC } from "@/app/actions/cuentas-corrientes";
 import { guardarOffline, obtenerTodosOffline, eliminarOffline, STORE_PEDIDOS, STORE_CLIENTES } from "@/lib/offline-db";
 import { redondearPrecio, calcularPrecioConCascada } from "@/lib/utils";
@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import {
     Trash2, Search, ShoppingCart, User, FileText, Ban, PackageSearch,
     Plus, Minus, X, ChevronRight, Bookmark, Tag, Percent, History, Edit,
-    CheckCircle2, RefreshCw, UserPlus, CloudOff, Wifi, Eye, Loader2
+    CheckCircle2, RefreshCw, UserPlus, CloudOff, Wifi, Eye, Loader2, LogOut
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -445,13 +445,18 @@ export default function PwaVendedor() {
                             {tabActiva === 'HISTORIAL' && <><History className="mr-2 h-6 w-6 text-indigo-600" /> Mis Pedidos</>}
                             {tabActiva === 'COBRANZAS' && <><Bookmark className="mr-2 h-6 w-6 text-indigo-600" /> Cobranzas</>}
                         </h1>
-                        <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isPending} className="bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 font-bold rounded-xl shadow-sm">
+                        <div className="flex gap-2 items-center">
+                            <form action={logout}>
+                                <Button type="submit" variant="outline" size="sm" className="bg-red-50 text-red-600 border-red-200 hover:bg-red-100 font-bold rounded-xl shadow-sm px-2">
+                                    <LogOut className="h-4 w-4" />
+                                </Button>
+                            </form>
+                            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isPending} className="bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 font-bold rounded-xl shadow-sm px-2">
                                 <RefreshCw className={`h-4 w-4 ${isPending ? 'animate-spin' : ''}`} />
                             </Button>
                             {tabActiva === 'NUEVO' && (
-                                <Button onClick={() => setModalCliente(true)} className="bg-indigo-600 text-white font-bold rounded-xl shadow-sm h-10 px-4">
-                                    <UserPlus className="h-4 w-4 mr-2" /> Nuevo Cliente
+                                <Button onClick={() => setModalCliente(true)} className="bg-indigo-600 text-white font-bold rounded-xl shadow-sm h-10 px-4 whitespace-nowrap">
+                                    <UserPlus className="h-4 w-4 mr-1 md:mr-2" /> <span className="hidden sm:inline">Nuevo Cliente</span>
                                 </Button>
                             )}
                         </div>
