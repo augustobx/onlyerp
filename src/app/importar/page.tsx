@@ -25,6 +25,7 @@ export default function ImportadorPage() {
     // Estado Tab Productos
     const [depositoSeleccionado, setDepositoSeleccionado] = useState("");
     const [listasSeleccionadas, setListasSeleccionadas] = useState<number[]>([]);
+    const [tipoPrecio, setTipoPrecio] = useState("COSTO_BASE");
     const [fileProductos, setFileProductos] = useState<File | null>(null);
 
     // Estado Tab Clientes
@@ -56,6 +57,7 @@ export default function ImportadorPage() {
         const formData = new FormData();
         formData.append("file", fileProductos);
         formData.append("depositoId", depositoSeleccionado);
+        formData.append("tipoPrecio", tipoPrecio);
         if (listasSeleccionadas.length > 0) {
             formData.append("listasIds", JSON.stringify(listasSeleccionadas));
         }
@@ -177,7 +179,23 @@ export default function ImportadorPage() {
                                 </div>
 
                                 <div className="space-y-2 border-t pt-4">
-                                    <Label className="font-bold text-slate-700">3. Archivo Excel (.csv, .xls, .xlsx)</Label>
+                                    <Label className="font-bold text-slate-700">3. ¿Qué tipo de precio tiene el Excel?</Label>
+                                    <Select value={tipoPrecio} onValueChange={(val) => setTipoPrecio(val)}>
+                                        <SelectTrigger className="h-11" disabled={isPending}>
+                                            <SelectValue placeholder="Seleccioná el tipo de precio..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="COSTO_BASE">Costo Base (Sin IVA)</SelectItem>
+                                            <SelectItem value="PRECIO_FINAL">Precio Final (Con IVA 21% incluido)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-slate-500">
+                                        Si elegís "Precio Final", el sistema deducirá automáticamente el 21% de IVA para guardar el Costo Base real.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2 border-t pt-4">
+                                    <Label className="font-bold text-slate-700">4. Archivo Excel (.csv, .xls, .xlsx)</Label>
                                     <Input 
                                         id="input-file-productos" 
                                         type="file" 

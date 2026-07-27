@@ -9,6 +9,7 @@ export async function importarProductosExcel(formData: FormData) {
         const file = formData.get("file") as File;
         const depositoId = Number(formData.get("depositoId"));
         const listasIds: number[] = formData.get("listasIds") ? JSON.parse(formData.get("listasIds") as string) : [];
+        const tipoPrecio = formData.get("tipoPrecio") as string || "COSTO_BASE";
 
         if (!file || !depositoId) {
             return { success: false, error: "Falta proporcionar el archivo o el depósito de destino." };
@@ -46,7 +47,12 @@ export async function importarProductosExcel(formData: FormData) {
 
             const rawCodigo = String(row[0] || "").trim();
             const rawNombre = String(row[1] || "").trim();
-            const rawPrecio = parseFloat(String(row[2] || "0").replace(",", "."));
+            let rawPrecio = parseFloat(String(row[2] || "0").replace(",", "."));
+            
+            if (tipoPrecio === "PRECIO_FINAL" && !isNaN(rawPrecio)) {
+                rawPrecio = parseFloat((rawPrecio / 1.21).toFixed(2));
+            }
+
             const rawStock = parseFloat(String(row[3] || "0").replace(",", "."));
             const rawMarcaName = String(row[4] || "GENÉRICO").trim().toUpperCase();
             const rawCategoriaName = String(row[5] || "SIN CATEGORÍA").trim().toUpperCase();
