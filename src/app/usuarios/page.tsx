@@ -286,6 +286,7 @@ export default function GestionUsuariosPage() {
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
+                                                    <SelectItem value="ADMIN">⭐ Administrador (Acceso Total)</SelectItem>
                                                     <SelectItem value="CAJERO">🏪 Cajero (Acceso al ERP)</SelectItem>
                                                     <SelectItem value="VENDEDOR">📱 Vendedor (Solo PWA)</SelectItem>
                                                 </SelectContent>
@@ -293,7 +294,9 @@ export default function GestionUsuariosPage() {
                                             <p className="text-[10px] text-slate-500 leading-tight">
                                                 {rolSeleccionado === 'VENDEDOR'
                                                     ? 'El vendedor solo accederá a la PWA de pedidos en calle. No verá el sistema ERP.'
-                                                    : 'El cajero accede al sistema ERP completo con los permisos que elijas.'}
+                                                    : rolSeleccionado === 'ADMIN'
+                                                        ? 'El administrador tiene acceso total e irrestricto a todos los módulos.'
+                                                        : 'El cajero accede al sistema ERP completo con los permisos que elijas.'}
                                             </p>
                                         </div>
                                     )}
@@ -325,7 +328,7 @@ export default function GestionUsuariosPage() {
                                 <div className="w-full md:w-1/2">
                                     <h4 className="font-bold text-xs uppercase text-slate-400 tracking-wider mb-4">Permisos y Accesos</h4>
 
-                                    {usuarioEditando?.rol === "ADMIN" || usuarios.length === 0 ? (
+                                    {usuarioEditando?.rol === "ADMIN" || usuarios.length === 0 || rolSeleccionado === "ADMIN" ? (
                                         <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-6 text-center">
                                             <ShieldCheck className="h-12 w-12 text-slate-300 mb-2" />
                                             <p className="font-bold text-slate-700">Modo Dueño</p>

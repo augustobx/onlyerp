@@ -35,8 +35,8 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
                 permisos: permisosJSON,
                 sucursalId: sucursalIdStr
             };
-            // Si se envía un rol y el usuario no es ADMIN, actualizar
-            if (rolForm && rolForm !== 'ADMIN') {
+            // Si se envía un rol, actualizar
+            if (rolForm) {
                 dataUpdate.rol = rolForm;
             }
             if (password && password.trim() !== "") {
