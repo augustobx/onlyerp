@@ -55,5 +55,5 @@ USER nextjs
 # Exponemos únicamente el puerto interno requerido
 EXPOSE 3000
 
-# Script de inicio: Ejecutamos migraciones de BD (Prisma) y luego arrancamos la app (standalone server)
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+# Script de inicio: Sincronizamos la BD (Prisma) y luego arrancamos la app (standalone server)
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node server.js"]

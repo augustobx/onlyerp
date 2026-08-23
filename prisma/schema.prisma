@@ -12,18 +12,19 @@ datasource db {
 // ==========================================
 
 model Proveedor {
-  id                 Int        @id @default(autoincrement())
-  nombre             String     @unique
+  id                 Int                    @id @default(autoincrement())
+  nombre             String                 @unique
   cuit               String?
   telefono           String?
   email              String?
   direccion          String?
   notas              String?
-  activo             Boolean    @default(true)
-  aumento_porcentaje Float      @default(0)
+  activo             Boolean                @default(true)
+  aumento_porcentaje Float                  @default(0)
   marcas             Marca[]
   productos          Producto[]
-  creadoEn           DateTime   @default(now())
+  listas_precios     ProveedorListaPrecio[]
+  creadoEn           DateTime               @default(now())
 }
 
 model Marca {
@@ -65,13 +66,14 @@ model Producto {
   codigo_barras        String                @default("0")
   fecha_ingreso        DateTime              @default(now())
   nombre_producto      String
+  imagen_url           String?               @db.Text
   proveedorId          Int
   proveedor            Proveedor             @relation(fields: [proveedorId], references: [id])
   marcaId              Int?
   marca                Marca?                @relation(fields: [marcaId], references: [id])
   categoriaId          Int?
   categoria            Categoria?            @relation(fields: [categoriaId], references: [id])
-  alicuota_iva         Float                 @default(21)
+  alicuota_iva         Float                 @default(0)
   precio_costo         Float
   descuento_proveedor  Float                 @default(0)
   stock_recomendado    Float                 @default(0)
@@ -80,6 +82,7 @@ model Producto {
   listas_precios       ProductoListaPrecio[]
   detalles_venta       DetalleVenta[]
   detalles_presupuesto DetallePresupuesto[]
+  combo_items          ComboItem[]
 
   stocks            StockUbicacion[]
   movimientos_stock MovimientoStock[]
@@ -111,17 +114,18 @@ enum Moneda {
 // ==========================================
 
 model ListaPrecio {
-  id               Int                   @id @default(autoincrement())
-  nombre           String                @unique
-  margen_defecto   Float
-  productos_listas ProductoListaPrecio[]
-  clientes_default Cliente[]             @relation("ClienteListaDefault")
-  clientes_listas  ClienteListaPrecio[]
-  ventas           Venta[]               @relation("VentaLista")
-  presupuestos     Presupuesto[]
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  Pedido           Pedido[]
+  id                 Int                    @id @default(autoincrement())
+  nombre             String                 @unique
+  margen_defecto     Float
+  productos_listas   ProductoListaPrecio[]
+  proveedores_listas ProveedorListaPrecio[]
+  clientes_default   Cliente[]              @relation("ClienteListaDefault")
+  clientes_listas    ClienteListaPrecio[]
+  ventas             Venta[]                @relation("VentaLista")
+  presupuestos       Presupuesto[]
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  Pedido             Pedido[]
 }
 
 model ProductoListaPrecio {
@@ -132,6 +136,17 @@ model ProductoListaPrecio {
   listaPrecio          ListaPrecio @relation(fields: [listaPrecioId], references: [id], onDelete: Cascade)
 
   @@id([productoId, listaPrecioId])
+}
+
+model ProveedorListaPrecio {
+  proveedorId             Int
+  listaPrecioId           Int
+  margen_personalizado    Float?
+  descuento_personalizado Float?
+  proveedor               Proveedor   @relation(fields: [proveedorId], references: [id], onDelete: Cascade)
+  listaPrecio             ListaPrecio @relation(fields: [listaPrecioId], references: [id], onDelete: Cascade)
+
+  @@id([proveedorId, listaPrecioId])
 }
 
 // ==========================================
@@ -486,6 +501,7 @@ model Usuario {
   movs_caja_creados MovimientoCaja[]
   movs_cc_creados   MovimientoCuentaCorriente[]
   Pedido            Pedido[]
+  pedidos_reparto   Pedido[]                    @relation("RepartidorPedidos")
 }
 
 // ==========================================
@@ -582,7 +598,7 @@ enum TipoMovimientoStock {
 }
 
 // ==========================================
-// MÓDULO DE PEDIDOS (PWA VENDEDORES)
+// MÓDULO DE PEDIDOS (PWA VENDEDORES & REPARTIDORES)
 // ==========================================
 
 model Pedido {
@@ -606,6 +622,13 @@ model Pedido {
   total            Float
   notas            String? @db.Text
 
+  // Despacho y Reparto
+  repartidorId            Int?
+  repartidor              Usuario?  @relation("RepartidorPedidos", fields: [repartidorId], references: [id])
+  fecha_entrega           DateTime?
+  motivo_no_entrega       String?   @db.Text
+  comprobante_entrega_url String?   @db.Text
+
   detalles DetallePedido[]
 
   createdAt DateTime @default(now())
@@ -626,17 +649,48 @@ model DetallePedido {
 
   cantidad             Float
   precio_unitario      Float
-  descuento_individual Float @default(0)
+  descuento_individual Float   @default(0)
   precio_final         Float
   subtotal             Float
+  combo_nombre         String?
 }
 
 enum EstadoPedido {
   PENDIENTE
   APROBADO
+  ARMADO
+  LISTO_ENTREGA
+  ENTREGADO
+  NO_ENTREGADO
   RECHAZADO
   FACTURADO
   CANCELADO
+}
+
+// ==========================================
+// MÓDULO DE COMBOS Y PROMOCIONES
+// ==========================================
+
+model Combo {
+  id                   Int         @id @default(autoincrement())
+  nombre               String
+  descripcion          String?     @db.Text
+  precio_combo         Float
+  descuento_porcentaje Float?
+  imagen_url           String?     @db.Text
+  activo               Boolean     @default(true)
+  items                ComboItem[]
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+}
+
+model ComboItem {
+  id         Int      @id @default(autoincrement())
+  comboId    Int
+  combo      Combo    @relation(fields: [comboId], references: [id], onDelete: Cascade)
+  productoId Int
+  producto   Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  cantidad   Float    @default(1)
 }
 
 // ==========================================

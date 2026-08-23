@@ -73,10 +73,11 @@ export async function crearProducto(data: ProductoFormValues) {
           codigo_barras: validatedData.codigo_barras || "0",
           fecha_ingreso: validatedData.fecha_ingreso,
           nombre_producto: validatedData.nombre_producto,
+          imagen_url: validatedData.imagen_url || null,
           proveedorId: validatedData.proveedorId,
           marcaId: validatedData.marcaId || null,
           categoriaId: validatedData.categoriaId || null,
-          alicuota_iva: validatedData.alicuota_iva,
+          alicuota_iva: validatedData.alicuota_iva || 0,
           precio_costo: validatedData.precio_costo,
           descuento_proveedor: validatedData.descuento_proveedor,
           stock_recomendado: validatedData.stock_recomendado,
@@ -157,10 +158,11 @@ export async function actualizarProducto(id: number, data: ProductoFormValues) {
           codigo_barras: validatedData.codigo_barras || "0",
           fecha_ingreso: validatedData.fecha_ingreso,
           nombre_producto: validatedData.nombre_producto,
+          imagen_url: validatedData.imagen_url !== undefined ? validatedData.imagen_url : undefined,
           proveedorId: validatedData.proveedorId,
           marcaId: validatedData.marcaId || null,
           categoriaId: validatedData.categoriaId || null,
-          alicuota_iva: validatedData.alicuota_iva,
+          alicuota_iva: validatedData.alicuota_iva || 0,
           precio_costo: validatedData.precio_costo,
           descuento_proveedor: validatedData.descuento_proveedor,
           stock_recomendado: validatedData.stock_recomendado,
@@ -188,7 +190,11 @@ export async function getProductos() {
   try {
     const productos = await prisma.producto.findMany({
       include: {
-        proveedor: true,
+        proveedor: {
+          include: {
+            listas_precios: true,
+          }
+        },
         marca: true,
         categoria: true,
         stocks: {
@@ -205,7 +211,7 @@ export async function getProductos() {
         },
         DetallePedido: {
           where: {
-            pedido: { estado: { in: ["PENDIENTE", "APROBADO"] } }
+            pedido: { estado: { in: ["PENDIENTE", "APROBADO", "ARMADO", "LISTO_ENTREGA"] } }
           },
           select: { cantidad: true }
         }
@@ -236,7 +242,11 @@ export async function getProductoById(id: number) {
     const producto = await prisma.producto.findUnique({
       where: { id },
       include: {
-        proveedor: true,
+        proveedor: {
+          include: {
+            listas_precios: true,
+          }
+        },
         marca: true,
         categoria: true,
         stocks: {
@@ -253,7 +263,7 @@ export async function getProductoById(id: number) {
         },
         DetallePedido: {
           where: {
-            pedido: { estado: { in: ["PENDIENTE", "APROBADO"] } }
+            pedido: { estado: { in: ["PENDIENTE", "APROBADO", "ARMADO", "LISTO_ENTREGA"] } }
           },
           select: { cantidad: true }
         }

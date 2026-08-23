@@ -7,7 +7,7 @@ import { jwtVerify } from "jose";
 import {
   LogOut, LayoutDashboard, ShoppingCart, Package,
   History, Users, Settings, BarChart4, Store, Wallet, ShieldCheck,
-  Building2, Tag, Contact, ClipboardList, Replace, HardDrive
+  Building2, Tag, Contact, ClipboardList, Replace, HardDrive, Truck, Sparkles
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import Link from "next/link";
@@ -144,6 +144,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     {(esAdmin || permisos.includes("VENTAS")) && (
                       <PedidosLink />
                     )}
+                    {(esAdmin || permisos.includes("VENTAS")) && (
+                      <Link href="/pedidos/armados" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors">
+                        <Truck className="h-4 w-4 opacity-70" /> Despacho y Repartos
+                      </Link>
+                    )}
                     {(esAdmin || permisos.includes("CAJA")) && (
                       <Link href="/caja" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
                         <Wallet className="h-4 w-4 opacity-70" /> Caja Diaria
@@ -171,6 +176,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                       <>
                         <Link href="/inventario" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
                           <Package className="h-4 w-4 opacity-70" /> Productos y Stock
+                        </Link>
+                        <Link href="/combos" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-amber-50 hover:text-amber-700 transition-colors">
+                          <Sparkles className="h-4 w-4 opacity-70 text-amber-500" /> Combos y Promos
                         </Link>
                         <Link href="/transferencias" className="flex items-center gap-3 px-3 py-2 text-sm font-semibold rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors">
                           <Replace className="h-4 w-4 opacity-70" /> Movimientos y Transf.

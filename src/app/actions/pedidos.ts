@@ -45,19 +45,27 @@ export async function registrarPedidoPWA(data: any) {
                     subtotal: data.subtotal,
                     descuento_global: data.descuento_global || 0,
                     total: data.total,
-                    notas: data.notas,
+                    notas: data.notas || null,
+                    fecha_entrega: data.fecha_entrega ? new Date(data.fecha_entrega) : null,
                     estado: 'PENDIENTE',
-                    metodo_pago: data.metodoPago,         // <--- NUEVO
-                    monto_abonado: data.montoAbonado, // <--- Estado inicial clave
+                    metodo_pago: data.metodoPago || "CUENTA_CORRIENTE",
+                    monto_abonado: data.montoAbonado || 0,
                     detalles: {
-                        create: data.carrito.map((item: any) => ({
-                            productoId: item.productoId,
-                            cantidad: item.cantidad,
-                            precio_unitario: item.precio_unitario,
-                            descuento_individual: item.descuento_individual || 0,
-                            precio_final: item.precio_final,
-                            subtotal: item.subtotal
-                        }))
+                        create: data.carrito.map((item: any) => {
+                            let comboNom = item.combo_nombre || null;
+                            if (!comboNom && item.nombre && item.nombre.includes("(Combo: ")) {
+                                comboNom = item.nombre.split("(Combo: ")[1]?.replace(")", "")?.trim() || null;
+                            }
+                            return {
+                                productoId: item.productoId,
+                                cantidad: item.cantidad,
+                                precio_unitario: item.precio_unitario,
+                                descuento_individual: item.descuento_individual || 0,
+                                precio_final: item.precio_final,
+                                subtotal: item.subtotal,
+                                combo_nombre: comboNom
+                            };
+                        })
                     }
                 }
             });
@@ -184,7 +192,7 @@ export async function obtenerTodosLosPedidos() {
 
 export async function cambiarEstadoPedidoAdmin(
     pedidoId: number,
-    nuevoEstado: 'APROBADO' | 'RECHAZADO' | 'FACTURADO',
+    nuevoEstado: 'APROBADO' | 'RECHAZADO' | 'FACTURADO' | 'ARMADO' | 'LISTO_ENTREGA' | 'ENTREGADO' | 'NO_ENTREGADO',
     tipoComprobante?: string // Solo para FACTURADO
 ) {
     try {
@@ -229,6 +237,50 @@ export async function cambiarEstadoPedidoAdmin(
                     data: {
                         estado: 'APROBADO',
                         notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> APROBADO. En preparación.`
+                    }
+                });
+                return { pedido: actualizado };
+            }
+
+            // ========== ARMADO / LISTO PARA ENTREGA ==========
+            if (nuevoEstado === 'ARMADO' || nuevoEstado === 'LISTO_ENTREGA') {
+                const fechaHora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+                const finalRepartidorId = pedido.repartidorId || pedido.usuarioId || null;
+                const finalFechaEntrega = pedido.fecha_entrega || new Date();
+                const actualizado = await tx.pedido.update({
+                    where: { id: pedidoId },
+                    data: {
+                        estado: nuevoEstado as any,
+                        repartidorId: finalRepartidorId,
+                        fecha_entrega: finalFechaEntrega,
+                        notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> Pedido ARMADO y listo para despacho/reparto.`
+                    }
+                });
+                return { pedido: actualizado };
+            }
+
+            // ========== ENTREGADO ==========
+            if (nuevoEstado === 'ENTREGADO') {
+                const fechaHora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+                const actualizado = await tx.pedido.update({
+                    where: { id: pedidoId },
+                    data: {
+                        estado: 'ENTREGADO',
+                        motivo_no_entrega: null,
+                        notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> Marcado como ENTREGADO.`
+                    }
+                });
+                return { pedido: actualizado };
+            }
+
+            // ========== NO ENTREGADO ==========
+            if (nuevoEstado === 'NO_ENTREGADO') {
+                const fechaHora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+                const actualizado = await tx.pedido.update({
+                    where: { id: pedidoId },
+                    data: {
+                        estado: 'NO_ENTREGADO',
+                        notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> Marcado como NO ENTREGADO.`
                     }
                 });
                 return { pedido: actualizado };
@@ -595,11 +647,11 @@ export async function recalcularPreciosPendientes() {
                     const aumMarca = prod.marca?.aumento_porcentaje || 0;
                     const aumCat = prod.categoria?.aumento_porcentaje || 0;
 
-                    // Calcular nuevo precio base
+                    // Calcular nuevo precio base (IVA 0)
                     const nuevoPrecioBase = calcularPrecioConCascada(
                         prod.precio_costo,
                         prod.descuento_proveedor || 0,
-                        prod.alicuota_iva || 21,
+                        prod.alicuota_iva || 0,
                         aumProv,
                         aumMarca,
                         aumCat,
@@ -656,5 +708,197 @@ export async function recalcularPreciosPendientes() {
     } catch (error: any) {
         console.error("Error al recalcular precios:", error);
         return { success: false, error: error.message || "Error al recalcular precios." };
+    }
+}
+
+// ============================================================================
+// 10. GESTIÓN DE DESPACHO Y REPARTO
+// ============================================================================
+
+export async function obtenerRepartidores() {
+    try {
+        return await prisma.usuario.findMany({
+            where: { activo: true },
+            select: { id: true, nombre: true, rol: true, username: true },
+            orderBy: { nombre: 'asc' }
+        });
+    } catch (e) {
+        return [];
+    }
+}
+
+export async function marcarPedidoListoEntrega(pedidoId: number, repartidorId?: number | null, fechaEntrega?: Date | string | null) {
+    try {
+        const fechaHora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+        const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId } });
+        if (!pedido) return { success: false, error: "Pedido no encontrado." };
+
+        const notaAuditoria = `\n\n[DESPACHO ${fechaHora}] -> Pedido ARMADO y listo para reparto.`;
+
+        const finalRepartidorId = repartidorId !== undefined
+            ? (repartidorId ? Number(repartidorId) : null)
+            : (pedido.repartidorId || pedido.usuarioId || null);
+
+        const finalFechaEntrega = fechaEntrega !== undefined
+            ? (fechaEntrega ? new Date(fechaEntrega) : null)
+            : (pedido.fecha_entrega || new Date());
+
+        const actualizado = await prisma.pedido.update({
+            where: { id: pedidoId },
+            data: {
+                estado: 'ARMADO',
+                repartidorId: finalRepartidorId,
+                fecha_entrega: finalFechaEntrega,
+                notas: (pedido.notas || "") + notaAuditoria
+            }
+        });
+
+        revalidatePath("/pedidos");
+        revalidatePath("/pedidos/armados");
+        revalidatePath("/vendedor");
+        return { success: true, data: actualizado };
+    } catch (error: any) {
+        console.error("Error al marcar pedido listo:", error);
+        return { success: false, error: error.message || "Error al marcar listo para entrega." };
+    }
+}
+
+export async function marcarPedidoEntregado(pedidoId: number, notas?: string) {
+    try {
+        const fechaHora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+        const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId } });
+        if (!pedido) return { success: false, error: "Pedido no encontrado." };
+
+        const notaAuditoria = `\n\n[REPARTO ${fechaHora}] -> ENTREGADO con éxito.` + (notas ? ` Obs: ${notas}` : "");
+
+        const actualizado = await prisma.pedido.update({
+            where: { id: pedidoId },
+            data: {
+                estado: 'ENTREGADO',
+                fecha_entrega: new Date(),
+                motivo_no_entrega: null,
+                notas: (pedido.notas || "") + notaAuditoria
+            }
+        });
+
+        revalidatePath("/pedidos");
+        revalidatePath("/pedidos/armados");
+        revalidatePath("/vendedor");
+        return { success: true, data: actualizado };
+    } catch (error: any) {
+        return { success: false, error: error.message || "Error al registrar entrega." };
+    }
+}
+
+export async function marcarPedidoNoEntregado(pedidoId: number, motivo: string) {
+    try {
+        if (!motivo || !motivo.trim()) return { success: false, error: "Debe indicar el motivo por el cual no se entregó." };
+        const fechaHora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+        const pedido = await prisma.pedido.findUnique({ where: { id: pedidoId } });
+        if (!pedido) return { success: false, error: "Pedido no encontrado." };
+
+        const notaAuditoria = `\n\n[REPARTO ${fechaHora}] -> NO ENTREGADO. Motivo: ${motivo.trim()}`;
+
+        const actualizado = await prisma.pedido.update({
+            where: { id: pedidoId },
+            data: {
+                estado: 'NO_ENTREGADO',
+                motivo_no_entrega: motivo.trim(),
+                notas: (pedido.notas || "") + notaAuditoria
+            }
+        });
+
+        revalidatePath("/pedidos");
+        revalidatePath("/pedidos/armados");
+        revalidatePath("/vendedor");
+        return { success: true, data: actualizado };
+    } catch (error: any) {
+        return { success: false, error: error.message || "Error al registrar no entrega." };
+    }
+}
+
+export async function obtenerPedidosArmados(filtroFecha?: string, repartidorId?: number) {
+    try {
+        const where: any = {
+            estado: { in: ['ARMADO', 'LISTO_ENTREGA', 'ENTREGADO', 'NO_ENTREGADO'] }
+        };
+        if (repartidorId) {
+            where.repartidorId = Number(repartidorId);
+        }
+        if (filtroFecha) {
+            const start = new Date(filtroFecha + "T00:00:00");
+            const end = new Date(filtroFecha + "T23:59:59.999");
+            where.fecha_entrega = { gte: start, lte: end };
+        }
+
+        return await prisma.pedido.findMany({
+            where,
+            include: {
+                cliente: true,
+                usuario: { select: { nombre: true } },
+                repartidor: { select: { id: true, nombre: true } },
+                detalles: {
+                    include: {
+                        producto: { select: { nombre_producto: true, codigo_articulo: true } }
+                    }
+                }
+            },
+            orderBy: { fecha: 'desc' }
+        });
+    } catch (error) {
+        console.error("Error al obtener pedidos armados:", error);
+        return [];
+    }
+}
+
+export async function obtenerPedidosParaReparto(repartidorId?: number) {
+    try {
+        const where: any = {
+            estado: { in: ['ARMADO', 'LISTO_ENTREGA', 'NO_ENTREGADO', 'ENTREGADO'] }
+        };
+        if (repartidorId) {
+            where.OR = [
+                { repartidorId: Number(repartidorId) },
+                { repartidorId: null }
+            ];
+        }
+
+        return await prisma.pedido.findMany({
+            where,
+            include: {
+                cliente: true,
+                usuario: { select: { nombre: true } },
+                repartidor: { select: { id: true, nombre: true } },
+                detalles: {
+                    include: {
+                        producto: { select: { nombre_producto: true, codigo_articulo: true } }
+                    }
+                }
+            },
+            orderBy: { fecha: 'desc' }
+        });
+    } catch (error) {
+        console.error("Error al obtener pedidos para reparto:", error);
+        return [];
+    }
+}
+
+export async function actualizarFechaEntregaPedido(pedidoId: number, fechaEntrega: string | Date) {
+    try {
+        const fechaObj = new Date(fechaEntrega);
+        if (isNaN(fechaObj.getTime())) throw new Error("Fecha de entrega no válida.");
+
+        const actualizado = await prisma.pedido.update({
+            where: { id: Number(pedidoId) },
+            data: { fecha_entrega: fechaObj }
+        });
+
+        revalidatePath("/pedidos");
+        revalidatePath("/pedidos/armados");
+        revalidatePath("/vendedor");
+        return { success: true, data: actualizado };
+    } catch (error: any) {
+        console.error("Error al actualizar fecha de entrega:", error);
+        return { success: false, error: error.message || "Error al actualizar fecha de entrega." };
     }
 }

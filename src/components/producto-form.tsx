@@ -83,6 +83,8 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
     defaultValues: initialData
       ? {
         ...initialData,
+        imagen_url: initialData.imagen_url || "",
+        alicuota_iva: initialData.alicuota_iva ?? 0,
         fecha_ingreso: new Date(initialData.fecha_ingreso),
         stocks: initialData.stocks?.map((s: any) => ({
           depositoId: s.depositoId,
@@ -102,12 +104,13 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
       : {
         codigo_articulo: "",
         codigo_barras: "0",
+        imagen_url: "",
         fecha_ingreso: new Date(),
         nombre_producto: "",
         proveedorId: "",
         marcaId: "",
         categoriaId: "",
-        alicuota_iva: 21,
+        alicuota_iva: 0,
         precio_costo: 0,
         descuento_proveedor: 0,
         stock_actual: 0,
@@ -134,9 +137,10 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
 
   const precioCosto = watch("precio_costo") || 0;
   const descuentoProveedor = watch("descuento_proveedor") || 0;
-  const alicuotaIva = watch("alicuota_iva") || 21;
+  const alicuotaIva = watch("alicuota_iva") ?? 0;
   const proveedorIdWatch = watch("proveedorId");
   const marcaIdWatch = watch("marcaId");
+  const imagenUrlWatch = watch("imagen_url");
   const tipoMedicion = (watch("tipo_medicion") || "UNIDAD") as TipoMedicionType;
 
   const costoNetoVisual = calcularCostoNeto(Number(precioCosto), Number(descuentoProveedor));
@@ -262,6 +266,16 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
         res = await crearProducto(payload);
       }
       if (res.success) {
+        // Guardar ID en sessionStorage para resaltarlo en la tabla
+        try {
+          const prodId = isEdit ? initialData.id : (res.data?.id || null);
+          if (prodId) {
+            const saved = sessionStorage.getItem("sanu_stock_table_updated_ids");
+            const prev = saved ? JSON.parse(saved) : [];
+            sessionStorage.setItem("sanu_stock_table_updated_ids", JSON.stringify([prodId, ...prev]));
+          }
+        } catch (e) {}
+
         toast.success(`Producto ${isEdit ? "actualizado" : "creado"} correctamente.`);
         router.push("/inventario");
       } else {
@@ -285,6 +299,34 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
               <div className="space-y-2">
                 <Label htmlFor="nombre_producto">Nombre de Producto <span className="text-red-500">*</span></Label>
                 <Input id="nombre_producto" {...register("nombre_producto")} className="text-lg bg-muted/30 focus-visible:ring-indigo-500" />
+              </div>
+
+              {/* FOTO DE PRODUCTO (URL / LINK) */}
+              <div className="space-y-2 p-4 bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-xl">
+                <Label htmlFor="imagen_url" className="text-xs font-bold uppercase text-slate-600 flex items-center gap-1.5">
+                  Foto del Producto (URL o enlace de imagen)
+                </Label>
+                <div className="flex gap-4 items-center">
+                  <div className="flex-1 space-y-1">
+                    <Input
+                      id="imagen_url"
+                      placeholder="https://ejemplo.com/fotos/producto.jpg"
+                      {...register("imagen_url")}
+                      className="bg-white text-sm"
+                    />
+                    <p className="text-[10px] text-slate-400">Pegá el enlace directo a la imagen. Se verá en el catálogo y la app móvil de vendedores.</p>
+                  </div>
+                  {imagenUrlWatch ? (
+                    <div className="h-16 w-16 rounded-xl border border-slate-200 bg-white overflow-hidden shrink-0 shadow-sm relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={imagenUrlWatch} alt="Preview" className="h-full w-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="h-16 w-16 rounded-xl border border-dashed border-slate-200 bg-white flex items-center justify-center shrink-0 text-slate-300 text-xs text-center p-1">
+                      Sin foto
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -343,17 +385,20 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
                   <Input type="number" step="0.1" {...register("descuento_proveedor")} className="bg-muted/30" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Alícuota IVA (%)</Label>
-                  <Input type="number" step="0.1" {...register("alicuota_iva")} className="bg-muted/30" />
+                  <Label className="flex items-center justify-between">
+                    <span>Alícuota IVA (%)</span>
+                    <span className="text-[10px] font-bold text-emerald-600">0% (Desactivado)</span>
+                  </Label>
+                  <Input type="number" step="0.1" {...register("alicuota_iva")} value="0" disabled className="bg-muted/50 cursor-not-allowed font-bold" />
                 </div>
               </div>
 
               {/* Cascading preview */}
               <div className="mt-8 p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500/10 via-background to-background rounded-xl border">
                 <div className="flex w-full items-center justify-between text-sm mb-4">
-                  <span className="text-muted-foreground font-medium">Costo Neto: <span className="text-foreground ml-1">${costoNetoVisual.toFixed(2)}</span></span>
+                  <span className="text-muted-foreground font-medium">Costo Base / Neto: <span className="text-foreground font-bold ml-1">${costoNetoVisual.toFixed(2)}</span></span>
                   <Separator orientation="vertical" className="h-4" />
-                  <span className="text-muted-foreground font-medium">+ IVA: <span className="text-foreground ml-1">${costoIvaVisual.toFixed(2)}</span></span>
+                  <span className="text-emerald-600 font-bold text-xs bg-emerald-50 px-2 py-0.5 rounded-full">IVA: 0%</span>
                 </div>
 
                 {(aumProv > 0 || aumMarca > 0 || aumCat > 0) && (
@@ -366,8 +411,8 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
 
                 <div className="flex flex-col items-center text-center">
                   <span className="text-sm font-semibold uppercase text-indigo-500 tracking-wider mb-1">Costo Final (Base Cascada)</span>
-                  <span className="text-4xl font-bold tracking-tighter">
-                    ${(costoIvaVisual * (1 + aumProv / 100) * (1 + aumMarca / 100) * (1 + aumCat / 100)).toFixed(2)}
+                  <span className="text-4xl font-black tracking-tighter text-indigo-950">
+                    ${(costoNetoVisual * (1 + aumProv / 100) * (1 + aumMarca / 100) * (1 + aumCat / 100)).toFixed(2)}
                   </span>
                 </div>
               </div>

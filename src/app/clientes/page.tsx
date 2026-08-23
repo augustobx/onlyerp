@@ -49,15 +49,16 @@ export default function ClientesPage() {
         toast.loading("Buscando en AFIP...");
         const res = await buscarCuitEnAfip(cuitDniAlta);
         toast.dismiss();
-        if (res.success && res.data) {
+        if (res.success && (res as any).data) {
+            const afipData = (res as any).data;
             toast.success("Datos encontrados");
             const nombreDocumento = document.getElementById("nombre_razon_social") as HTMLInputElement;
             if (nombreDocumento) {
-                nombreDocumento.value = res.data.personReturn?.person?.name || res.data.personReturn?.person?.idPersona?.toString() || "";
+                nombreDocumento.value = afipData.personReturn?.person?.name || afipData.personReturn?.person?.idPersona?.toString() || "";
             }
             const direccionDocumento = document.getElementById("direccion_alta") as HTMLInputElement;
             if (direccionDocumento) {
-                const dom = res.data.personReturn?.person?.domicilio?.[0];
+                const dom = afipData.personReturn?.person?.domicilio?.[0];
                 if (dom) direccionDocumento.value = `${dom.direccion || ""} ${dom.localidad || ""} ${dom.codigoPostal || ""}`.trim();
             }
         } else {

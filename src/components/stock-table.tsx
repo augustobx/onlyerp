@@ -1,16 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import {
-  ColumnDef, ColumnFiltersState, SortingState, VisibilityState,
+  ColumnDef, ColumnFiltersState, SortingState, VisibilityState, PaginationState,
   flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel,
   getSortedRowModel, useReactTable,
 } from "@tanstack/react-table";
 import {
   AlertTriangle, ArrowUpDown, ChevronDown, MoreHorizontal, Pencil, Search,
   Zap, X, Loader2, ArrowUpRight, History, TrendingUp, PackagePlus,
-  ArrowRightLeft, Plus
+  ArrowRightLeft, Plus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  ImageIcon, Sparkles, SlidersHorizontal, Percent, DollarSign, Eye, Tag
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -28,13 +29,15 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import {
-  formatCurrency, calcularPrecioConCascada, redondearPrecio,
+  formatCurrency, calcularPrecioConCascada, resolverMargenYDescuento, redondearPrecio,
   formatCantidad, getUnidadLabel, getStepParaMedicion,
   type TipoMedicionType,
 } from "@/lib/utils";
 import { actualizarStockRapido, getHistorialProducto } from "@/app/actions/productos";
+import { actualizarPreciosMasivos } from "@/app/actions/proveedores";
 
 export type ProductoColumn = {
   id: number;
@@ -42,8 +45,10 @@ export type ProductoColumn = {
   codigo_barras: string;
   fecha_ingreso: Date;
   nombre_producto: string;
+  imagen_url?: string | null;
   categoria: string;
   proveedor: string;
+  proveedorObj?: any;
   marca: string;
   stock_actual: number;
   stocks?: any[];
@@ -64,13 +69,24 @@ export const getColumns = (
   listasGlobales: any[],
   handleAbrirEdicion: (prod: any) => void,
   handleAbrirHistorial: (prod: any) => void,
+  handleVerFoto: (url: string, nombre: string) => void,
+  actualizadosRecientes: number[],
   configGlobal: any
 ): ColumnDef<ProductoColumn>[] => {
   const baseColumns: ColumnDef<ProductoColumn>[] = [
     {
       accessorKey: "codigo_articulo",
       header: "Cód. Artículo",
-      cell: ({ row }) => <div className="font-mono text-slate-500 text-xs">{row.getValue("codigo_articulo")}</div>,
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono text-slate-500 text-xs">{row.getValue("codigo_articulo")}</span>
+          {actualizadosRecientes.includes(row.original.id) && (
+            <Badge className="bg-emerald-500 text-white text-[9px] px-1.5 py-0 font-bold animate-pulse">
+              ✨ Actualizado
+            </Badge>
+          )}
+        </div>
+      ),
     },
     {
       accessorKey: "codigo_barras",
@@ -85,7 +101,36 @@ export const getColumns = (
           Producto <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => <div className="font-bold text-slate-900 dark:text-white text-sm">{row.getValue("nombre_producto")}</div>,
+      cell: ({ row }) => {
+        const imgUrl = row.original.imagen_url;
+        const nombre = row.getValue("nombre_producto") as string;
+        return (
+          <div className="flex items-center gap-2.5">
+            {imgUrl ? (
+              <button
+                type="button"
+                onClick={() => handleVerFoto(imgUrl, nombre)}
+                className="relative h-9 w-9 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 hover:opacity-80 transition-opacity shrink-0 group"
+                title="Ver foto ampliada"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imgUrl} alt={nombre} className="h-full w-full object-cover" />
+                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                  <Eye className="h-3.5 w-3.5 text-white" />
+                </div>
+              </button>
+            ) : (
+              <div className="h-9 w-9 rounded-lg border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center shrink-0 text-slate-300">
+                <ImageIcon className="h-4 w-4" />
+              </div>
+            )}
+            <div className="flex flex-col">
+              <span className="font-bold text-slate-900 dark:text-white text-sm leading-tight">{nombre}</span>
+              <span className="text-[11px] text-slate-400">{row.original.marca ? `${row.original.marca} • ` : ""}{row.original.categoria}</span>
+            </div>
+          </div>
+        );
+      },
     },
     {
       accessorKey: "proveedor",
@@ -148,14 +193,19 @@ export const getColumns = (
     id: `lista_${lista.id}`,
     header: () => <div className="text-right text-[10px] uppercase font-bold text-slate-400 whitespace-nowrap">P. {lista.nombre}</div>,
     cell: ({ row }) => {
-      const pivot = row.original.listas_precios?.find(lp => lp.listaPrecioId === lista.id);
-      if (!pivot) return <div className="text-right text-slate-300">-</div>;
+      const { margenFinal, descuentoFinal } = resolverMargenYDescuento(
+        {
+          ...row.original,
+          proveedor: row.original.proveedorObj || { listas_precios: [] }
+        },
+        lista.id,
+        lista.margen_defecto
+      );
 
-      const margenFinal = pivot.margen_personalizado ?? lista.margen_defecto;
       const precioFinal = calcularPrecioConCascada(
         row.original.precio_costo,
-        row.original.descuento_proveedor || 0,
-        row.original.alicuota_iva || 21,
+        descuentoFinal,
+        row.original.alicuota_iva || 0, // IVA desactivado (0%)
         row.original.aumento_proveedor || 0,
         row.original.aumento_marca || 0,
         row.original.aumento_categoria || 0,
@@ -219,15 +269,97 @@ interface StockTableProps {
   configGlobal?: any;
 }
 
+const STORAGE_KEY_STATE = "sanu_stock_table_state";
+const STORAGE_KEY_UPDATED = "sanu_stock_table_updated_ids";
+
 export function StockTable({ data, proveedores, listasGlobales, depositos, usuarioId, configGlobal }: StockTableProps) {
   const [isPending, startTransition] = useTransition();
 
+  // Estados para Edición Rápida y Auditoría
   const [productoEditando, setProductoEditando] = useState<any | null>(null);
   const [formRapido, setFormRapido] = useState({ cantidad_sumar: 0, stock_recomendado: 0, precio_costo: 0, depositoId: "" });
 
   const [productoHistorial, setProductoHistorial] = useState<any | null>(null);
   const [historialData, setHistorialData] = useState<any[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
+
+  // Modal para ver foto ampliada
+  const [fotoModal, setFotoModal] = useState<{ url: string; nombre: string } | null>(null);
+// Tracking de productos recién actualizados
+  const [actualizadosRecientes, setActualizadosRecientes] = useState<number[]>([]);
+
+  // Modal Aumento Rápido General
+  const [showAumentoRapidoModal, setShowAumentoRapidoModal] = useState(false);
+  const [aumentoForm, setAumentoForm] = React.useState<{
+    destino: string; // "COSTO_BASE" o el ID de una lista
+    proveedor: string;
+    marca: string;
+    tipo: "PORCENTAJE" | "MONTO_FIJO";
+    accion: "AUMENTO" | "REBAJA";
+    valor: string;
+  }>({
+    destino: "COSTO_BASE",
+    proveedor: "ALL",
+    marca: "ALL",
+    tipo: "PORCENTAJE",
+    accion: "AUMENTO",
+    valor: "",
+  });
+
+  const marcas = React.useMemo(() => {
+    const mSet = new Set<string>();
+    data.forEach(p => {
+      if (p.marca && p.marca.trim()) mSet.add(p.marca.trim());
+    });
+    return Array.from(mSet).sort();
+  }, [data]);
+
+  // Estados de TanStack Table con persistencia
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({ codigo_barras: false, tipo_medicion: false });
+  const [globalFilter, setGlobalFilter] = React.useState("");
+  const [pagination, setPagination] = React.useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 25,
+  });
+
+  // Cargar estado persistente desde sessionStorage
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY_STATE);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.globalFilter !== undefined) setGlobalFilter(parsed.globalFilter);
+        if (parsed.pagination) setPagination(parsed.pagination);
+        if (parsed.columnFilters) setColumnFilters(parsed.columnFilters);
+      }
+      const savedUpdated = sessionStorage.getItem(STORAGE_KEY_UPDATED);
+      if (savedUpdated) {
+        setActualizadosRecientes(JSON.parse(savedUpdated));
+      }
+    } catch (e) {
+      console.error("Error cargando estado de stock table:", e);
+    }
+  }, []);
+
+  // Guardar estado en sessionStorage ante cambios
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        STORAGE_KEY_STATE,
+        JSON.stringify({ globalFilter, pagination, columnFilters })
+      );
+    } catch (e) {}
+  }, [globalFilter, pagination, columnFilters]);
+
+  const registrarActualizado = (prodId: number) => {
+    const nuevos = Array.from(new Set([prodId, ...actualizadosRecientes])).slice(0, 50);
+    setActualizadosRecientes(nuevos);
+    try {
+      sessionStorage.setItem(STORAGE_KEY_UPDATED, JSON.stringify(nuevos));
+    } catch (e) {}
+  };
 
   const handleAbrirEdicion = (prod: any) => {
     setFormRapido({ 
@@ -248,6 +380,7 @@ export function StockTable({ data, proveedores, listasGlobales, depositos, usuar
       const res = await actualizarStockRapido(productoEditando.id, Number(formRapido.cantidad_sumar), Number(formRapido.stock_recomendado), Number(formRapido.precio_costo), depId, usuarioId);
       if (res.success) {
         toast.success("¡Producto actualizado!", { description: "Impactado en todas las listas e historial." });
+        registrarActualizado(productoEditando.id);
         setProductoEditando(null);
       } else { toast.error(res.error); }
     });
@@ -262,12 +395,10 @@ export function StockTable({ data, proveedores, listasGlobales, depositos, usuar
     setLoadingHistorial(false);
   };
 
-  const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({ codigo_barras: false, tipo_medicion: false });
-  const [globalFilter, setGlobalFilter] = React.useState("");
+  const handleVerFoto = (url: string, nombre: string) => {
+    setFotoModal({ url, nombre });
+  };
 
-  // Refactor column filters to properly isolate "proveedor"
   const handleProveedorFilter = (value: string) => {
     if (value === "ALL") {
       setColumnFilters(filters => filters.filter(f => f.id !== "proveedor"));
@@ -279,40 +410,107 @@ export function StockTable({ data, proveedores, listasGlobales, depositos, usuar
     }
   };
 
-  const columns = React.useMemo(() => getColumns(listasGlobales, handleAbrirEdicion, handleAbrirHistorial, configGlobal), [listasGlobales, configGlobal]);
+  const handleEjecutarAumentoRapido = () => {
+    const valorNum = Number(aumentoForm.valor);
+    if (!valorNum || valorNum <= 0) return toast.error("Ingrese un valor válido mayor a 0.");
+
+    const provObj = aumentoForm.proveedor !== "ALL" ? data.find(p => p.proveedor === aumentoForm.proveedor)?.proveedorObj : null;
+    const targetLista = aumentoForm.destino !== "COSTO_BASE" ? listasGlobales.find(l => String(l.id) === String(aumentoForm.destino)) : null;
+
+    const txtDestino = targetLista ? `la Lista "${targetLista.nombre}"` : "el Costo Base (Todas las Listas)";
+    const txtProv = aumentoForm.proveedor === "ALL" ? "Todos los proveedores" : `Proveedor ${aumentoForm.proveedor}`;
+    const txtMarca = aumentoForm.marca === "ALL" ? "Todas las marcas" : `Marca ${aumentoForm.marca}`;
+    const txtTipo = aumentoForm.tipo === "PORCENTAJE" ? `${valorNum}%` : `$${valorNum}`;
+    const txtAccion = aumentoForm.accion === "AUMENTO" ? "AUMENTAR" : "REBAJAR";
+
+    // Filtrar IDs de productos correspondientes a la marca y/o proveedor seleccionados
+    let targetProductIds: number[] | undefined = undefined;
+    if (aumentoForm.marca !== "ALL" || aumentoForm.proveedor !== "ALL") {
+      const filtrados = data.filter(p => 
+        (aumentoForm.proveedor === "ALL" || p.proveedor === aumentoForm.proveedor) &&
+        (aumentoForm.marca === "ALL" || p.marca === aumentoForm.marca)
+      );
+      targetProductIds = filtrados.map(p => p.id);
+      if (targetProductIds.length === 0) {
+        return toast.warning("No hay productos que coincidan con el proveedor y la marca seleccionados.");
+      }
+    }
+
+    if (!confirm(`⚠️ ¿Está seguro de ${txtAccion} ${txtTipo} en ${txtDestino} para ${txtProv} / ${txtMarca}?`)) return;
+
+    startTransition(async () => {
+      const res = await actualizarPreciosMasivos({
+        destino: aumentoForm.destino === "COSTO_BASE" ? "COSTO_BASE" : Number(aumentoForm.destino),
+        proveedorId: provObj?.id || null,
+        productoIds: targetProductIds,
+        tipoAumento: aumentoForm.tipo,
+        valor: valorNum,
+        accion: aumentoForm.accion
+      });
+
+      if (res.success) {
+        toast.success("¡Ajuste de precios aplicado!", { description: res.message || `Se actualizaron los precios con éxito.` });
+        if (res.updatedIds && Array.isArray(res.updatedIds)) {
+          res.updatedIds.forEach(id => registrarActualizado(id));
+        }
+        setShowAumentoRapidoModal(false);
+        setAumentoForm({ destino: "COSTO_BASE", proveedor: "ALL", marca: "ALL", tipo: "PORCENTAJE", accion: "AUMENTO", valor: "" });
+      } else {
+        toast.error(res.error);
+      }
+    });
+  };
+
+  const columns = React.useMemo(
+    () => getColumns(listasGlobales, handleAbrirEdicion, handleAbrirHistorial, handleVerFoto, actualizadosRecientes, configGlobal),
+    [listasGlobales, configGlobal, actualizadosRecientes]
+  );
 
   const table = useReactTable({
-    data, columns,
+    data,
+    columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     globalFilterFn: "includesString",
-    state: { sorting, columnFilters, columnVisibility, globalFilter },
+    state: { sorting, columnFilters, columnVisibility, globalFilter, pagination },
     onGlobalFilterChange: setGlobalFilter,
   });
 
   const tipoMedicionActual = productoEditando ? (productoEditando.tipo_medicion as TipoMedicionType) : "UNIDAD";
   const stepStock = getStepParaMedicion(tipoMedicionActual);
 
+  const pageIndex = table.getState().pagination.pageIndex;
+  const pageSize = table.getState().pagination.pageSize;
+  const pageCount = table.getPageCount();
+  const totalFilteredRows = table.getFilteredRowModel().rows.length;
+  const startRow = totalFilteredRows === 0 ? 0 : pageIndex * pageSize + 1;
+  const endRow = Math.min((pageIndex + 1) * pageSize, totalFilteredRows);
+
   return (
     <div className="w-full space-y-4 relative">
       {/* BARRA DE HERRAMIENTAS */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto flex-1">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row gap-3 flex-1">
           <div className="relative w-full sm:max-w-md">
             <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
-            <Input placeholder="Buscar por código, barra o nombre..." value={globalFilter ?? ""} onChange={(e) => setGlobalFilter(String(e.target.value))}
-              className="pl-10 h-10 bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 shadow-sm" />
+            <Input
+              placeholder="Buscar por código, barra o nombre..."
+              value={globalFilter ?? ""}
+              onChange={(e) => setGlobalFilter(String(e.target.value))}
+              className="pl-10 h-10 bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 shadow-sm"
+            />
           </div>
-          <div className="w-full sm:w-48">
+          <div className="w-full sm:w-56">
             <select
-              className="w-full h-10 border border-slate-200 dark:border-zinc-800 rounded-md bg-white dark:bg-zinc-900 px-3 text-sm text-slate-600 dark:text-slate-300 shadow-sm"
+              className="w-full h-10 border border-slate-200 dark:border-zinc-800 rounded-md bg-white dark:bg-zinc-900 px-3 text-sm text-slate-600 dark:text-slate-300 shadow-sm outline-none"
               onChange={(e) => handleProveedorFilter(e.target.value)}
-              defaultValue="ALL"
+              value={(columnFilters.find(f => f.id === "proveedor")?.value as string) || "ALL"}
             >
               <option value="ALL">Todos los Proveedores</option>
               {proveedores.map(p => (
@@ -321,7 +519,16 @@ export function StockTable({ data, proveedores, listasGlobales, depositos, usuar
             </select>
           </div>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Button
+            onClick={() => setShowAumentoRapidoModal(true)}
+            variant="outline"
+            className="h-10 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200 font-bold shadow-sm"
+          >
+            <SlidersHorizontal className="h-4 w-4 mr-1.5 text-indigo-600" /> Aumento Rápido (% o $)
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger className={buttonVariants({ variant: "outline", className: "h-10 bg-white border-slate-200 text-slate-600 font-medium" })}>
               Columnas <ChevronDown className="ml-2 h-4 w-4 text-slate-400" />
@@ -334,6 +541,7 @@ export function StockTable({ data, proveedores, listasGlobales, depositos, usuar
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
           <Link href="/inventario/nuevo">
             <Button className="h-10 bg-slate-900 hover:bg-slate-800 text-white font-medium shadow-sm">
               <Plus className="h-4 w-4 mr-2" /> Nuevo Producto
@@ -359,20 +567,28 @@ export function StockTable({ data, proveedores, listasGlobales, depositos, usuar
             </TableHeader>
             <TableBody className="divide-y divide-slate-100 dark:divide-zinc-800">
               {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map(row => (
-                  <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}
-                    className={row.original.stock_actual <= 0
-                      ? "bg-red-50/70 hover:bg-red-50 dark:bg-red-900/15 transition-colors"
-                      : row.original.stock_actual <= row.original.stock_recomendado
-                        ? "bg-orange-50/50 hover:bg-orange-50 dark:bg-orange-900/10 transition-colors"
-                        : "hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition-colors"}>
-                    {row.getVisibleCells().map(cell => (
-                      <TableCell key={cell.id} className="py-3">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
+                table.getRowModel().rows.map(row => {
+                  const isUpdated = actualizadosRecientes.includes(row.original.id);
+                  return (
+                    <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}
+                      className={`transition-colors ${
+                        isUpdated
+                          ? "bg-emerald-50/70 hover:bg-emerald-50 border-l-4 border-l-emerald-500"
+                          : row.original.stock_actual <= 0
+                            ? "bg-red-50/70 hover:bg-red-50 dark:bg-red-900/15"
+                            : row.original.stock_actual <= row.original.stock_recomendado
+                              ? "bg-orange-50/50 hover:bg-orange-50 dark:bg-orange-900/10"
+                              : "hover:bg-slate-50 dark:hover:bg-zinc-800/50"
+                      }`}
+                    >
+                      {row.getVisibleCells().map(cell => (
+                        <TableCell key={cell.id} className="py-3">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })
               ) : (
                 <TableRow>
                   <TableCell colSpan={columns.length} className="h-32 text-center text-slate-400">No se encontraron resultados.</TableCell>
@@ -383,18 +599,236 @@ export function StockTable({ data, proveedores, listasGlobales, depositos, usuar
         </div>
       </Card>
 
-      {/* PAGINACIÓN */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-medium text-slate-500">
-          Mostrando <span className="text-slate-900">{table.getRowModel().rows.length}</span> de {table.getFilteredRowModel().rows.length} productos
+      {/* PAGINACIÓN MEJORADA */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white dark:bg-zinc-900 p-4 rounded-xl border border-slate-200 dark:border-zinc-800 shadow-sm">
+        <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
+          <span>
+            Mostrando <strong className="text-slate-900 dark:text-white">{startRow}</strong> a <strong className="text-slate-900 dark:text-white">{endRow}</strong> de <strong className="text-slate-900 dark:text-white">{totalFilteredRows}</strong> productos
+          </span>
+          <span className="text-slate-300">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs">Filas:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => table.setPageSize(Number(e.target.value))}
+              className="h-8 px-2 text-xs font-bold border border-slate-200 dark:border-zinc-700 rounded-lg bg-slate-50 dark:bg-zinc-800 text-slate-800 dark:text-slate-200 outline-none"
+            >
+              {[10, 25, 50, 100, 250, 500].map(size => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+              <option value={9999}>Todos</option>
+            </select>
+          </div>
         </div>
-        <div className="space-x-2">
-          <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="bg-white border-slate-200 text-slate-600 font-medium">Anterior</Button>
-          <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="bg-white border-slate-200 text-slate-600 font-medium">Siguiente</Button>
+
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => table.setPageIndex(0)}
+            disabled={!table.getCanPreviousPage()}
+            title="Primera página"
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+            title="Página anterior"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+
+          <span className="px-3 text-xs font-bold text-slate-700 dark:text-slate-300">
+            Página {pageIndex + 1} de {Math.max(1, pageCount)}
+          </span>
+
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+            title="Página siguiente"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => table.setPageIndex(pageCount - 1)}
+            disabled={!table.getCanNextPage()}
+            title="Última página"
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      {/* MODAL EDICIÓN RÁPIDA */}
+      {/* MODAL FOTO AMPLIADA */}
+      {fotoModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="relative bg-white dark:bg-zinc-900 rounded-2xl overflow-hidden shadow-2xl max-w-lg w-full">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-sm text-slate-800 truncate pr-4">{fotoModal.nombre}</h3>
+              <Button variant="ghost" size="icon" onClick={() => setFotoModal(null)} className="h-8 w-8 rounded-full">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="p-4 flex items-center justify-center bg-slate-100 min-h-[250px]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={fotoModal.url} alt={fotoModal.nombre} className="max-h-[70vh] w-auto object-contain rounded-lg shadow-sm" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AUMENTO RÁPIDO GENERAL */}
+      {showAumentoRapidoModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-md shadow-2xl border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="bg-indigo-600 p-5 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <div className="bg-white/20 p-2 rounded-xl">
+                  <SlidersHorizontal className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-black text-lg">Aumento Rápido de Precios</h3>
+                  <p className="text-xs text-indigo-100">Ajustá costos en lote por porcentaje o monto fijo</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setShowAumentoRapidoModal(false)} className="text-white hover:bg-white/20 rounded-full h-8 w-8">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <CardContent className="p-6 space-y-4 bg-white">
+              {/* DESTINO DEL AUMENTO */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+                  <Tag className="h-3.5 w-3.5 text-indigo-600" />
+                  Destino del Ajuste (¿A qué se le aplica?)
+                </Label>
+                <select
+                  className="w-full h-11 border-2 border-indigo-100 rounded-xl px-3 text-sm font-bold bg-indigo-50/50 text-indigo-950 outline-none"
+                  value={aumentoForm.destino}
+                  onChange={(e) => setAumentoForm({ ...aumentoForm, destino: e.target.value })}
+                >
+                  <option value="COSTO_BASE">📦 Costo Base del Producto (Impacta en Todas las Listas)</option>
+                  <optgroup label="Listas de Precios Específicas">
+                    {listasGlobales.map(l => (
+                      <option key={l.id} value={String(l.id)}>🏷️ Solo en Lista: {l.nombre} (Margen Defecto: {l.margen_defecto}%)</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* FILTROS POR PROVEEDOR Y MARCA */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Proveedor</Label>
+                  <select
+                    className="w-full h-10 border border-slate-200 rounded-xl px-3 text-xs font-semibold bg-slate-50 outline-none"
+                    value={aumentoForm.proveedor}
+                    onChange={(e) => setAumentoForm({ ...aumentoForm, proveedor: e.target.value })}
+                  >
+                    <option value="ALL">Todos los Proveedores</option>
+                    {proveedores.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Marca</Label>
+                  <select
+                    className="w-full h-10 border border-slate-200 rounded-xl px-3 text-xs font-semibold bg-slate-50 outline-none"
+                    value={aumentoForm.marca}
+                    onChange={(e) => setAumentoForm({ ...aumentoForm, marca: e.target.value })}
+                  >
+                    <option value="ALL">Todas las Marcas</option>
+                    {marcas.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Operación</Label>
+                  <select
+                    className="w-full h-11 border border-slate-200 rounded-xl px-3 text-sm font-bold bg-slate-50 outline-none"
+                    value={aumentoForm.accion}
+                    onChange={(e) => setAumentoForm({ ...aumentoForm, accion: e.target.value as any })}
+                  >
+                    <option value="AUMENTO">Aumento (+)</option>
+                    <option value="REBAJA">Rebaja (-)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-700">Tipo de Ajuste</Label>
+                  <select
+                    className="w-full h-11 border border-slate-200 rounded-xl px-3 text-sm font-bold bg-slate-50 outline-none"
+                    value={aumentoForm.tipo}
+                    onChange={(e) => setAumentoForm({ ...aumentoForm, tipo: e.target.value as any })}
+                  >
+                    <option value="PORCENTAJE">Porcentaje (%)</option>
+                    <option value="MONTO_FIJO">Monto Fijo ($)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 pt-1">
+                <Label className="text-xs font-bold text-slate-700">
+                  Valor {aumentoForm.tipo === "PORCENTAJE" ? "en Porcentaje (%)" : "en Pesos ($)"}
+                </Label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 font-bold text-slate-400 text-lg">
+                    {aumentoForm.tipo === "PORCENTAJE" ? "%" : "$"}
+                  </span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder={aumentoForm.tipo === "PORCENTAJE" ? "Ej: 15" : "Ej: 500"}
+                    value={aumentoForm.valor}
+                    onChange={(e) => setAumentoForm({ ...aumentoForm, valor: e.target.value })}
+                    className="h-12 pl-9 font-black text-xl bg-slate-50 border-slate-200"
+                    autoFocus
+                  />
+                </div>
+                <p className="text-[11px] text-slate-500 leading-tight">
+                  {aumentoForm.destino === "COSTO_BASE" 
+                    ? "Se actualizará el costo base y todas las listas de precios adoptarán el nuevo valor automáticamente."
+                    : "Se ajustará el margen y precio únicamente para la lista seleccionada sin alterar el costo de otras listas."}
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex gap-2">
+                <Button variant="outline" onClick={() => setShowAumentoRapidoModal(false)} className="w-1/3">
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleEjecutarAumentoRapido}
+                  disabled={isPending || !aumentoForm.valor}
+                  className="w-2/3 bg-indigo-600 hover:bg-indigo-700 font-bold text-white shadow-md"
+                >
+                  {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                  Aplicar Aumento
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* MODAL EDICIÓN RÁPIDA DE STOCK / PRECIO */}
       {productoEditando && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <Card className="w-full max-w-sm shadow-2xl border border-slate-200 dark:border-zinc-800 flex flex-col rounded-2xl">

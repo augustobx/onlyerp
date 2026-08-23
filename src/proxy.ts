@@ -17,6 +17,8 @@ const RUTAS_MODULOS: Record<string, string> = {
     '/configuracion': 'CONFIGURACION',
     '/presupuestos': 'PRESUPUESTOS',
     '/pedidos': 'VENTAS',
+    '/pedidos/armados': 'VENTAS',
+    '/combos': 'INVENTARIO',
     '/compras': 'INVENTARIO',
     '/listas-precio': 'INVENTARIO',
     '/proveedores': 'INVENTARIO',

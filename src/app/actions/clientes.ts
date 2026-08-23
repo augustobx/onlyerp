@@ -293,24 +293,41 @@ export async function cobrarCuentaCorriente(clienteId: number, pagos: { metodo_p
 }
 
 
-// src/app/actions/clientes.ts (Agregar al final)
 export async function registrarClientePWA(data: { nombre: string, cuit?: string, direccion?: string, telefono?: string }) {
     try {
+        if (!data.nombre || !data.nombre.trim()) {
+            return { success: false, error: "El nombre o razón social es obligatorio." };
+        }
+
+        // Buscar dinámicamente la primera lista de precios
+        const primeraLista = await prisma.listaPrecio.findFirst({
+            orderBy: { id: 'asc' }
+        });
+
         const nuevo = await prisma.cliente.create({
             data: {
-                nombre_razon_social: data.nombre,
-                dni_cuit: data.cuit && data.cuit.trim() !== "" ? data.cuit : null,
-                direccion: data.direccion,
-                telefono: data.telefono,
+                nombre_razon_social: data.nombre.trim(),
+                dni_cuit: data.cuit && data.cuit.trim() !== "" ? data.cuit.trim() : null,
+                direccion: data.direccion?.trim() || null,
+                telefono: data.telefono?.trim() || null,
                 condicion_iva: "CONSUMIDOR_FINAL",
                 comprobante_default: "COMPROBANTE_X",
-                lista_default_id: 1 // Por defecto a la lista general
+                lista_default_id: primeraLista ? primeraLista.id : null,
+                listas_permitidas: primeraLista ? {
+                    create: [{ listaPrecioId: primeraLista.id }]
+                } : undefined
+            },
+            include: {
+                lista_default: true,
+                listas_permitidas: { include: { listaPrecio: true } }
             }
         });
+
         revalidatePath("/clientes");
+        revalidatePath("/vendedor");
         return { success: true, cliente: nuevo };
     } catch (error: any) {
         if (error.code === 'P2002') return { success: false, error: "El CUIT/DNI ya existe." };
-        return { success: false, error: "Error al crear cliente." };
+        return { success: false, error: error.message || "Error al crear cliente." };
     }
 }

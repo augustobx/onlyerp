@@ -12,9 +12,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   // Esto permite que el JavaScript y los Server Actions funcionen a través de ngrok
   allowedDevOrigins: [
     'fernlike-acclimatisable-magaly.ngrok-free.dev',

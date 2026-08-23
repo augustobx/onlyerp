@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { obtenerTodosLosPedidos, cambiarEstadoPedidoAdmin, editarPedidoAdmin, recalcularPreciosPendientes } from "@/app/actions/pedidos";
+import { obtenerTodosLosPedidos, cambiarEstadoPedidoAdmin, editarPedidoAdmin, recalcularPreciosPendientes, actualizarFechaEntregaPedido } from "@/app/actions/pedidos";
 import { buscarProductos, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
 import { redondearPrecio } from "@/lib/utils";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Search, ClipboardList, CheckCircle2, Ban, Receipt, User, Clock, Package, X, FileText, CreditCard, Edit, Calendar, Plus, Minus, RefreshCw } from "lucide-react";
+import { Search, ClipboardList, CheckCircle2, Ban, Receipt, User, Clock, Package, X, FileText, CreditCard, Edit, Calendar, Plus, Minus, RefreshCw, Truck } from "lucide-react";
 
 export default function AdminPedidosPage() {
     const [pedidos, setPedidos] = useState<any[]>([]);
@@ -105,7 +106,7 @@ export default function AdminPedidosPage() {
     };
 
     const agregarProductoEditar = (prod: any) => {
-        const alicuota = prod.alicuota_iva || 21;
+        const alicuota = prod.alicuota_iva || 0;
         // Precio base aproximado (Costo + IVA + Margen)
         const margen = pedidoActivo.listaPrecio?.margen_defecto || 0;
         const precioBruto = prod.precio_costo * (1 + (alicuota / 100)) * (1 + (margen / 100));
@@ -143,7 +144,7 @@ export default function AdminPedidosPage() {
         setCargando(false);
     };
 
-    const procesarPedido = async (nuevoEstado: 'APROBADO' | 'RECHAZADO') => {
+    const procesarPedido = async (nuevoEstado: 'APROBADO' | 'RECHAZADO' | 'ARMADO' | 'ENTREGADO' | 'NO_ENTREGADO' | string) => {
         if (!pedidoActivo) return;
 
         if (nuevoEstado === 'RECHAZADO' && !confirm("¿Seguro que querés RECHAZAR este pedido? Se devolverá el stock al inventario.")) return;
@@ -151,7 +152,7 @@ export default function AdminPedidosPage() {
         setCargando(true);
         const toastId = toast.loading(`Procesando pedido #${pedidoActivo.numero}...`);
 
-        const res = await cambiarEstadoPedidoAdmin(pedidoActivo.id, nuevoEstado);
+        const res = await cambiarEstadoPedidoAdmin(pedidoActivo.id, nuevoEstado as any);
 
         if (res.success) {
             toast.success(`Pedido ${nuevoEstado} correctamente.`, { id: toastId });
@@ -218,6 +219,10 @@ export default function AdminPedidosPage() {
         switch (estado) {
             case 'PENDIENTE': return 'bg-amber-100 text-amber-700 border-amber-200';
             case 'APROBADO': return 'bg-blue-100 text-blue-700 border-blue-200';
+            case 'ARMADO':
+            case 'LISTO_ENTREGA': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+            case 'ENTREGADO': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+            case 'NO_ENTREGADO': return 'bg-rose-100 text-rose-700 border-rose-200';
             case 'FACTURADO': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
             case 'RECHAZADO':
             case 'CANCELADO': return 'bg-red-100 text-red-700 border-red-200';
@@ -239,26 +244,33 @@ export default function AdminPedidosPage() {
             {/* PANEL IZQUIERDO: LISTA DE PEDIDOS */}
             <div className="w-full md:w-1/3 flex flex-col h-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                    <div className="flex justify-between items-center mb-4">
+                    <div className="flex justify-between items-center mb-3">
                         <h2 className="font-black text-lg text-slate-800 flex items-center">
                             <ClipboardList className="mr-2 h-5 w-5 text-indigo-600" /> Recepción de Pedidos
                         </h2>
-                        <Button variant="outline" size="sm" onClick={handleRecalcularPendientes} disabled={cargando} className="text-[10px] h-7 px-2 border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold tracking-tight">
-                            <RefreshCw className={`h-3 w-3 mr-1 ${cargando ? 'animate-spin' : ''}`} /> Actualizar Precios
-                        </Button>
+                        <div className="flex gap-1.5">
+                            <Link href="/pedidos/armados">
+                                <Button variant="outline" size="sm" className="text-[10px] h-7 px-2 border-indigo-200 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 font-bold">
+                                    <Truck className="h-3 w-3 mr-1 text-indigo-600" /> Armados / Despacho
+                                </Button>
+                            </Link>
+                            <Button variant="outline" size="sm" onClick={handleRecalcularPendientes} disabled={cargando} className="text-[10px] h-7 px-2 border-slate-200 text-slate-600 hover:bg-slate-50 font-bold tracking-tight">
+                                <RefreshCw className={`h-3 w-3 mr-1 ${cargando ? 'animate-spin' : ''}`} /> Recalcular
+                            </Button>
+                        </div>
                     </div>
 
                     {/* Botonera Filtros Rápidos */}
-                    <div className="flex gap-2 mb-3 overflow-x-auto pb-1 hide-scrollbar">
-                        {['PENDIENTE', 'APROBADO', 'FACTURADO', 'TODOS'].map(est => (
+                    <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1 hide-scrollbar">
+                        {['PENDIENTE', 'APROBADO', 'ARMADO', 'FACTURADO', 'TODOS'].map(est => (
                             <Button
                                 key={est}
                                 variant={filtroEstado === est ? "default" : "outline"}
                                 size="sm"
-                                className={`text-[10px] font-bold rounded-lg h-7 px-3 ${filtroEstado === est ? 'bg-indigo-600 hover:bg-indigo-700' : 'text-slate-500'}`}
+                                className={`text-[10px] font-bold rounded-lg h-7 px-2.5 ${filtroEstado === est ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'text-slate-500'}`}
                                 onClick={() => setFiltroEstado(est)}
                             >
-                                {est}
+                                {est === 'ARMADO' ? '🚚 ARMADOS' : est}
                             </Button>
                         ))}
                     </div>
@@ -348,28 +360,57 @@ export default function AdminPedidosPage() {
 
                             {/* BOTONERA DE ACCIÓN ADMIN */}
                             {pedidoActivo.estado === 'PENDIENTE' && (
-                                <div className="flex gap-2">
-                                    <Button disabled={cargando} onClick={abrirModalEditar} variant="outline" className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold">
-                                        <Edit className="w-4 h-4 mr-2" /> Editar
+                                <div className="flex flex-wrap gap-2">
+                                    <Button disabled={cargando} onClick={abrirModalEditar} variant="outline" className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold text-xs h-9">
+                                        <Edit className="w-4 h-4 mr-1.5" /> Editar
                                     </Button>
-                                    <Button disabled={cargando} onClick={() => procesarPedido('RECHAZADO')} variant="outline" className="border-red-200 text-red-600 hover:bg-red-50 font-bold">
-                                        <Ban className="w-4 h-4 mr-2" /> Rechazar
+                                    <Button disabled={cargando} onClick={() => procesarPedido('RECHAZADO')} variant="outline" className="border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs h-9">
+                                        <Ban className="w-4 h-4 mr-1.5" /> Rechazar
                                     </Button>
-                                    <Button disabled={cargando} onClick={() => procesarPedido('APROBADO')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md">
-                                        <CheckCircle2 className="w-4 h-4 mr-2" /> Aprobar (Preparar)
+                                    <Button disabled={cargando} onClick={() => procesarPedido('APROBADO')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm text-xs h-9">
+                                        <CheckCircle2 className="w-4 h-4 mr-1.5" /> Aprobar
                                     </Button>
-                                    <Button disabled={cargando} onClick={abrirModalFacturar} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-md">
-                                        <Receipt className="w-4 h-4 mr-2" /> Facturar y Cerrar
+                                    <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm text-xs h-9">
+                                        <Truck className="w-4 h-4 mr-1.5" /> Listo p/ Entrega (Armado)
+                                    </Button>
+                                    <Button disabled={cargando} onClick={abrirModalFacturar} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-sm text-xs h-9">
+                                        <Receipt className="w-4 h-4 mr-1.5" /> Facturar y Cerrar
                                     </Button>
                                 </div>
                             )}
                             {pedidoActivo.estado === 'APROBADO' && (
-                                <div className="flex gap-2">
-                                    <Button disabled={cargando} onClick={abrirModalEditar} variant="outline" className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold">
-                                        <Edit className="w-4 h-4 mr-2" /> Editar
+                                <div className="flex flex-wrap gap-2">
+                                    <Button disabled={cargando} onClick={abrirModalEditar} variant="outline" className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold text-xs h-9">
+                                        <Edit className="w-4 h-4 mr-1.5" /> Editar
                                     </Button>
-                                    <Button disabled={cargando} onClick={abrirModalFacturar} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-md">
-                                        <Receipt className="w-4 h-4 mr-2" /> Facturar (Ya entregado)
+                                    <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm text-xs h-9">
+                                        <Truck className="w-4 h-4 mr-1.5" /> Listo p/ Entrega (Armado)
+                                    </Button>
+                                    <Button disabled={cargando} onClick={abrirModalFacturar} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-sm text-xs h-9">
+                                        <Receipt className="w-4 h-4 mr-1.5" /> Facturar (Ya entregado)
+                                    </Button>
+                                </div>
+                            )}
+                            {['ARMADO', 'LISTO_ENTREGA'].includes(pedidoActivo.estado) && (
+                                <div className="flex flex-wrap gap-2">
+                                    <Button disabled={cargando} onClick={() => procesarPedido('ENTREGADO')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm text-xs h-9">
+                                        <CheckCircle2 className="w-4 h-4 mr-1.5" /> Marcar Entregado
+                                    </Button>
+                                    <Button disabled={cargando} onClick={() => procesarPedido('NO_ENTREGADO')} variant="outline" className="border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-xs h-9">
+                                        <Ban className="w-4 h-4 mr-1.5" /> No Entregado
+                                    </Button>
+                                    <Button disabled={cargando} onClick={abrirModalFacturar} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-sm text-xs h-9">
+                                        <Receipt className="w-4 h-4 mr-1.5" /> Facturar
+                                    </Button>
+                                </div>
+                            )}
+                            {pedidoActivo.estado === 'NO_ENTREGADO' && (
+                                <div className="flex flex-wrap gap-2">
+                                    <Button disabled={cargando} onClick={() => procesarPedido('ENTREGADO')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm text-xs h-9">
+                                        <CheckCircle2 className="w-4 h-4 mr-1.5" /> Reintentar y Entregar
+                                    </Button>
+                                    <Button disabled={cargando} onClick={abrirModalFacturar} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold shadow-sm text-xs h-9">
+                                        <Receipt className="w-4 h-4 mr-1.5" /> Facturar
                                     </Button>
                                 </div>
                             )}
@@ -402,6 +443,31 @@ export default function AdminPedidosPage() {
                                             </div>
                                         )}
 
+                                        {/* Fecha de Entrega Programada */}
+                                        <div className="mt-2 bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                                <p className="text-[10px] font-bold text-indigo-700 uppercase flex items-center gap-1">
+                                                    <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Fecha Entrega Programada:
+                                                </p>
+                                                <input
+                                                    type="date"
+                                                    defaultValue={pedidoActivo.fecha_entrega ? new Date(pedidoActivo.fecha_entrega).toISOString().split('T')[0] : ''}
+                                                    onChange={async (e) => {
+                                                        if (!e.target.value) return;
+                                                        const res = await actualizarFechaEntregaPedido(pedidoActivo.id, e.target.value);
+                                                        if (res.success) {
+                                                            toast.success("¡Fecha de entrega actualizada!");
+                                                            setPedidoActivo({ ...pedidoActivo, fecha_entrega: new Date(e.target.value) });
+                                                            cargarPedidos();
+                                                        } else {
+                                                            toast.error(res.error);
+                                                        }
+                                                    }}
+                                                    className="text-xs font-bold bg-white border border-indigo-200 rounded px-2 py-1 text-indigo-900 outline-none shadow-sm"
+                                                />
+                                            </div>
+                                        </div>
+
                                         <div className="mt-3 bg-amber-50 p-3 rounded-lg border border-amber-100">
                                             <p className="text-[10px] font-bold text-amber-700 uppercase mb-1">Notas del Pedido:</p>
                                             <p className="text-xs text-amber-900 whitespace-pre-wrap">{pedidoActivo.notas || 'Sin notas.'}</p>
@@ -429,7 +495,14 @@ export default function AdminPedidosPage() {
                                             {pedidoActivo.detalles.map((item: any, idx: number) => (
                                                 <tr key={idx} className="bg-white hover:bg-slate-50">
                                                     <td className="px-4 py-3 text-xs text-slate-400">{item.producto?.codigo_articulo}</td>
-                                                    <td className="px-4 py-3 font-semibold text-slate-700">{item.producto?.nombre_producto}</td>
+                                                    <td className="px-4 py-3 font-semibold text-slate-700">
+                                                        <div>{item.producto?.nombre_producto}</div>
+                                                        {item.combo_nombre && (
+                                                            <span className="inline-block mt-0.5 text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded border border-indigo-200">
+                                                                📦 Combo: {item.combo_nombre}
+                                                            </span>
+                                                        )}
+                                                    </td>
                                                     <td className="px-4 py-3 text-center font-black">{item.cantidad}</td>
                                                     <td className="px-4 py-3 text-right text-slate-500">${item.precio_unitario.toFixed(2)}</td>
                                                     <td className="px-4 py-3 text-center">

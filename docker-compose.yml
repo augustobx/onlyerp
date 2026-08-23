@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: sanudb
+      MYSQL_DATABASE: tomassidb
       MYSQL_USER: sanuuser
       MYSQL_PASSWORD: password_seguro
     volumes:

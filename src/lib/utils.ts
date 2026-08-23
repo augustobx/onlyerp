@@ -9,16 +9,17 @@ export function cn(...inputs: ClassValue[]) {
 // CÁLCULOS DE PRECIO BASE
 // ==========================================
 
-export function calcularCostoNeto(precioCosto: number, descuentoProveedor: number) {
-  return precioCosto - (precioCosto * descuentoProveedor) / 100;
+export function calcularCostoNeto(precioCosto: number, descuentoProveedor: number = 0) {
+  return precioCosto - (precioCosto * (descuentoProveedor || 0)) / 100;
 }
 
-export function calcularCostoIva(costoNeto: number, alicuotaIva: number) {
-  return costoNeto * (1 + alicuotaIva / 100);
+export function calcularCostoIva(costoNeto: number, alicuotaIva: number = 0) {
+  // IVA desactivado globalmente (0% IVA)
+  return costoNeto;
 }
 
-export function calcularPrecioFinal(costoIva: number, porcentajeMarcacion: number) {
-  return costoIva * (1 + porcentajeMarcacion / 100);
+export function calcularPrecioFinal(costoIva: number, porcentajeMarcacion: number = 0) {
+  return costoIva * (1 + (porcentajeMarcacion || 0) / 100);
 }
 
 // ==========================================
@@ -31,13 +32,13 @@ export function redondearPrecio(precio: number, activo: boolean): number {
 }
 
 // ==========================================
-// CÁLCULO CON CASCADA P → M → C
+// CÁLCULO CON CASCADA P → M → C (IVA 0% POR DEFECTO)
 // ==========================================
 
 /**
  * Calcula el precio final aplicando la cascada:
  * 1. Costo Neto = precioCosto * (1 - descProv/100)
- * 2. Costo + IVA
+ * 2. Costo + IVA (0% por defecto)
  * 3. + Aumento Proveedor %
  * 4. + Aumento Marca %
  * 5. + Aumento Categoría %
@@ -45,16 +46,16 @@ export function redondearPrecio(precio: number, activo: boolean): number {
  */
 export function calcularPrecioConCascada(
   precioCosto: number,
-  descuentoProveedor: number,
-  alicuotaIva: number,
-  aumentoProveedor: number,
-  aumentoMarca: number,
-  aumentoCategoria: number,
-  margenLista: number,
+  descuentoProveedor: number = 0,
+  alicuotaIva: number = 0,
+  aumentoProveedor: number = 0,
+  aumentoMarca: number = 0,
+  aumentoCategoria: number = 0,
+  margenLista: number = 0,
   redondearA5: boolean = false
 ): number {
-  const costoNeto = calcularCostoNeto(precioCosto, descuentoProveedor);
-  const costoIva = calcularCostoIva(costoNeto, alicuotaIva);
+  const costoNeto = calcularCostoNeto(precioCosto, descuentoProveedor || 0);
+  const costoIva = calcularCostoIva(costoNeto, alicuotaIva || 0);
   const conAumProv = costoIva * (1 + (aumentoProveedor || 0) / 100);
   const conAumMarca = conAumProv * (1 + (aumentoMarca || 0) / 100);
   const conAumCat = conAumMarca * (1 + (aumentoCategoria || 0) / 100);
@@ -65,6 +66,41 @@ export function calcularPrecioConCascada(
   }
   
   return precioFinal;
+}
+
+/**
+ * Resuelve el margen y descuento aplicable para un producto y una lista:
+ * 1. Margen individual del producto en la lista
+ * 2. Margen asignado al proveedor para esa lista
+ * 3. Margen por defecto de la lista
+ */
+export function resolverMargenYDescuento(
+  producto: any,
+  listaId: number,
+  listaMargenDefecto: number = 0
+): { margenFinal: number; descuentoFinal: number } {
+  // 1. Margen del producto en la lista
+  const pivotProd = producto.listas_precios?.find((lp: any) => lp.listaPrecioId === listaId);
+  let margenFinal = listaMargenDefecto;
+  let descuentoFinal = producto.descuento_proveedor || 0;
+
+  // 2. Margen y descuento del proveedor para esta lista
+  const pivotProv = producto.proveedor?.listas_precios?.find((lp: any) => lp.listaPrecioId === listaId);
+  if (pivotProv) {
+    if (pivotProv.margen_personalizado !== null && pivotProv.margen_personalizado !== undefined) {
+      margenFinal = pivotProv.margen_personalizado;
+    }
+    if (pivotProv.descuento_personalizado !== null && pivotProv.descuento_personalizado !== undefined) {
+      descuentoFinal = pivotProv.descuento_personalizado;
+    }
+  }
+
+  // 3. Sobrescritura si el producto tiene margen personalizado explícito
+  if (pivotProd && pivotProd.margen_personalizado !== null && pivotProd.margen_personalizado !== undefined) {
+    margenFinal = pivotProd.margen_personalizado;
+  }
+
+  return { margenFinal, descuentoFinal };
 }
 
 // ==========================================

@@ -14,10 +14,11 @@ export const productoSchema = z.object({
   codigo_barras: z.string().default("0"),
   fecha_ingreso: z.coerce.date(),
   nombre_producto: z.string().min(1, "El nombre del producto es obligatorio"),
+  imagen_url: z.string().nullable().optional(),
   proveedorId: z.coerce.number().min(1, "Debe seleccionar un proveedor"),
   marcaId: z.coerce.number().nullable().optional(),
   categoriaId: z.coerce.number().nullable().optional(),
-  alicuota_iva: z.coerce.number().min(0, "Debe ser al menos 0"),
+  alicuota_iva: z.coerce.number().min(0, "Debe ser al menos 0").default(0),
   precio_costo: z.coerce.number().min(0, "Debe ser al menos 0"),
   descuento_proveedor: z.coerce.number().min(0, "Debe ser al menos 0"),
 

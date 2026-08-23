@@ -6,8 +6,8 @@ import {
     Building2, Users, Edit, Trash2, Plus, Loader2, X, Phone, Mail, MapPin, TrendingUp, AlertTriangle, ArrowRight, Package, Tag, Percent
 } from "lucide-react";
 
-import { getProveedoresCompleto, guardarProveedor, guardarMarca, eliminarMarca, actualizarPreciosMasivos } from "@/app/actions/proveedores";
-import { crearCategoria, actualizarCategoria, eliminarCategoria } from "@/app/actions/productos";
+import { getProveedoresCompleto, guardarProveedor, guardarMarca, eliminarMarca, actualizarPreciosMasivos, guardarProveedorListaPrecio } from "@/app/actions/proveedores";
+import { crearCategoria, actualizarCategoria, eliminarCategoria, getListasPrecioGlobales } from "@/app/actions/productos";
 import { Badge } from "@/components/ui/badge";
 
 import { Button } from "@/components/ui/button";
@@ -19,12 +19,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export default function ProveedoresPage() {
     const [isPending, startTransition] = useTransition();
     const [proveedores, setProveedores] = useState<any[]>([]);
+    const [listasGlobales, setListasGlobales] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [tabActiva, setTabActiva] = useState<"DIRECTORIO" | "AUMENTOS">("DIRECTORIO");
 
     // Modal de Proveedor
     const [showModal, setShowModal] = useState(false);
     const [provEditando, setProvEditando] = useState<any | null>(null);
+
+    // Modal de Listas de Precios por Proveedor
+    const [showListasModal, setShowListasModal] = useState(false);
+    const [provListasEditando, setProvListasEditando] = useState<any | null>(null);
+    const [formListasProv, setFormListasProv] = useState<Record<number, { margen: string; descuento: string }>>({});
 
     // Estado para gestión de Marcas
     const [showMarcaModal, setShowMarcaModal] = useState(false);
@@ -45,13 +51,52 @@ export default function ProveedoresPage() {
 
     const cargarDatos = () => {
         startTransition(async () => {
-            const data = await getProveedoresCompleto();
+            const [data, listas] = await Promise.all([
+                getProveedoresCompleto(),
+                getListasPrecioGlobales()
+            ]);
             setProveedores(data);
+            setListasGlobales(listas);
             setLoading(false);
         });
     };
 
     useEffect(() => { cargarDatos(); }, []);
+
+    const handleAbrirListas = (prov: any) => {
+        setProvListasEditando(prov);
+        const map: Record<number, { margen: string; descuento: string }> = {};
+        listasGlobales.forEach(lg => {
+            const pivot = prov.listas_precios?.find((lp: any) => lp.listaPrecioId === lg.id);
+            map[lg.id] = {
+                margen: pivot?.margen_personalizado !== null && pivot?.margen_personalizado !== undefined ? String(pivot.margen_personalizado) : "",
+                descuento: pivot?.descuento_personalizado !== null && pivot?.descuento_personalizado !== undefined ? String(pivot.descuento_personalizado) : ""
+            };
+        });
+        setFormListasProv(map);
+        setShowListasModal(true);
+    };
+
+    const handleGuardarListasProveedor = async () => {
+        if (!provListasEditando) return;
+        startTransition(async () => {
+            let errorCount = 0;
+            for (const lg of listasGlobales) {
+                const item = formListasProv[lg.id];
+                const margenVal = item?.margen && item.margen.trim() !== "" ? Number(item.margen) : null;
+                const descVal = item?.descuento && item.descuento.trim() !== "" ? Number(item.descuento) : null;
+                const res = await guardarProveedorListaPrecio(provListasEditando.id, lg.id, margenVal, descVal);
+                if (!res.success) errorCount++;
+            }
+            if (errorCount === 0) {
+                toast.success("¡Reglas de listas actualizadas para este proveedor!");
+                setShowListasModal(false);
+                cargarDatos();
+            } else {
+                toast.error("Ocurrió un error al guardar algunas reglas.");
+            }
+        });
+    };
 
     const handleAbrirModal = (prov: any = null) => {
         setProvEditando(prov);
@@ -158,7 +203,7 @@ export default function ProveedoresPage() {
                 categoriaSeleccionadaMasiva ? Number(categoriaSeleccionadaMasiva) : undefined
             );
             if (res.success) {
-                toast.success(`¡Actualización completada!`, { description: `Se modificaron ${res.cantidadModificada} productos.` });
+                toast.success(`¡Actualización completada!`, { description: `Se modificaron ${res.count} productos.` });
                 setPorcentajeMasivo("");
                 setProvSeleccionadoMasivo("");
                 setMarcaSeleccionadaMasiva("");
@@ -283,6 +328,12 @@ export default function ProveedoresPage() {
                                         <span className="text-xs font-medium text-slate-500 flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> {p._count.productos} productos</span>
                                         <Button variant="ghost" size="sm" className="text-xs h-7 text-indigo-600 hover:bg-indigo-50" onClick={() => { setMarcaEditando(null); setMarcaProvId(p.id); setShowMarcaModal(true); }}>
                                             <Plus className="h-3 w-3 mr-1" /> Marca
+                                        </Button>
+                                    </div>
+
+                                    <div className="pt-2">
+                                        <Button variant="outline" size="sm" className="w-full text-xs font-bold text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100 border-indigo-200 h-8" onClick={() => handleAbrirListas(p)}>
+                                            <Tag className="h-3.5 w-3.5 mr-1.5 text-indigo-600" /> Tarifarios y Descuentos ({p.listas_precios?.length || 0})
                                         </Button>
                                     </div>
                                 </CardContent>
@@ -500,6 +551,83 @@ export default function ProveedoresPage() {
                                 <Button type="submit" disabled={isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white">{isPending ? <Loader2 className="animate-spin h-4 w-4" /> : "Guardar"}</Button>
                             </div>
                         </form>
+                    </Card>
+                </div>
+            )}
+
+            {/* ========= MODAL LISTAS DE PRECIOS POR PROVEEDOR ========= */}
+            {showListasModal && provListasEditando && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <Card className="w-full max-w-lg shadow-2xl border-0 rounded-2xl flex flex-col max-h-[90vh]">
+                        <div className="p-4 border-b border-slate-100 bg-indigo-50/50 flex justify-between items-center shrink-0 rounded-t-2xl">
+                            <div>
+                                <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                                    <Tag className="h-4 w-4 text-indigo-600" /> Reglas de Tarifarios y Descuentos
+                                </h3>
+                                <p className="text-xs text-slate-500 mt-0.5">Proveedor: <span className="font-bold text-indigo-700">{provListasEditando.nombre}</span></p>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => setShowListasModal(false)} className="h-8 w-8 rounded-full text-slate-400"><X className="h-4 w-4" /></Button>
+                        </div>
+                        <div className="p-5 overflow-y-auto space-y-4 flex-1">
+                            <p className="text-xs text-slate-500 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                Definí márgenes de ganancia o descuentos específicos para este proveedor en cada lista de precios. Si se deja en blanco, se utilizará el margen por defecto de la lista.
+                            </p>
+
+                            <div className="space-y-3">
+                                {listasGlobales.map(lista => (
+                                    <div key={lista.id} className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-2.5">
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-bold text-sm text-slate-800">{lista.nombre}</span>
+                                            <Badge variant="outline" className="text-[10px] text-slate-500 bg-slate-50">
+                                                Margen base: {lista.margen_defecto}%
+                                            </Badge>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] font-bold uppercase text-indigo-600">Margen Específico (%)</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.1"
+                                                    placeholder={`Defecto: ${lista.margen_defecto}%`}
+                                                    value={formListasProv[lista.id]?.margen || ""}
+                                                    onChange={(e) => setFormListasProv({
+                                                        ...formListasProv,
+                                                        [lista.id]: {
+                                                            ...formListasProv[lista.id],
+                                                            margen: e.target.value
+                                                        }
+                                                    })}
+                                                    className="h-9 text-sm font-semibold bg-slate-50 border-slate-200"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] font-bold uppercase text-emerald-600">Descuento Específico (%)</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.1"
+                                                    placeholder="Ej: 5"
+                                                    value={formListasProv[lista.id]?.descuento || ""}
+                                                    onChange={(e) => setFormListasProv({
+                                                        ...formListasProv,
+                                                        [lista.id]: {
+                                                            ...formListasProv[lista.id],
+                                                            descuento: e.target.value
+                                                        }
+                                                    })}
+                                                    className="h-9 text-sm font-semibold bg-slate-50 border-slate-200"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-slate-100 flex justify-end gap-2 bg-slate-50 shrink-0 rounded-b-2xl">
+                            <Button variant="outline" onClick={() => setShowListasModal(false)}>Cancelar</Button>
+                            <Button onClick={handleGuardarListasProveedor} disabled={isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold">
+                                {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null} Guardar Reglas
+                            </Button>
+                        </div>
                     </Card>
                 </div>
             )}

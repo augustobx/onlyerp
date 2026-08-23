@@ -1,8 +1,6 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "@/lib/prisma";
 
 export async function getDashboardMetrics() {
     try {
@@ -70,6 +68,35 @@ export async function getDashboardMetrics() {
             include: { cliente: { select: { nombre_razon_social: true } } }
         });
 
+        // 7. Pedidos para entregar hoy (Logística / Repartos)
+        const pedidosHoy = await prisma.pedido.findMany({
+            where: {
+                OR: [
+                    {
+                        estado: { in: ['ARMADO', 'LISTO_ENTREGA'] }
+                    },
+                    {
+                        fecha_entrega: { gte: hoyInicio, lte: hoyFin }
+                    }
+                ]
+            },
+            take: 5,
+            orderBy: { fecha: 'desc' },
+            include: {
+                cliente: { select: { nombre_razon_social: true, direccion: true, telefono: true } },
+                repartidor: { select: { nombre: true } }
+            }
+        });
+
+        const totalPedidosHoy = await prisma.pedido.count({
+            where: {
+                OR: [
+                    { estado: { in: ['ARMADO', 'LISTO_ENTREGA'] } },
+                    { fecha_entrega: { gte: hoyInicio, lte: hoyFin } }
+                ]
+            }
+        });
+
         return {
             success: true,
             data: {
@@ -80,7 +107,9 @@ export async function getDashboardMetrics() {
                 productosBajoStock,
                 efectivoEnCaja,
                 cajaAbierta: !!cajaActiva,
-                ultimasVentas
+                ultimasVentas,
+                totalPedidosHoy,
+                pedidosHoy
             }
         };
     } catch (error) {

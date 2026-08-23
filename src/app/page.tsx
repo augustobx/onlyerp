@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { getDashboardMetrics } from "@/app/actions/dashboard";
 import {
   LayoutDashboard, TrendingUp, AlertTriangle, BadgeDollarSign,
-  Wallet, Settings, Receipt, Package, ArrowRight, Loader2, Check
+  Wallet, Settings, Receipt, Package, ArrowRight, Loader2, Check, Truck, Calendar
 } from "lucide-react";
 import Link from "next/link";
 
@@ -22,7 +22,8 @@ export default function DashboardPage() {
   // === MOTOR DE PERSONALIZACIÓN DE WIDGETS ===
   const [showConfig, setShowConfig] = useState(false);
   const [widgets, setWidgets] = useState({
-    kpis: true,          // Las 4 tarjetas de arriba
+    kpis: true,          // Las tarjetas de arriba
+    entregasHoy: true,   // Widget de pedidos a entregar hoy
     alertasStock: true,  // Panel de bajo stock
     ultimasVentas: true, // Feed de ventas recientes
     accesos: true        // Botones rápidos
@@ -84,13 +85,20 @@ export default function DashboardPage() {
             <p className="text-sm text-slate-500 mt-0.5">Resumen operativo de tu negocio al día de hoy.</p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setShowConfig(!showConfig)}
-          className={`h-10 border-slate-200 font-medium transition-colors ${showConfig ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'text-slate-600 hover:bg-slate-50'}`}
-        >
-          <Settings className="h-4 w-4 mr-2" /> Configurar Vista
-        </Button>
+        <div className="flex gap-2">
+          <Link href="/pedidos/armados">
+            <Button className="h-10 bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm">
+              <Truck className="h-4 w-4 mr-2" /> Despacho / Entregas
+            </Button>
+          </Link>
+          <Button
+            variant="outline"
+            onClick={() => setShowConfig(!showConfig)}
+            className={`h-10 border-slate-200 font-medium transition-colors ${showConfig ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'text-slate-600 hover:bg-slate-50'}`}
+          >
+            <Settings className="h-4 w-4 mr-2" /> Configurar Vista
+          </Button>
+        </div>
       </div>
 
       {/* PANEL DE CONFIGURACIÓN DESPLEGABLE */}
@@ -98,21 +106,25 @@ export default function DashboardPage() {
         <Card className="border-indigo-100 bg-indigo-50/30 dark:bg-indigo-500/5 shadow-sm animate-in slide-in-from-top-4 fade-in duration-200">
           <CardContent className="p-5">
             <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 mb-4">Personalizar Dashboard</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <div className="flex items-center justify-between bg-white dark:bg-zinc-900 p-3 rounded-lg border border-slate-200 dark:border-zinc-800">
-                <Label className="font-semibold text-sm cursor-pointer" onClick={() => toggleWidget('kpis')}>Métricas (KPIs)</Label>
+                <Label className="font-semibold text-xs cursor-pointer" onClick={() => toggleWidget('kpis')}>KPIs</Label>
                 <Switch checked={widgets.kpis} onCheckedChange={() => toggleWidget('kpis')} />
               </div>
               <div className="flex items-center justify-between bg-white dark:bg-zinc-900 p-3 rounded-lg border border-slate-200 dark:border-zinc-800">
-                <Label className="font-semibold text-sm cursor-pointer" onClick={() => toggleWidget('alertasStock')}>Alertas de Stock</Label>
+                <Label className="font-semibold text-xs cursor-pointer" onClick={() => toggleWidget('entregasHoy')}>Entregas Hoy</Label>
+                <Switch checked={widgets.entregasHoy} onCheckedChange={() => toggleWidget('entregasHoy')} />
+              </div>
+              <div className="flex items-center justify-between bg-white dark:bg-zinc-900 p-3 rounded-lg border border-slate-200 dark:border-zinc-800">
+                <Label className="font-semibold text-xs cursor-pointer" onClick={() => toggleWidget('alertasStock')}>Alertas Stock</Label>
                 <Switch checked={widgets.alertasStock} onCheckedChange={() => toggleWidget('alertasStock')} />
               </div>
               <div className="flex items-center justify-between bg-white dark:bg-zinc-900 p-3 rounded-lg border border-slate-200 dark:border-zinc-800">
-                <Label className="font-semibold text-sm cursor-pointer" onClick={() => toggleWidget('ultimasVentas')}>Últimas Ventas</Label>
+                <Label className="font-semibold text-xs cursor-pointer" onClick={() => toggleWidget('ultimasVentas')}>Últimas Ventas</Label>
                 <Switch checked={widgets.ultimasVentas} onCheckedChange={() => toggleWidget('ultimasVentas')} />
               </div>
               <div className="flex items-center justify-between bg-white dark:bg-zinc-900 p-3 rounded-lg border border-slate-200 dark:border-zinc-800">
-                <Label className="font-semibold text-sm cursor-pointer" onClick={() => toggleWidget('accesos')}>Accesos Rápidos</Label>
+                <Label className="font-semibold text-xs cursor-pointer" onClick={() => toggleWidget('accesos')}>Accesos Rápidos</Label>
                 <Switch checked={widgets.accesos} onCheckedChange={() => toggleWidget('accesos')} />
               </div>
             </div>
@@ -122,7 +134,24 @@ export default function DashboardPage() {
 
       {/* 1. MÓDULO: MÉTRICAS PRINCIPALES (KPIs) */}
       {widgets.kpis && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+
+          <Card className="shadow-sm border-indigo-100 dark:border-indigo-500/20 bg-indigo-50/50 dark:bg-indigo-500/5 hover:border-indigo-300 transition-colors">
+            <Link href="/pedidos/armados">
+              <CardContent className="p-5">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase text-indigo-600 tracking-wider">Entregas Hoy</p>
+                    <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{metrics.totalPedidosHoy || 0}</h3>
+                  </div>
+                  <div className="p-2 bg-indigo-100 dark:bg-indigo-500/20 rounded-lg text-indigo-600"><Truck className="h-5 w-5" /></div>
+                </div>
+                <p className="text-xs font-medium text-indigo-600/80 mt-3 flex items-center gap-1">
+                  Pedidos armados/reparto <ArrowRight className="h-3 w-3" />
+                </p>
+              </CardContent>
+            </Link>
+          </Card>
 
           <Card className="shadow-sm border-emerald-100 dark:border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-500/5">
             <CardContent className="p-5">
@@ -171,16 +200,76 @@ export default function DashboardPage() {
             <CardContent className="p-5">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-[10px] font-bold uppercase text-red-600/80 tracking-wider">Alertas de Inventario</p>
+                  <p className="text-[10px] font-bold uppercase text-red-600/80 tracking-wider">Alertas Inventario</p>
                   <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">{metrics.totalBajoStock}</h3>
                 </div>
                 <div className="p-2 bg-red-100 dark:bg-red-500/20 rounded-lg text-red-600"><AlertTriangle className="h-5 w-5" /></div>
               </div>
-              <p className="text-xs font-medium text-red-600/70 mt-3">Productos debajo del mínimo</p>
+              <p className="text-xs font-medium text-red-600/70 mt-3">Debajo del mínimo</p>
             </CardContent>
           </Card>
 
         </div>
+      )}
+
+      {/* BLOQUE DE ENTREGAS DE HOY */}
+      {widgets.entregasHoy && (
+        <Card className="shadow-sm border-indigo-200 dark:border-indigo-500/20 bg-white dark:bg-zinc-900 flex flex-col">
+          <CardHeader className="bg-indigo-50/40 dark:bg-indigo-500/5 border-b border-indigo-100 dark:border-indigo-500/10 p-4 flex flex-row justify-between items-center">
+            <CardTitle className="text-base flex items-center gap-2 text-indigo-900 dark:text-indigo-200 font-bold">
+              <Truck className="h-5 w-5 text-indigo-600" /> Pedidos para Entregar Hoy / Reparto ({metrics.totalPedidosHoy || 0})
+            </CardTitle>
+            <Link href="/pedidos/armados">
+              <Button variant="ghost" size="sm" className="h-8 text-xs text-indigo-600 hover:bg-indigo-50 font-bold">
+                Ver todos los despachos <ArrowRight className="h-3.5 w-3.5 ml-1" />
+              </Button>
+            </Link>
+          </CardHeader>
+          <div className="p-0 overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-[10px] uppercase tracking-wider bg-slate-50 dark:bg-zinc-800/50 text-slate-500 border-b border-slate-200 dark:border-zinc-800">
+                <tr>
+                  <th className="px-5 py-3 font-semibold">Pedido #</th>
+                  <th className="px-5 py-3 font-semibold">Cliente</th>
+                  <th className="px-5 py-3 font-semibold">Dirección de Entrega</th>
+                  <th className="px-5 py-3 font-semibold">Repartidor</th>
+                  <th className="px-5 py-3 font-semibold text-center">Estado</th>
+                  <th className="px-5 py-3 font-semibold text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-zinc-800">
+                {(!metrics.pedidosHoy || metrics.pedidosHoy.length === 0) ? (
+                  <tr>
+                    <td colSpan={6} className="text-center py-6 text-slate-400 text-xs">
+                      No hay entregas pendientes programadas para hoy.
+                    </td>
+                  </tr>
+                ) : (
+                  metrics.pedidosHoy.map((p: any) => (
+                    <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-zinc-800/50 transition-colors">
+                      <td className="px-5 py-3 font-bold font-mono text-slate-900 dark:text-white">#{p.numero}</td>
+                      <td className="px-5 py-3 font-semibold text-slate-800 dark:text-slate-200">{p.cliente?.nombre_razon_social}</td>
+                      <td className="px-5 py-3 text-slate-500 text-xs">{p.cliente?.direccion || "Retiro en local / Sin dirección"}</td>
+                      <td className="px-5 py-3 text-slate-600 text-xs font-medium">{p.repartidor?.nombre || "Sin asignar"}</td>
+                      <td className="px-5 py-3 text-center">
+                        <Badge variant="outline" className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border-indigo-200">
+                          {p.estado}
+                        </Badge>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <Link href="/pedidos/armados">
+                          <Button variant="outline" size="sm" className="h-7 text-xs font-bold text-indigo-600 border-indigo-200">
+                            Gestionar
+                          </Button>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {/* BLOQUE INFERIOR: TABLAS Y ACCESOS */}
