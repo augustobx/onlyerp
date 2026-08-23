@@ -1,42 +1,53 @@
-version: '3.8'
-
 services:
   web:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: web-app
+
+    container_name: tommasi-web
     restart: unless-stopped
+
     ports:
-      # Mapeamos el puerto interno al mismo puerto externo hacia el host (NPM)
-      - "3002:3002"
+      - "3002:3000"
+
     environment:
-      - PORT=3002
-      - NODE_ENV=production
+      NODE_ENV: production
+      PORT: 3000
+
     env_file:
       - .env
+
     depends_on:
       db:
         condition: service_healthy
+
     networks:
       - app_network
 
   db:
     image: mysql:8.0
-    container_name: db
+
+    container_name: tommasi-db
     restart: unless-stopped
+
     environment:
       MYSQL_ROOT_PASSWORD: rootpassword
       MYSQL_DATABASE: tomassidb
       MYSQL_USER: sanuuser
       MYSQL_PASSWORD: password_seguro
+
     volumes:
-      # Persistencia de los datos de la base de datos
       - db_data:/var/lib/mysql
+
     networks:
       - app_network
+
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -prootpassword"]
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h localhost -u root -prootpassword"
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
