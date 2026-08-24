@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { buscarClientes, buscarProductos, obtenerListasPrecio, obtenerMarcas, obtenerCategorias, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
+import { getDepositos } from "@/app/actions/configuracion";
 import {
     registrarPedidoPWA, obtenerPedidosVendedor, accionarPedidoVendedor,
     obtenerPedidosParaReparto, marcarPedidoEntregado, marcarPedidoNoEntregado,
@@ -89,7 +90,8 @@ export default function PwaVendedor() {
     const [filtroCategoria, setFiltroCategoria] = useState<string>("TODAS");
     const [productosCatalogo, setProductosCatalogo] = useState<any[]>([]);
 
-    const depositoId = 1;
+    const [depositos, setDepositos] = useState<any[]>([]);
+    const [depositoId, setDepositoId] = useState<number>(1);
 
     // ==========================================
     // EFECTOS (CONEXIÓN Y CARGA)
@@ -110,9 +112,24 @@ export default function PwaVendedor() {
         cargarCombos();
         cargarRepartos();
         intentarSincronizar();
+
+        getDepositos().then(deps => {
+            if (deps && deps.length > 0) {
+                setDepositos(deps);
+                setDepositoId(deps[0].id);
+            }
+        });
         
         getClientSession().then((s) => {
             if (s && s.permisos && s.permisos.includes("COBRAR_CC")) setPuedeCobrar(true);
+            if (s?.sucursalId) {
+                getDepositos(Number(s.sucursalId)).then(deps => {
+                    if (deps && deps.length > 0) {
+                        setDepositos(deps);
+                        setDepositoId(deps[0].id);
+                    }
+                });
+            }
         });
 
         return () => {

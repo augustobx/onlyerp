@@ -7,6 +7,41 @@ import { emitirComprobanteAFIP } from "./afip";
 import { calcularPrecioConCascada, redondearPrecio } from "@/lib/utils";
 
 // ============================================================================
+// HELPER: RESOLVER DEPÓSITO ACTIVO DINÁMICAMENTE
+// ============================================================================
+async function resolverDepositoId(tx: any, usuarioId?: number | null, requestedDepositoId?: number | null): Promise<number> {
+    if (requestedDepositoId && typeof requestedDepositoId === 'number' && requestedDepositoId > 0) {
+        const depo = await tx.deposito.findUnique({ where: { id: requestedDepositoId, estado: true } });
+        if (depo) return depo.id;
+    }
+
+    if (usuarioId) {
+        const user = await tx.usuario.findUnique({ where: { id: usuarioId }, select: { sucursalId: true } });
+        if (user?.sucursalId) {
+            const sucursalDepo = await tx.deposito.findFirst({
+                where: { sucursalId: user.sucursalId, estado: true },
+                orderBy: { id: 'asc' }
+            });
+            if (sucursalDepo) return sucursalDepo.id;
+        }
+    }
+
+    const primerDepo = await tx.deposito.findFirst({
+        where: { estado: true },
+        orderBy: { id: 'asc' }
+    });
+    if (primerDepo) return primerDepo.id;
+
+    const anyDepo = await tx.deposito.findFirst({ orderBy: { id: 'asc' } });
+    if (anyDepo) return anyDepo.id;
+
+    const nuevoDepo = await tx.deposito.create({
+        data: { nombre: "Depósito Principal", estado: true }
+    });
+    return nuevoDepo.id;
+}
+
+// ============================================================================
 // 1. REGISTRAR NUEVO PEDIDO
 // ============================================================================
 export async function registrarPedidoPWA(data: any) {
@@ -17,16 +52,44 @@ export async function registrarPedidoPWA(data: any) {
 
             if (!usuarioId) throw new Error("No estás autenticado.");
 
-            // A. VERIFICACIÓN ESTRICTA DE STOCK
+            const baseDepositoId = await resolverDepositoId(tx, usuarioId, data.depositoId ? Number(data.depositoId) : null);
+
+            // A. VERIFICACIÓN INTELIGENTE DE STOCK
+            const itemsConDeposito: { item: any; targetDepositoId: number }[] = [];
+
             for (const item of data.carrito) {
-                const stockUbi = await tx.stockUbicacion.findUnique({
-                    where: { productoId_depositoId: { productoId: item.productoId, depositoId: data.depositoId } }
+                let targetDepoId = baseDepositoId;
+                let stockUbi = await tx.stockUbicacion.findUnique({
+                    where: { productoId_depositoId: { productoId: item.productoId, depositoId: targetDepoId } }
                 });
 
+                // Si en el depósito base no alcanza, buscar si otro depósito activo tiene stock suficiente
                 if (!stockUbi || stockUbi.cantidad < item.cantidad) {
-                    const prod = await tx.producto.findUnique({ where: { id: item.productoId } });
-                    throw new Error(`SIN STOCK: Solo quedan ${stockUbi?.cantidad || 0} de "${prod?.nombre_producto}".`);
+                    const altStock = await tx.stockUbicacion.findFirst({
+                        where: {
+                            productoId: item.productoId,
+                            cantidad: { gte: item.cantidad },
+                            deposito: { estado: true }
+                        }
+                    });
+                    if (altStock) {
+                        targetDepoId = altStock.depositoId;
+                        stockUbi = altStock;
+                    }
                 }
+
+                // Si aún no alcanza, calcular stock total disponible para un mensaje de error exacto
+                if (!stockUbi || stockUbi.cantidad < item.cantidad) {
+                    const totalStockAgg = await tx.stockUbicacion.aggregate({
+                        where: { productoId: item.productoId, deposito: { estado: true } },
+                        _sum: { cantidad: true }
+                    });
+                    const prod = await tx.producto.findUnique({ where: { id: item.productoId } });
+                    const disponible = stockUbi?.cantidad ?? (totalStockAgg._sum.cantidad || 0);
+                    throw new Error(`SIN STOCK: Solo quedan ${disponible} de "${prod?.nombre_producto}".`);
+                }
+
+                itemsConDeposito.push({ item, targetDepositoId: targetDepoId });
             }
 
             // B. GENERAR NÚMERO DE PEDIDO SECUENCIAL
@@ -71,10 +134,11 @@ export async function registrarPedidoPWA(data: any) {
             });
 
             // D. DESCONTAR STOCK PREVENTIVO DEL DEPÓSITO
-            for (const item of data.carrito) {
-                await tx.stockUbicacion.update({
-                    where: { productoId_depositoId: { productoId: item.productoId, depositoId: data.depositoId } },
-                    data: { cantidad: { decrement: item.cantidad } }
+            for (const { item, targetDepositoId } of itemsConDeposito) {
+                await tx.stockUbicacion.upsert({
+                    where: { productoId_depositoId: { productoId: item.productoId, depositoId: targetDepositoId } },
+                    update: { cantidad: { decrement: item.cantidad } },
+                    create: { productoId: item.productoId, depositoId: targetDepositoId, cantidad: -item.cantidad }
                 });
             }
 
@@ -172,13 +236,14 @@ export async function accionarPedidoVendedor(pedidoId: number, accion: 'CANCELAR
                 throw new Error(`ACCESO DENEGADO: El pedido ya está facturado o cancelado. Ya no se puede modificar desde la calle.`);
             }
 
-            const depositoCentralId = 1;
+            const depositoCentralId = await resolverDepositoId(tx, pedido.usuarioId, null);
 
             // A. DEVOLVER EL STOCK PREVENTIVO PARA QUE OTROS VENDEDORES PUEDAN VENDERLO
             for (const item of pedido.detalles) {
-                await tx.stockUbicacion.update({
+                await tx.stockUbicacion.upsert({
                     where: { productoId_depositoId: { productoId: item.productoId, depositoId: depositoCentralId } },
-                    data: { cantidad: { increment: item.cantidad } }
+                    update: { cantidad: { increment: item.cantidad } },
+                    create: { productoId: item.productoId, depositoId: depositoCentralId, cantidad: item.cantidad }
                 });
             }
 
@@ -255,11 +320,12 @@ export async function cambiarEstadoPedidoAdmin(
                     throw new Error(`ACCESO DENEGADO: El pedido ya tiene una factura/comprobante emitido (Venta #${pedido.ventaId}). Primero debés anular el comprobante desde Historial antes de rechazar el pedido.`);
                 }
 
-                const depositoCentralId = 1;
+                const depositoCentralId = await resolverDepositoId(tx, pedido.usuarioId, null);
                 for (const item of pedido.detalles) {
-                    await tx.stockUbicacion.update({
+                    await tx.stockUbicacion.upsert({
                         where: { productoId_depositoId: { productoId: item.productoId, depositoId: depositoCentralId } },
-                        data: { cantidad: { increment: item.cantidad } }
+                        update: { cantidad: { increment: item.cantidad } },
+                        create: { productoId: item.productoId, depositoId: depositoCentralId, cantidad: item.cantidad }
                     });
                 }
 
@@ -342,14 +408,9 @@ export async function cambiarEstadoPedidoAdmin(
                 }
 
                 const tipo_comprobante = tipoComprobante || "COMPROBANTE_X";
-                const depositoCentralId = 1;
-
-                // Para auditoría y la Venta, usamos el usuario del pedido (el vendedor original)
-                // Esto es crucial para que las comisiones y el historial reflejen a quién hizo la venta
                 const usuarioVendedorId = pedido.usuarioId;
-                
-                // Buscar si hay sucursal asociada al pedido/vendedor
                 const sucursalId = pedido.usuario?.sucursalId || null;
+                const depositoCentralId = await resolverDepositoId(tx, usuarioVendedorId, null);
 
                 // A. GENERAR NÚMERO DE COMPROBANTE
                 let secuencia = await tx.secuenciaFactura.findUnique({
@@ -587,30 +648,48 @@ export async function editarPedidoAdmin(
                 throw new Error(`El pedido está ${pedidoActual.estado}. No se puede editar.`);
             }
 
-            const depositoCentralId = 1;
+            const depositoCentralId = await resolverDepositoId(tx, pedidoActual.usuarioId, null);
 
             // A. DEVOLVER EL STOCK DEL PEDIDO ANTERIOR
             for (const item of pedidoActual.detalles) {
-                await tx.stockUbicacion.update({
+                await tx.stockUbicacion.upsert({
                     where: { productoId_depositoId: { productoId: item.productoId, depositoId: depositoCentralId } },
-                    data: { cantidad: { increment: item.cantidad } }
+                    update: { cantidad: { increment: item.cantidad } },
+                    create: { productoId: item.productoId, depositoId: depositoCentralId, cantidad: item.cantidad }
                 });
             }
 
             // B. VERIFICAR NUEVO STOCK Y DESCONTARLO
             for (const item of nuevoCarrito) {
-                const stockUbi = await tx.stockUbicacion.findUnique({
-                    where: { productoId_depositoId: { productoId: item.productoId, depositoId: depositoCentralId } }
+                let targetDepoId = depositoCentralId;
+                let stockUbi = await tx.stockUbicacion.findUnique({
+                    where: { productoId_depositoId: { productoId: item.productoId, depositoId: targetDepoId } }
                 });
 
                 if (!stockUbi || stockUbi.cantidad < item.cantidad) {
-                    const prod = await tx.producto.findUnique({ where: { id: item.productoId } });
-                    throw new Error(`SIN STOCK SUFICIENTE: Solo quedan ${stockUbi?.cantidad || 0} de "${prod?.nombre_producto}".`);
+                    const altStock = await tx.stockUbicacion.findFirst({
+                        where: { productoId: item.productoId, cantidad: { gte: item.cantidad }, deposito: { estado: true } }
+                    });
+                    if (altStock) {
+                        targetDepoId = altStock.depositoId;
+                        stockUbi = altStock;
+                    }
                 }
 
-                await tx.stockUbicacion.update({
-                    where: { productoId_depositoId: { productoId: item.productoId, depositoId: depositoCentralId } },
-                    data: { cantidad: { decrement: item.cantidad } }
+                if (!stockUbi || stockUbi.cantidad < item.cantidad) {
+                    const totalStockAgg = await tx.stockUbicacion.aggregate({
+                        where: { productoId: item.productoId, deposito: { estado: true } },
+                        _sum: { cantidad: true }
+                    });
+                    const prod = await tx.producto.findUnique({ where: { id: item.productoId } });
+                    const disponible = stockUbi?.cantidad ?? (totalStockAgg._sum.cantidad || 0);
+                    throw new Error(`SIN STOCK SUFICIENTE: Solo quedan ${disponible} de "${prod?.nombre_producto}".`);
+                }
+
+                await tx.stockUbicacion.upsert({
+                    where: { productoId_depositoId: { productoId: item.productoId, depositoId: targetDepoId } },
+                    update: { cantidad: { decrement: item.cantidad } },
+                    create: { productoId: item.productoId, depositoId: targetDepoId, cantidad: -item.cantidad }
                 });
             }
 
