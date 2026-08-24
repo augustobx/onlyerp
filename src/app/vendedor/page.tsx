@@ -889,6 +889,15 @@ export default function PwaVendedor() {
                                                             <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-md">
                                                                 📅 {p.fecha_entrega ? `Entrega: ${new Date(p.fecha_entrega).toLocaleDateString()}` : `Emisión: ${new Date(p.fecha).toLocaleDateString()}`}
                                                             </span>
+                                                            {p.ventaId ? (
+                                                                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded-md border border-emerald-200">
+                                                                    🧾 Facturado
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[10px] bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded-md border border-amber-200">
+                                                                    ⏳ Sin Facturar
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                     <Badge className={`text-[10px] font-black ${
@@ -1018,7 +1027,18 @@ export default function PwaVendedor() {
                                             <div className="flex justify-between items-start border-b border-zinc-100 pb-3 mb-3">
                                                 <div>
                                                     <p className="font-black text-sm text-zinc-900 leading-tight mb-1">{pedido.cliente?.nombre_razon_social}</p>
-                                                    <p className="text-[10px] text-zinc-400 font-bold uppercase">Pedido #{pedido.numero} • {new Date(pedido.fecha).toLocaleDateString()}</p>
+                                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                                        <p className="text-[10px] text-zinc-400 font-bold uppercase">Pedido #{pedido.numero} • {new Date(pedido.fecha).toLocaleDateString()}</p>
+                                                        {pedido.ventaId ? (
+                                                            <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded-md border border-emerald-200">
+                                                                🧾 Facturado
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[9px] bg-amber-50 text-amber-700 font-bold px-1.5 py-0.5 rounded-md border border-amber-200">
+                                                                ⏳ Sin Facturar
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 <div className={`text-[10px] font-black px-2 py-1 rounded-lg ${
                                                     pedido.estado === 'PENDIENTE' ? 'bg-amber-100 text-amber-700' :
@@ -1468,7 +1488,7 @@ export default function PwaVendedor() {
                         <div className="text-center border-b border-dashed border-zinc-300 pb-5 mb-5 mt-2">
                             <h2 className="font-black text-2xl text-zinc-900 tracking-tight">PEDIDO #{pedidoVer.numero}</h2>
                             <p className="text-xs font-bold text-zinc-400 uppercase mt-2">{pedidoVer.cliente?.nombre_razon_social}</p>
-                            <div className="flex items-center justify-center gap-2 mt-2">
+                            <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
                                 <div className={`text-[10px] font-black px-2 py-1 rounded-lg inline-block ${
                                     pedidoVer.estado === 'PENDIENTE' ? 'bg-amber-100 text-amber-700' :
                                     pedidoVer.estado === 'CANCELADO' ? 'bg-red-100 text-red-600' :
@@ -1477,6 +1497,15 @@ export default function PwaVendedor() {
                                 }`}>
                                     {pedidoVer.estado}
                                 </div>
+                                {pedidoVer.ventaId ? (
+                                    <div className="text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-1 rounded-lg">
+                                        🧾 Facturado (Venta #{pedidoVer.ventaId})
+                                    </div>
+                                ) : (
+                                    <div className="text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-200 px-2 py-1 rounded-lg">
+                                        ⏳ Sin Facturar
+                                    </div>
+                                )}
                                 {pedidoVer.fecha_entrega && (
                                     <div className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded-lg">
                                         📅 Entrega: {new Date(pedidoVer.fecha_entrega).toLocaleDateString()}

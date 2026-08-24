@@ -3,7 +3,8 @@
 import { useState, useEffect, useTransition } from "react";
 import {
   Truck, CheckCircle2, XCircle, Clock, Calendar, User, Phone, MapPin,
-  Search, Filter, ArrowLeft, RefreshCw, AlertCircle, Package, ExternalLink, Printer
+  Search, Filter, ArrowLeft, RefreshCw, AlertCircle, Package, ExternalLink,
+  Printer, Receipt, RotateCcw, AlertTriangle, FileText, CreditCard, X
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -13,13 +14,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   obtenerPedidosArmados,
   obtenerRepartidores,
   marcarPedidoListoEntrega,
   marcarPedidoEntregado,
-  marcarPedidoNoEntregado
+  marcarPedidoNoEntregado,
+  cambiarEstadoPedidoAdmin
 } from "@/app/actions/pedidos";
 import { formatCurrency } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ export default function PedidosArmadosPage() {
 
   // Filtros
   const [filtroEstado, setFiltroEstado] = useState<string>("TODOS");
+  const [filtroFacturado, setFiltroFacturado] = useState<string>("TODOS");
   const [filtroRepartidor, setFiltroRepartidor] = useState<string>("ALL");
   const [filtroFecha, setFiltroFecha] = useState<string>("");
   const [busqueda, setBusqueda] = useState<string>("");
@@ -43,6 +45,11 @@ export default function PedidosArmadosPage() {
   const [pedidoAsignarModal, setPedidoAsignarModal] = useState<any | null>(null);
   const [repartidorSeleccionado, setRepartidorSeleccionado] = useState<string>("");
   const [fechaSeleccionada, setFechaSeleccionada] = useState<string>("");
+
+  // Modal Facturar
+  const [pedidoFacturarModal, setPedidoFacturarModal] = useState<any | null>(null);
+  const [tipoComprobanteSeleccionado, setTipoComprobanteSeleccionado] = useState("COMPROBANTE_X");
+  const [facturando, setFacturando] = useState(false);
 
   const cargarDatos = () => {
     setLoading(true);
@@ -108,13 +115,44 @@ export default function PedidosArmadosPage() {
     });
   };
 
+  const abrirModalFacturar = (pedido: any) => {
+    setPedidoFacturarModal(pedido);
+    const condicion = pedido?.cliente?.condicion_iva || "CONSUMIDOR_FINAL";
+    if (condicion === "RESPONSABLE_INSCRIPTO" || condicion === "MONOTRIBUTISTA") {
+      setTipoComprobanteSeleccionado("FACTURA_A");
+    } else {
+      setTipoComprobanteSeleccionado("COMPROBANTE_X");
+    }
+  };
+
+  const handleFacturar = async () => {
+    if (!pedidoFacturarModal) return;
+    setFacturando(true);
+    const toastId = toast.loading(`Facturando pedido #${pedidoFacturarModal.numero}...`);
+
+    const res = await cambiarEstadoPedidoAdmin(pedidoFacturarModal.id, 'FACTURADO', tipoComprobanteSeleccionado);
+    if (res.success) {
+      toast.success(`¡Pedido #${pedidoFacturarModal.numero} FACTURADO con éxito!`, { id: toastId });
+      setPedidoFacturarModal(null);
+      cargarDatos();
+    } else {
+      toast.error(res.error, { id: toastId });
+    }
+    setFacturando(false);
+  };
+
   // Filtrado de pedidos en memoria
   const pedidosFiltrados = pedidos.filter(p => {
     if (filtroEstado !== "TODOS" && p.estado !== filtroEstado) return false;
+    
+    const estaFacturado = !!p.ventaId || !!p.venta;
+    if (filtroFacturado === "FACTURADOS" && !estaFacturado) return false;
+    if (filtroFacturado === "SIN_FACTURAR" && estaFacturado) return false;
+
     if (busqueda.trim()) {
       const q = busqueda.toLowerCase();
       const matchNum = String(p.numero).includes(q);
-      const matchCliente = p.cliente?.nombre?.toLowerCase().includes(q) || p.cliente?.cuit?.includes(q);
+      const matchCliente = p.cliente?.nombre_razon_social?.toLowerCase().includes(q) || p.cliente?.dni_cuit?.includes(q);
       const matchDir = p.cliente?.direccion?.toLowerCase().includes(q);
       if (!matchNum && !matchCliente && !matchDir) return false;
     }
@@ -141,7 +179,7 @@ export default function PedidosArmadosPage() {
               Módulo de Pedidos Armados y Despacho
             </h1>
             <p className="text-sm text-slate-500">
-              Control de logística, repartidores y estado de entrega de mercadería
+              Control de logística, repartidores, entrega y facturación en simultáneo
             </p>
           </div>
         </div>
@@ -218,7 +256,7 @@ export default function PedidosArmadosPage() {
       {/* FILTROS TOOLBAR */}
       <Card className="border border-slate-200 shadow-sm bg-white">
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
               <Input
@@ -235,10 +273,22 @@ export default function PedidosArmadosPage() {
                 onChange={(e) => setFiltroEstado(e.target.value)}
                 className="w-full h-10 border border-slate-200 rounded-lg px-3 text-sm font-medium bg-slate-50 outline-none"
               >
-                <option value="TODOS">Todos los Estados</option>
+                <option value="TODOS">Todos los Estados Logísticos</option>
                 <option value="ARMADO">Armado / Listo para Entrega</option>
                 <option value="ENTREGADO">Entregado</option>
                 <option value="NO_ENTREGADO">No Entregado</option>
+              </select>
+            </div>
+
+            <div>
+              <select
+                value={filtroFacturado}
+                onChange={(e) => setFiltroFacturado(e.target.value)}
+                className="w-full h-10 border border-slate-200 rounded-lg px-3 text-sm font-medium bg-slate-50 outline-none"
+              >
+                <option value="TODOS">Toda Facturación</option>
+                <option value="FACTURADOS">🧾 Facturados</option>
+                <option value="SIN_FACTURAR">⏳ Sin Facturar</option>
               </select>
             </div>
 
@@ -285,6 +335,8 @@ export default function PedidosArmadosPage() {
             const esEntregado = pedido.estado === "ENTREGADO";
             const esNoEntregado = pedido.estado === "NO_ENTREGADO";
             const esArmado = pedido.estado === "ARMADO" || pedido.estado === "LISTO_ENTREGA";
+            const estaFacturado = !!pedido.ventaId || !!pedido.venta;
+            const ventaId = pedido.ventaId || pedido.venta?.id;
 
             return (
               <Card
@@ -305,6 +357,7 @@ export default function PedidosArmadosPage() {
                         Pedido #{pedido.numero}
                       </span>
 
+                      {/* Insignia Logística */}
                       {esArmado && (
                         <Badge className="bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-100 font-bold">
                           🚚 LISTO PARA ENTREGA
@@ -321,6 +374,20 @@ export default function PedidosArmadosPage() {
                         </Badge>
                       )}
 
+                      {/* Insignia Facturación */}
+                      {estaFacturado ? (
+                        <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100 font-bold flex items-center gap-1">
+                          <Receipt className="w-3 h-3" />
+                          {pedido.venta
+                            ? `${pedido.venta.tipo_comprobante?.replace('_', ' ')} 000${pedido.venta.punto_venta}-${pedido.venta.numero_comprobante}`
+                            : `FACTURADO (Venta #${pedido.ventaId})`}
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100 font-bold flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> PENDIENTE FACTURA
+                        </Badge>
+                      )}
+
                       <span className="text-xs text-slate-400 font-medium flex items-center gap-1">
                         <Calendar className="h-3.5 w-3.5" />
                         {new Date(pedido.fecha).toLocaleDateString("es-AR")}
@@ -330,7 +397,7 @@ export default function PedidosArmadosPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs text-slate-600">
                       <div>
                         <strong className="text-slate-800 font-bold text-sm block">
-                          {pedido.cliente?.nombre || "Consumidor Final"}
+                          {pedido.cliente?.nombre_razon_social || "Consumidor Final"}
                         </strong>
                         {pedido.cliente?.telefono && (
                           <span className="text-slate-500 flex items-center gap-1 mt-0.5">
@@ -344,11 +411,6 @@ export default function PedidosArmadosPage() {
                           <MapPin className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
                           {pedido.cliente?.direccion || "Retira por sucursal / Sin dirección"}
                         </span>
-                        {pedido.cliente?.localidad && (
-                          <span className="text-[11px] text-slate-400 ml-4.5 block">
-                            {pedido.cliente.localidad}
-                          </span>
-                        )}
                       </div>
 
                       <div>
@@ -391,6 +453,34 @@ export default function PedidosArmadosPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                      
+                      {/* BOTÓN FACTURAR DIRECTO SI NO ESTÁ FACTURADO */}
+                      {!estaFacturado && (
+                        <Button
+                          size="sm"
+                          onClick={() => abrirModalFacturar(pedido)}
+                          className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                          <Receipt className="h-3.5 w-3.5 mr-1" /> Facturar
+                        </Button>
+                      )}
+
+                      {/* BOTONES DE IMPRESIÓN SI YA ESTÁ FACTURADO */}
+                      {estaFacturado && ventaId && (
+                        <div className="flex gap-1">
+                          <Link href={`/imprimir/ticket/${ventaId}`} target="_blank">
+                            <Button variant="outline" size="sm" className="h-8 text-xs font-bold border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100">
+                              <Printer className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Ticket
+                            </Button>
+                          </Link>
+                          <Link href={`/imprimir/a4/${ventaId}`} target="_blank">
+                            <Button variant="outline" size="sm" className="h-8 text-xs font-bold border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100">
+                              <FileText className="h-3.5 w-3.5 mr-1 text-emerald-600" /> A4
+                            </Button>
+                          </Link>
+                        </div>
+                      )}
+
                       <Button
                         variant="outline"
                         size="sm"
@@ -449,6 +539,83 @@ export default function PedidosArmadosPage() {
         )}
       </div>
 
+      {/* MODAL FACTURAR DIRECTO */}
+      {pedidoFacturarModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Receipt className="h-5 w-5 text-emerald-600" /> Facturar Pedido #{pedidoFacturarModal.numero}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">{pedidoFacturarModal.cliente?.nombre_razon_social} — Total: ${pedidoFacturarModal.total.toFixed(2)}</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setPedidoFacturarModal(null)} className="h-8 w-8 rounded-full text-slate-400 hover:bg-slate-200">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Método de Pago</p>
+                  <p className="font-bold text-sm text-slate-800">
+                    {pedidoFacturarModal.metodo_pago === 'CUENTA_CORRIENTE' ? 'CUENTA CORRIENTE' : 'EFECTIVO'}
+                  </p>
+                </div>
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Total a Facturar</p>
+                  <p className="font-black text-lg text-slate-900">${pedidoFacturarModal.total.toFixed(2)}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-2">Seleccionar Comprobante</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "COMPROBANTE_X", label: "Comprobante X", desc: "Interno (sin AFIP)" },
+                    { id: "FACTURA_A", label: "Factura A", desc: "Resp. Inscripto" },
+                    { id: "FACTURA_B", label: "Factura B", desc: "Consumidor Final" },
+                    { id: "FACTURA_C", label: "Factura C", desc: "Monotributo" },
+                  ].map(tipo => (
+                    <button
+                      key={tipo.id}
+                      type="button"
+                      onClick={() => setTipoComprobanteSeleccionado(tipo.id)}
+                      className={`p-3 rounded-xl border-2 text-left transition-all ${tipoComprobanteSeleccionado === tipo.id
+                          ? 'border-emerald-400 bg-emerald-50 shadow-sm'
+                          : 'border-slate-200 bg-white hover:border-emerald-200 hover:bg-slate-50'
+                        }`}
+                    >
+                      <p className={`font-bold text-xs ${tipoComprobanteSeleccionado === tipo.id ? 'text-emerald-800' : 'text-slate-700'}`}>
+                        {tipo.label}
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{tipo.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setPedidoFacturarModal(null)} className="bg-white">
+                Cancelar
+              </Button>
+              <Button
+                disabled={facturando}
+                onClick={handleFacturar}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md px-6"
+              >
+                <Receipt className="w-4 h-4 mr-2" /> Confirmar Facturación
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MODAL NO ENTREGADO */}
       {pedidoNoEntregadoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
@@ -467,7 +634,7 @@ export default function PedidosArmadosPage() {
             <div className="p-5 space-y-4 bg-white">
               <p className="text-xs text-slate-600">
                 Pedido <strong>#{pedidoNoEntregadoModal.numero}</strong> para{" "}
-                <strong>{pedidoNoEntregadoModal.cliente?.nombre}</strong>.
+                <strong>{pedidoNoEntregadoModal.cliente?.nombre_razon_social}</strong>.
               </p>
 
               <div className="space-y-1.5">

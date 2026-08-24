@@ -91,6 +91,43 @@ export async function registrarPedidoPWA(data: any) {
 }
 
 // ============================================================================
+// HELPER: ADJUNTAR DETALLES DE VENTA / FACTURA A PEDIDOS
+// ============================================================================
+async function adjuntarVentasAPedidos(pedidos: any[]) {
+    if (!pedidos || pedidos.length === 0) return pedidos;
+    const ventaIds = pedidos
+        .map(p => p.ventaId)
+        .filter((id): id is number => typeof id === 'number' && id > 0);
+
+    if (ventaIds.length === 0) {
+        return pedidos.map(p => ({ ...p, venta: null }));
+    }
+
+    const ventas = await prisma.venta.findMany({
+        where: { id: { in: Array.from(new Set(ventaIds)) } },
+        select: {
+            id: true,
+            tipo_comprobante: true,
+            punto_venta: true,
+            numero_comprobante: true,
+            cae: true,
+            cae_vto: true,
+            fecha_emision: true,
+            estado_pago: true,
+            saldo_pendiente: true,
+            total: true
+        }
+    });
+
+    const ventasMap = new Map(ventas.map(v => [v.id, v]));
+
+    return pedidos.map(p => ({
+        ...p,
+        venta: p.ventaId ? (ventasMap.get(p.ventaId) || null) : null
+    }));
+}
+
+// ============================================================================
 // 2. OBTENER EL HISTORIAL DEL VENDEDOR
 // ============================================================================
 export async function obtenerPedidosVendedor() {
@@ -99,7 +136,7 @@ export async function obtenerPedidosVendedor() {
         const usuarioId = (session as any)?.id ? Number((session as any).id) : null;
         if (!usuarioId) return [];
 
-        return await prisma.pedido.findMany({
+        const pedidos = await prisma.pedido.findMany({
             where: { usuarioId },
             include: {
                 cliente: true,
@@ -112,6 +149,8 @@ export async function obtenerPedidosVendedor() {
             orderBy: { fecha: 'desc' },
             take: 100 // Límite para que la PWA cargue rápido en la calle
         });
+
+        return await adjuntarVentasAPedidos(pedidos);
     } catch (error) {
         console.error("Error al obtener pedidos:", error);
         return [];
@@ -128,15 +167,14 @@ export async function accionarPedidoVendedor(pedidoId: number, accion: 'CANCELAR
 
             if (!pedido) throw new Error("Pedido no encontrado.");
 
-            // REGLA DE NEGOCIO: Bloqueo estricto si administración ya lo procesó o canceló de forma definitiva
-            if (pedido.estado === 'FACTURADO' || pedido.estado === 'RECHAZADO' || pedido.estado === 'CANCELADO') {
-                throw new Error(`ACCESO DENEGADO: El pedido está ${pedido.estado}. Ya no se puede modificar desde la calle.`);
+            // REGLA DE NEGOCIO: Bloqueo estricto si ya está facturado o cancelado
+            if (pedido.ventaId || pedido.estado === 'FACTURADO' || pedido.estado === 'RECHAZADO' || pedido.estado === 'CANCELADO') {
+                throw new Error(`ACCESO DENEGADO: El pedido ya está facturado o cancelado. Ya no se puede modificar desde la calle.`);
             }
 
             const depositoCentralId = 1;
 
             // A. DEVOLVER EL STOCK PREVENTIVO PARA QUE OTROS VENDEDORES PUEDAN VENDERLO
-            // Nota: Incluso si estaba APROBADO, el stock sigue estando descontado preventivamente (no facturado), así que se devuelve igual.
             for (const item of pedido.detalles) {
                 await tx.stockUbicacion.update({
                     where: { productoId_depositoId: { productoId: item.productoId, depositoId: depositoCentralId } },
@@ -173,17 +211,20 @@ export async function accionarPedidoVendedor(pedidoId: number, accion: 'CANCELAR
 // ============================================================================
 export async function obtenerTodosLosPedidos() {
     try {
-        return await prisma.pedido.findMany({
+        const pedidos = await prisma.pedido.findMany({
             include: {
-                cliente: { select: { nombre_razon_social: true, dni_cuit: true, telefono: true } },
-                usuario: { select: { nombre: true } }, // El Vendedor
-                listaPrecio: { select: { nombre: true } },
+                cliente: { select: { id: true, nombre_razon_social: true, dni_cuit: true, condicion_iva: true, telefono: true, direccion: true, limite_credito: true, dias_aviso_deuda: true } },
+                usuario: { select: { id: true, nombre: true, sucursalId: true } }, // El Vendedor
+                repartidor: { select: { id: true, nombre: true } },
+                listaPrecio: { select: { id: true, nombre: true, margen_defecto: true } },
                 detalles: {
-                    include: { producto: { select: { nombre_producto: true, codigo_articulo: true } } }
+                    include: { producto: { select: { id: true, nombre_producto: true, codigo_articulo: true } } }
                 }
             },
             orderBy: { fecha: 'desc' }
         });
+
+        return await adjuntarVentasAPedidos(pedidos);
     } catch (error) {
         console.error("Error al obtener todos los pedidos:", error);
         return [];
@@ -210,6 +251,10 @@ export async function cambiarEstadoPedidoAdmin(
 
             // ========== RECHAZAR ==========
             if (nuevoEstado === 'RECHAZADO' && pedido.estado !== 'RECHAZADO' && pedido.estado !== 'CANCELADO') {
+                if (pedido.ventaId) {
+                    throw new Error(`ACCESO DENEGADO: El pedido ya tiene una factura/comprobante emitido (Venta #${pedido.ventaId}). Primero debés anular el comprobante desde Historial antes de rechazar el pedido.`);
+                }
+
                 const depositoCentralId = 1;
                 for (const item of pedido.detalles) {
                     await tx.stockUbicacion.update({
@@ -266,6 +311,7 @@ export async function cambiarEstadoPedidoAdmin(
                     where: { id: pedidoId },
                     data: {
                         estado: 'ENTREGADO',
+                        fecha_entrega: pedido.fecha_entrega || new Date(),
                         motivo_no_entrega: null,
                         notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> Marcado como ENTREGADO.`
                     }
@@ -288,6 +334,13 @@ export async function cambiarEstadoPedidoAdmin(
 
             // ========== FACTURAR — CREAR VENTA REAL ==========
             if (nuevoEstado === 'FACTURADO') {
+                if (pedido.ventaId) {
+                    throw new Error(`Este pedido ya fue facturado previamente (Venta #${pedido.ventaId}).`);
+                }
+                if (pedido.estado === 'RECHAZADO' || pedido.estado === 'CANCELADO') {
+                    throw new Error("No se puede facturar un pedido cancelado o rechazado.");
+                }
+
                 const tipo_comprobante = tipoComprobante || "COMPROBANTE_X";
                 const depositoCentralId = 1;
 
@@ -470,12 +523,17 @@ export async function cambiarEstadoPedidoAdmin(
                     data: { numero_actual: nuevoNumero }
                 });
 
-                // K. MARCAR PEDIDO COMO FACTURADO CON REFERENCIA A LA VENTA
+                // K. ACTUALIZAR PEDIDO: Preservar el estado logístico si ya estaba armado/entregado/aprobado, o pasarlo a APROBADO si era PENDIENTE
                 const fechaHora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+                let nuevoEstadoLogistico = pedido.estado;
+                if (pedido.estado === 'PENDIENTE') {
+                    nuevoEstadoLogistico = 'APROBADO';
+                }
+
                 const pedidoActualizado = await tx.pedido.update({
                     where: { id: pedidoId },
                     data: {
-                        estado: 'FACTURADO',
+                        estado: nuevoEstadoLogistico as any,
                         ventaId: nuevaVenta.id,
                         notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> FACTURADO como ${tipo_comprobante.replace('_', ' ')} #${nuevoNumero}. VentaID: ${nuevaVenta.id}`
                     }
@@ -491,6 +549,7 @@ export async function cambiarEstadoPedidoAdmin(
         });
 
         revalidatePath("/pedidos");
+        revalidatePath("/pedidos/armados");
         revalidatePath("/historial");
         revalidatePath("/caja");
         revalidatePath("/cuentas-corrientes");
@@ -831,7 +890,7 @@ export async function obtenerPedidosArmados(filtroFecha?: string, repartidorId?:
             where.fecha_entrega = { gte: start, lte: end };
         }
 
-        return await prisma.pedido.findMany({
+        const pedidos = await prisma.pedido.findMany({
             where,
             include: {
                 cliente: true,
@@ -845,6 +904,8 @@ export async function obtenerPedidosArmados(filtroFecha?: string, repartidorId?:
             },
             orderBy: { fecha: 'desc' }
         });
+
+        return await adjuntarVentasAPedidos(pedidos);
     } catch (error) {
         console.error("Error al obtener pedidos armados:", error);
         return [];
@@ -863,7 +924,7 @@ export async function obtenerPedidosParaReparto(repartidorId?: number) {
             ];
         }
 
-        return await prisma.pedido.findMany({
+        const pedidos = await prisma.pedido.findMany({
             where,
             include: {
                 cliente: true,
@@ -877,6 +938,8 @@ export async function obtenerPedidosParaReparto(repartidorId?: number) {
             },
             orderBy: { fecha: 'desc' }
         });
+
+        return await adjuntarVentasAPedidos(pedidos);
     } catch (error) {
         console.error("Error al obtener pedidos para reparto:", error);
         return [];
