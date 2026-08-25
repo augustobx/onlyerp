@@ -43,7 +43,24 @@ export default function PresupuestoA4PrintPage({ params }: { params: Promise<{ i
     const vigenciaStr = vigenciaFin.toLocaleDateString('es-AR');
 
     return (
-        <div className="w-[210mm] min-h-[297mm] bg-white text-black p-12 mx-auto shadow-xl print:shadow-none print:m-0 print:p-8">
+        <div className="bg-slate-100 py-6 print:bg-white print:py-0 min-h-screen">
+            {/* BOTÓN VOLVER E IMPRIMIR (Oculto al imprimir) */}
+            <div className="print:hidden max-w-[210mm] mx-auto mb-4 flex justify-between items-center bg-slate-900 text-white p-3 rounded-2xl shadow-lg">
+                <button
+                    onClick={() => window.history.back()}
+                    className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-xl text-xs"
+                >
+                    ← Volver
+                </button>
+                <button
+                    onClick={() => window.print()}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-black py-2 px-5 rounded-xl text-xs shadow"
+                >
+                    🖨️ IMPRIMIR PRESUPUESTO
+                </button>
+            </div>
+
+            <div className="w-[210mm] max-w-full bg-white text-black p-10 mx-auto shadow-xl print:shadow-none print:m-0 print:p-6 border border-slate-200 print:border-none">
 
             {/* CABECERA */}
             <div className="flex justify-between items-start border-b-2 border-slate-900 pb-6 mb-6 relative">
@@ -105,7 +122,7 @@ export default function PresupuestoA4PrintPage({ params }: { params: Promise<{ i
             </div>
 
             {/* CUERPO DEL PRESUPUESTO */}
-            <div className="min-h-[400px]">
+            <div className="min-h-0">
                 <table className="w-full text-left border-collapse">
                     <thead>
                         <tr className="bg-slate-800 text-white">
@@ -136,7 +153,7 @@ export default function PresupuestoA4PrintPage({ params }: { params: Promise<{ i
             </div>
 
             {/* TOTALES */}
-            <div className="flex justify-end mt-6">
+            <div className="flex justify-end mt-4">
                 <div className="w-[300px] space-y-2">
                     <div className="flex justify-between text-slate-600">
                         <span>Subtotal:</span>
@@ -156,9 +173,10 @@ export default function PresupuestoA4PrintPage({ params }: { params: Promise<{ i
             </div>
 
             {/* PIE DE PÁGINA */}
-            <div className="mt-20 border-t border-slate-200 pt-8 text-center text-sm text-slate-500">
+            <div className="mt-8 border-t border-slate-200 pt-4 text-center text-xs text-slate-500">
                 <p>Las cotizaciones están sujetas a modificaciones sin previo aviso y a disponibilidad de stock al momento de confirmar la compra.</p>
-                <p className="font-bold mt-2">Los precios expresados en este documento mantendrán validez por {presupuesto.vigencia_dias || 15} días.</p>
+                <p className="font-bold mt-1">Los precios expresados en este documento mantendrán validez por {presupuesto.vigencia_dias || 15} días.</p>
+            </div>
             </div>
         </div>
     );

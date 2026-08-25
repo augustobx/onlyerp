@@ -2,18 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { use } from "react";
+import { useSearchParams } from "next/navigation";
 import { getDatosEmpresa, getVentaParaTicket } from "@/app/actions/configuracion-empresa";
-import { Store, Loader2 } from "lucide-react";
+import { Store, Loader2, Printer, ArrowLeft, Scissors, FileText, LayoutTemplate, Check } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { generarQRBase64 } from "@/lib/afipQrAlgorithm";
+
+type FormatoImpresion = "AUTO" | "DOBLE" | "A4";
 
 export default function FacturaA4PrintPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const ventaId = Number(id);
+    const searchParams = useSearchParams();
 
     const [venta, setVenta] = useState<any>(null);
     const [empresa, setEmpresa] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+
+    // Formato seleccionado: "AUTO" (Media Hoja / Adaptable), "DOBLE" (Original + Duplicado), "A4" (Hoja Completa)
+    const formatoParam = searchParams.get("formato") as FormatoImpresion | null;
+    const [formato, setFormato] = useState<FormatoImpresion>(formatoParam || "AUTO");
 
     useEffect(() => {
         const cargarDatos = async () => {
@@ -26,14 +34,35 @@ export default function FacturaA4PrintPage({ params }: { params: Promise<{ id: s
             setLoading(false);
 
             if (v) {
-                setTimeout(() => window.print(), 500);
+                // Auto-disparo de impresión suave tras cargar
+                setTimeout(() => window.print(), 600);
             }
         };
         cargarDatos();
     }, [ventaId]);
 
-    if (loading) return <div className="p-10 flex justify-center"><Loader2 className="animate-spin h-8 w-8 text-black" /></div>;
-    if (!venta) return <div className="p-10 font-bold text-center">Comprobante no encontrado.</div>;
+    if (loading) {
+        return (
+            <div className="p-10 flex flex-col items-center justify-center min-h-[60vh] gap-3">
+                <Loader2 className="animate-spin h-8 w-8 text-indigo-600" />
+                <p className="text-sm font-bold text-slate-600">Preparando comprobante para impresión...</p>
+            </div>
+        );
+    }
+
+    if (!venta) {
+        return (
+            <div className="p-10 font-bold text-center text-slate-800">
+                <p className="text-lg">Comprobante no encontrado.</p>
+                <button
+                    onClick={() => window.history.back()}
+                    className="mt-4 bg-indigo-600 text-white font-bold py-2 px-6 rounded-xl shadow"
+                >
+                    Volver
+                </button>
+            </div>
+        );
+    }
 
     let letraComprobante = "X";
     let codComprobante = "000";
@@ -45,13 +74,197 @@ export default function FacturaA4PrintPage({ params }: { params: Promise<{ id: s
 
     const qrBase64 = generarQRBase64(venta, empresa);
 
-    // Calcular totales de IVA genéricos si corresponden
+    // Totales IVA si es Factura A
     let subNeto = venta.subtotal;
     let impIva = 0;
     if (venta.tipo_comprobante === "FACTURA_A") {
         subNeto = venta.subtotal / 1.21;
         impIva = venta.subtotal - subNeto;
     }
+
+    // Componente interno que renderiza el cuerpo del comprobante
+    const renderComprobanteCuerpo = (copiaEtiqueta?: string | null, esCompacto: boolean = false) => {
+        return (
+            <div className={`bg-white text-black font-sans ${esCompacto ? 'text-[11px] p-4' : 'text-xs p-6'}`}>
+                {/* ETIQUETA COPIA (Si aplica para Doble comprobante) */}
+                {copiaEtiqueta && (
+                    <div className="flex justify-between items-center bg-slate-900 text-white px-3 py-0.5 rounded text-[10px] font-black uppercase tracking-wider mb-2">
+                        <span>{copiaEtiqueta}</span>
+                        <span>{empresa?.nombre_fantasia || "Sanu Distribuidora"}</span>
+                    </div>
+                )}
+
+                {/* CABECERA TRIPARTITA */}
+                <div className={`relative border border-black p-3 mb-2 flex justify-between ${esCompacto ? 'h-[110px]' : 'h-[135px]'}`}>
+                    {/* Cuadro Central Letra */}
+                    <div className="absolute left-1/2 -translate-x-1/2 -top-[1px] bg-white border border-black w-[44px] h-[44px] flex flex-col items-center justify-center z-10">
+                        <span className="text-2xl font-black leading-none">{letraComprobante}</span>
+                        <span className="text-[8px] font-bold mt-0.5 leading-none border-t border-black w-full text-center pt-0.5">COD {codComprobante}</span>
+                    </div>
+                    {/* Linea divisoria central */}
+                    <div className="absolute left-1/2 top-[44px] bottom-0 w-[1px] bg-black"></div>
+
+                    {/* Izquierda: Empresa */}
+                    <div className="w-[47%] pr-2">
+                        {empresa?.logo_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={empresa.logo_url} alt="Logo" className="max-h-8 mb-1 object-contain" />
+                        ) : (
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <Store className="h-4 w-4 text-black shrink-0" />
+                                <h1 className="text-sm font-black uppercase tracking-tight truncate">{empresa?.nombre_fantasia || "Mi Empresa"}</h1>
+                            </div>
+                        )}
+                        <p className="font-bold text-[10px] uppercase truncate">{empresa?.razon_social}</p>
+                        <p className="text-[10px] leading-tight truncate">{empresa?.direccion}</p>
+                        <p className="text-[10px] leading-tight">Tel: {empresa?.telefono}</p>
+                        <p className="text-[10px] font-bold uppercase mt-0.5">IVA {empresa?.condicion_iva}</p>
+                    </div>
+
+                    {/* Derecha: Comprobante */}
+                    <div className="w-[47%] pl-2 text-left">
+                        <h2 className="text-base font-black uppercase leading-tight">{tipoTexto}</h2>
+                        <div className="flex gap-2 items-center my-0.5">
+                            <p className="font-black text-xs">Nº {String(venta.punto_venta).padStart(4, '0')}-{String(venta.numero_comprobante).padStart(8, '0')}</p>
+                        </div>
+                        <p className="text-[10px]"><strong>Fecha:</strong> {new Date(venta.fecha_emision).toLocaleDateString('es-AR')}</p>
+                        <p className="text-[10px]"><strong>CUIT:</strong> {empresa?.cuit}</p>
+                        <p className="text-[10px]"><strong>IIBB:</strong> {empresa?.cuit}</p>
+                    </div>
+                </div>
+
+                {/* DATOS DEL CLIENTE */}
+                <div className="border border-black p-2.5 mb-2 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] bg-slate-50/50">
+                    <div><span className="font-bold">Cliente:</span> {venta.cliente?.nombre_razon_social || "Consumidor Final"}</div>
+                    <div><span className="font-bold">CUIT/DNI:</span> {venta.cliente?.dni_cuit || "---"}</div>
+                    <div><span className="font-bold">Condición de IVA:</span> {venta.cliente?.condicion_iva || "Consumidor Final"}</div>
+                    <div className="flex items-center">
+                        <span className="font-bold whitespace-nowrap mr-1">Pago:</span>
+                        <span className="truncate">
+                            {venta.pagos && venta.pagos.length > 0 ? (
+                                venta.pagos.map((p: any) => `${p.metodo_pago.replace('_', ' ')} ($${p.monto})`).join(", ")
+                            ) : (
+                                venta.metodo_pago.replace('_', ' ')
+                            )}
+                        </span>
+                    </div>
+                    {venta.direccion_envio && (
+                        <div className="col-span-2 text-[10px] text-slate-700">
+                            <span className="font-bold">Entrega en:</span> {venta.direccion_envio}
+                        </div>
+                    )}
+                </div>
+
+                {/* TABLA DE ÍTEMS */}
+                <div className={`border border-black flex flex-col relative ${formato === 'A4' ? 'min-h-[140mm]' : 'min-h-0'}`}>
+                    <table className="w-full text-left border-collapse text-[11px]">
+                        <thead>
+                            <tr className="border-b border-black bg-slate-100 font-bold">
+                                <th className="py-1 px-2 border-r border-black w-10 text-center">Cant</th>
+                                <th className="py-1 px-2 border-r border-black">Descripción del Artículo</th>
+                                <th className="py-1 px-2 border-r border-black w-20 text-right">P. Unit</th>
+                                {venta.tipo_comprobante === "FACTURA_A" && <th className="py-1 px-2 border-r border-black w-14 text-right">% IVA</th>}
+                                <th className="py-1 px-2 w-24 text-right">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {venta.detalles?.map((det: any) => {
+                                let itemUnitario = det.precio_unitario;
+                                let itemSubtotal = det.subtotal;
+                                if (venta.tipo_comprobante === "FACTURA_A") {
+                                    itemUnitario = det.precio_unitario / 1.21;
+                                    itemSubtotal = det.subtotal / 1.21;
+                                }
+                                return (
+                                    <tr key={det.id} className="align-top border-b border-slate-200 last:border-b-0">
+                                        <td className="py-1 px-2 border-r border-black text-center font-bold">{det.cantidad}</td>
+                                        <td className="py-1 px-2 border-r border-black">
+                                            <span>{det.producto?.nombre_producto || 'Producto genérico'}</span>
+                                            {det.descuento_individual > 0 && (
+                                                <span className="text-[9px] text-slate-500 font-semibold ml-1">(-{det.descuento_individual}%)</span>
+                                            )}
+                                        </td>
+                                        <td className="py-1 px-2 border-r border-black text-right">${itemUnitario.toFixed(2)}</td>
+                                        {venta.tipo_comprobante === "FACTURA_A" && <td className="py-1 px-2 border-r border-black text-right">21%</td>}
+                                        <td className="py-1 px-2 text-right font-bold">${itemSubtotal.toFixed(2)}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* TOTALES */}
+                <div className="border border-t-0 border-black mb-2 flex">
+                    <div className="w-[55%] border-r border-black p-2 flex flex-col text-[10px] text-slate-600 justify-center">
+                        {venta.tipo_comprobante === "FACTURA_A" ? (
+                            <p>Los importes expresados son netos sujetos a la aplicación del IVA.</p>
+                        ) : (
+                            <p>Documento no válido como factura fiscal en compras a cuenta.</p>
+                        )}
+                        {venta.notas_venta && (
+                            <p className="mt-0.5 font-bold text-slate-800">Nota: {venta.notas_venta}</p>
+                        )}
+                    </div>
+                    <div className="w-[45%] p-2 space-y-1 text-xs">
+                        {venta.tipo_comprobante === "FACTURA_A" && (
+                            <>
+                                <div className="flex justify-between text-[11px]">
+                                    <span>Subtotal Neto:</span>
+                                    <span>${subNeto.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-[11px]">
+                                    <span>IVA 21%:</span>
+                                    <span>${impIva.toFixed(2)}</span>
+                                </div>
+                            </>
+                        )}
+                        {venta.tipo_comprobante !== "FACTURA_A" && (
+                            <div className="flex justify-between text-[11px]">
+                                <span>Subtotal:</span>
+                                <span>${venta.subtotal.toFixed(2)}</span>
+                            </div>
+                        )}
+                        {venta.descuento_global > 0 && (
+                            <div className="flex justify-between text-[11px] text-emerald-700 font-bold">
+                                <span>Descuento Global:</span>
+                                <span>-${venta.descuento_global.toFixed(2)}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between font-black text-sm border-t border-black pt-1">
+                            <span>TOTAL:</span>
+                            <span>${venta.total.toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* FOOTER QR CAE / FIRMA */}
+                <div className="flex justify-between items-end pt-1">
+                    <div className="flex items-center gap-3">
+                        {letraComprobante !== "X" && qrBase64 && (
+                            <QRCodeSVG value={`https://www.afip.gob.ar/fe/qr/?p=${qrBase64}`} size={esCompacto ? 60 : 75} className="border border-black p-0.5" />
+                        )}
+                        {letraComprobante !== "X" && venta.cae && (
+                            <div className="text-[10px]">
+                                <p className="font-bold">CAE N°: <span className="font-normal">{venta.cae}</span></p>
+                                <p className="font-bold">Vto CAE: <span className="font-normal">{new Date(venta.cae_vto).toLocaleDateString('es-AR')}</span></p>
+                            </div>
+                        )}
+                        {copiaEtiqueta?.includes("DUPLICADO") && (
+                            <div className="border border-dashed border-slate-400 p-2 rounded text-[10px] w-56 text-center">
+                                <div className="h-6"></div>
+                                <div className="border-t border-black pt-0.5 font-bold">Firma y Aclaración de Recepción</div>
+                            </div>
+                        )}
+                    </div>
+                    <div className="text-right text-[9px] text-slate-500">
+                        <span className="font-bold block">Emisor: {venta.usuario ? (venta.usuario.nombre || venta.usuario.nombre_completo) : "Sistema"}</span>
+                        <span>{empresa?.nombre_fantasia || "Sanu Distribuidora"}</span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <>
@@ -61,188 +274,111 @@ export default function FacturaA4PrintPage({ params }: { params: Promise<{ id: s
                         size: A4 portrait;
                         margin: 0mm;
                     }
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        background: #fff;
+                    }
                 }
             `}} />
 
-            <div className="w-[210mm] min-h-[297mm] bg-white text-black p-8 mx-auto font-sans text-sm print:m-0 print:p-8">
-
-            {/* BOTÓN VOLVER (Oculto al imprimir) */}
-            <div className="print:hidden mb-4 relative z-50">
-                <button 
-                    onClick={() => window.history.back()} 
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded shadow-md flex items-center justify-center m-auto"
-                >
-                    Volver al POS
-                </button>
-            </div>
-
-            {/* CABECERA TRIPARTITA */}
-            <div className="relative border border-black p-4 mb-4 flex justify-between h-[150px]">
-                
-                {/* Cuadro Central Letra */}
-                <div className="absolute left-1/2 -translate-x-1/2 -top-[1px] bg-white border border-black w-[50px] h-[50px] flex flex-col items-center justify-center">
-                    <span className="text-3xl font-bold leading-none">{letraComprobante}</span>
-                    <span className="text-[9px] font-bold mt-1 leading-none border-t border-black w-full text-center pt-1">COD {codComprobante}</span>
-                </div>
-                {/* Linea divisoria central */}
-                <div className="absolute left-1/2 top-[50px] bottom-0 w-[1px] bg-black"></div>
-
-                {/* Izquierda: Empresa */}
-                <div className="w-[45%] pr-4 pt-2">
-                    {empresa?.logo_url ? (
-                        <img src={empresa.logo_url} alt="Logo" className="max-h-12 mb-2" />
-                    ) : (
-                        <div className="flex items-center gap-2 mb-2">
-                            <Store className="h-6 w-6 text-black" />
-                            <h1 className="text-xl font-bold uppercase tracking-tight">{empresa?.nombre_fantasia || "Mi Empresa"}</h1>
-                        </div>
-                    )}
-                    <p className="font-bold text-xs uppercase mb-1">{empresa?.razon_social}</p>
-                    <p className="text-[11px] leading-tight break-words">{empresa?.direccion}</p>
-                    <p className="text-[11px] leading-tight">Tel: {empresa?.telefono}</p>
-                    <p className="text-[11px] mt-2 font-bold uppercase">IVA {empresa?.condicion_iva}</p>
-                </div>
-
-                {/* Derecha: Comprobante */}
-                <div className="w-[45%] pl-4 pt-2 text-left">
-                    <h2 className="text-2xl font-bold uppercase">{tipoTexto}</h2>
-                    <div className="flex gap-4 items-center mb-2 mt-1">
-                        <p className="font-bold text-sm">Nº {String(venta.punto_venta).padStart(4, '0')}-{String(venta.numero_comprobante).padStart(8, '0')}</p>
-                        <p className="font-bold text-sm border-l border-black pl-4">Fecha: {new Date(venta.fecha_emision).toLocaleDateString('es-AR')}</p>
-                    </div>
-                    <p className="text-[11px]"><strong>CUIT:</strong> {empresa?.cuit}</p>
-                    <p className="text-[11px]"><strong>Ingresos Brutos:</strong> {empresa?.cuit}</p>
-                    <p className="text-[11px]"><strong>Inicio de Actividades:</strong> {empresa?.inicio_actividad}</p>
-                </div>
-            </div>
-
-            {/* DATOS DEL CLIENTE */}
-            <div className="border border-black p-4 mb-4 grid grid-cols-2 gap-y-2 text-xs">
-                <div><span className="font-bold">Cliente:</span> {venta.cliente?.nombre_razon_social || "Consumidor Final"}</div>
-                <div><span className="font-bold">CUIT/DNI:</span> {venta.cliente?.dni_cuit || "---"}</div>
-                <div><span className="font-bold">Condición de IVA:</span> {venta.cliente?.condicion_iva || "Consumidor Final"}</div>
-                <div className="flex">
-                    <span className="font-bold whitespace-nowrap mr-1">Condición de Venta:</span> 
-                    <div>
-                        {venta.pagos && venta.pagos.length > 0 ? (
-                            venta.pagos.map((pago: any) => (
-                                <span key={pago.id} className="block leading-tight">
-                                    {pago.metodo_pago.replace('_', ' ')}: ${pago.monto.toFixed(2)}
-                                </span>
-                            ))
-                        ) : (
-                            <span className="block">{venta.metodo_pago.replace('_', ' ')}</span>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* TABLA DE ÍTEMS */}
-            <div className="border border-black min-h-[140mm] flex flex-col relative">
-                <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                        <tr className="border-b border-black bg-slate-100">
-                            <th className="py-2 px-3 border-r border-black w-12 text-center">Cant</th>
-                            <th className="py-2 px-3 border-r border-black">Producto / Descripción</th>
-                            <th className="py-2 px-3 border-r border-black w-24 text-right">P. Unit</th>
-                            {venta.tipo_comprobante === "FACTURA_A" && <th className="py-2 px-3 border-r border-black w-16 text-right">% IVA</th>}
-                            <th className="py-2 px-3 w-28 text-right">Subtotal</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {venta.detalles?.map((det: any, index: number) => {
-                            let itemUnitario = det.precio_unitario;
-                            let itemSubtotal = det.subtotal;
-                            if (venta.tipo_comprobante === "FACTURA_A") {
-                                itemUnitario = det.precio_unitario / 1.21;
-                                itemSubtotal = det.subtotal / 1.21;
-                            }
-                            return (
-                                <tr key={det.id} className="align-top">
-                                    <td className="py-2 px-3 border-r border-black text-center">{det.cantidad}</td>
-                                    <td className="py-2 px-3 border-r border-black">
-                                        {det.producto?.nombre_producto || 'Producto genérico'}
-                                        {det.descuento_individual > 0 && <span className="block text-[10px] text-slate-500 mt-1">*{det.descuento_individual}% OFF Aplicado</span>}
-                                    </td>
-                                    <td className="py-2 px-3 border-r border-black text-right">${itemUnitario.toFixed(2)}</td>
-                                    {venta.tipo_comprobante === "FACTURA_A" && <td className="py-2 px-3 border-r border-black text-right">21%</td>}
-                                    <td className="py-2 px-3 text-right">${itemSubtotal.toFixed(2)}</td>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* TOTALES */}
-            <div className="border border-t-0 border-black mb-4 flex">
-                <div className="w-[60%] border-r border-black p-2 flex flex-col text-xs text-slate-600 justify-end">
-                    {venta.tipo_comprobante === "FACTURA_A" ? (
-                        <p>Los importes expresados son netos sujetos a la aplicación del IVA.</p>
-                    ) : (
-                        <p>Los importes están expresados en pesos argentinos.</p>
-                    )}
-                </div>
-                <div className="w-[40%] p-3 space-y-2 text-sm">
-                    {venta.tipo_comprobante === "FACTURA_A" && (
-                        <>
-                            <div className="flex justify-between">
-                                <span>Subtotal Neto:</span>
-                                <span>${subNeto.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span>IVA 21%:</span>
-                                <span>${impIva.toFixed(2)}</span>
-                            </div>
-                        </>
-                    )}
-                    {venta.tipo_comprobante !== "FACTURA_A" && (
-                        <div className="flex justify-between">
-                            <span>Subtotal:</span>
-                            <span>${venta.subtotal.toFixed(2)}</span>
-                        </div>
-                    )}
+            {/* BARRA DE CONTROL DE FORMATO Y BOTONERA (Oculta al imprimir) */}
+            <div className="print:hidden sticky top-0 z-50 bg-slate-900 text-white p-4 shadow-xl border-b border-slate-800">
+                <div className="max-w-4xl mx-auto flex flex-wrap items-center justify-between gap-4">
                     
-                    {venta.descuento_global > 0 && (
-                        <div className="flex justify-between">
-                            <span>Descuento Global:</span>
-                            <span>-${venta.descuento_global.toFixed(2)}</span>
-                        </div>
-                    )}
-                    <div className="flex justify-between font-bold text-base border-t border-black pt-2">
-                        <span>TOTAL:</span>
-                        <span>${venta.total.toFixed(2)}</span>
+                    {/* VOLVER */}
+                    <button
+                        onClick={() => window.history.back()}
+                        className="flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-xl transition-colors"
+                    >
+                        <ArrowLeft className="h-4 w-4" /> Volver al POS
+                    </button>
+
+                    {/* SELECTOR DE FORMATO */}
+                    <div className="flex items-center gap-1.5 bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700">
+                        <button
+                            onClick={() => setFormato("AUTO")}
+                            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-all ${
+                                formato === "AUTO"
+                                    ? "bg-indigo-600 text-white shadow-md"
+                                    : "text-slate-300 hover:text-white hover:bg-slate-700/50"
+                            }`}
+                        >
+                            <FileText className="h-3.5 w-3.5" /> Media Hoja (Adaptable)
+                        </button>
+
+                        <button
+                            onClick={() => setFormato("DOBLE")}
+                            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-all ${
+                                formato === "DOBLE"
+                                    ? "bg-indigo-600 text-white shadow-md"
+                                    : "text-slate-300 hover:text-white hover:bg-slate-700/50"
+                            }`}
+                        >
+                            <Scissors className="h-3.5 w-3.5" /> 2 en 1 (Original + Duplicado)
+                        </button>
+
+                        <button
+                            onClick={() => setFormato("A4")}
+                            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl transition-all ${
+                                formato === "A4"
+                                    ? "bg-indigo-600 text-white shadow-md"
+                                    : "text-slate-300 hover:text-white hover:bg-slate-700/50"
+                            }`}
+                        >
+                            <LayoutTemplate className="h-3.5 w-3.5" /> A4 Completa
+                        </button>
                     </div>
+
+                    {/* BOTÓN IMPRIMIR */}
+                    <button
+                        onClick={() => window.print()}
+                        className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black px-5 py-2 rounded-xl shadow-lg shadow-emerald-600/30 text-xs transition-all"
+                    >
+                        <Printer className="h-4 w-4" /> IMPRIMIR AHORA
+                    </button>
                 </div>
             </div>
 
-            {/* FOOOTER QR CAE */}
-            <div className="flex justify-between items-end mt-2">
-                <div className="flex items-center gap-4">
-                    {letraComprobante !== "X" && qrBase64 && (
-                        <QRCodeSVG value={`https://www.afip.gob.ar/fe/qr/?p=${qrBase64}`} size={90} className="border border-black p-1" />
-                    )}
-                    {letraComprobante !== "X" && venta.cae && (
-                        <div className="text-[12px]">
-                            {empresa.logo_url && <img src="/afip_logo.png" className="max-h-8 object-contain mb-1 opacity-50" onError={(e) => e.currentTarget.style.display = 'none'} />}
-                            <p className="font-bold flex items-center gap-2">CAE N°: <span className="font-normal text-sm">{venta.cae}</span></p>
-                            <p className="font-bold flex items-center gap-2">Vto CAE: <span className="font-normal">{new Date(venta.cae_vto).toLocaleDateString('es-AR')}</span></p>
+            {/* CONTENEDOR DE IMPRESIÓN SEGÚN FORMATO SELECCIONADO */}
+            <div className="bg-slate-100 py-6 print:bg-white print:py-0 min-h-screen">
+                
+                {/* 1. MODO MEDIA HOJA / AUTO-ADAPTABLE */}
+                {formato === "AUTO" && (
+                    <div className="w-[210mm] max-w-full bg-white shadow-xl print:shadow-none mx-auto border print:border-none border-slate-200">
+                        {renderComprobanteCuerpo(null, false)}
+                    </div>
+                )}
+
+                {/* 2. MODO 2 EN 1: ORIGINAL + DUPLICADO EN HOJA A4 */}
+                {formato === "DOBLE" && (
+                    <div className="w-[210mm] max-w-full min-h-[297mm] bg-white shadow-xl print:shadow-none mx-auto border print:border-none border-slate-200 flex flex-col justify-between p-4 print:p-2">
+                        {/* COPIA 1: ORIGINAL */}
+                        <div className="flex-1">
+                            {renderComprobanteCuerpo("ORIGINAL - COMPROBANTE PARA EL CLIENTE", true)}
                         </div>
-                    )}
-                    {letraComprobante !== "X" && !venta.cae && (
-                        <div className="text-[12px] text-red-600 font-bold border border-red-600 p-2">COMPROBANTE SIN CAE FISCAL AUTORIZADO</div>
-                    )}
-                </div>
-                <div className="text-right text-[10px] text-slate-500 max-w-sm flex flex-col justify-end">
-                    {letraComprobante === "X" && (
-                        <p className="mb-1 font-bold text-slate-600">Las cotizaciones están sujetas a modificaciones sin previo aviso y a disponibilidad de stock al momento de confirmar la compra.</p>
-                    )}
-                    <span className="font-bold">Cajero: {venta.usuario ? venta.usuario.nombre_completo : "Sistema"}</span>
-                    <span>Documento impreso desde Tendeco POS</span>
-                </div>
-            </div>
 
-        </div>
+                        {/* LÍNEA DE CORTE */}
+                        <div className="my-2 border-b-2 border-dashed border-slate-400 flex items-center justify-center text-[10px] text-slate-500 font-bold uppercase tracking-widest relative">
+                            <span className="bg-white px-3 flex items-center gap-1 -mb-[9px]">
+                                <Scissors className="h-3.5 w-3.5 text-slate-600" /> Cortar por aquí (Original arriba / Duplicado abajo)
+                            </span>
+                        </div>
+
+                        {/* COPIA 2: DUPLICADO */}
+                        <div className="flex-1">
+                            {renderComprobanteCuerpo("DUPLICADO - CONSTANCIA DE ENTREGA / FIRMA", true)}
+                        </div>
+                    </div>
+                )}
+
+                {/* 3. MODO A4 COMPLETA */}
+                {formato === "A4" && (
+                    <div className="w-[210mm] min-h-[297mm] bg-white shadow-xl print:shadow-none mx-auto border print:border-none border-slate-200">
+                        {renderComprobanteCuerpo(null, false)}
+                    </div>
+                )}
+            </div>
         </>
     );
 }

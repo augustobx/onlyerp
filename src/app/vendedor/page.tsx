@@ -42,6 +42,7 @@ export default function PwaVendedor() {
     const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false });
     const [pedidosHistorial, setPedidosHistorial] = useState<any[]>([]);
     const [filtroHistorial, setFiltroHistorial] = useState("");
+    const [refrescando, setRefrescando] = useState(false);
 
     // Combos y Repartos
     const [combos, setCombos] = useState<any[]>([]);
@@ -210,15 +211,70 @@ export default function PwaVendedor() {
         });
     }, [queryCatalogo, filtroMarca, filtroCategoria, catalogoAbierto]);
 
-    // Función de actualización manual
-    const handleRefresh = () => {
-        startTransition(() => {
+    // ==========================================
+    // HARD REFRESH TOTAL DEL SISTEMA
+    // ==========================================
+    const handleHardRefresh = async () => {
+        if (refrescando) return;
+        setRefrescando(true);
+        const toastId = toast.loading("Actualizando catálogo, precios, stock y pedidos...");
+
+        try {
+            const [
+                listasData,
+                marcasData,
+                categoriasData,
+                configData,
+                historialData,
+                combosData,
+                repartosData,
+                productosData,
+                deudoresRes,
+                depsData
+            ] = await Promise.all([
+                obtenerListasPrecio(),
+                obtenerMarcas(),
+                obtenerCategorias(),
+                obtenerConfiguracionGlobal(),
+                obtenerPedidosVendedor(),
+                getCombosActivos(),
+                obtenerPedidosParaReparto(),
+                buscarProductos(queryCatalogo),
+                getClientesDeudores({ estado: 'TODOS' }),
+                getDepositos()
+            ]);
+
+            if (listasData) setListas(listasData);
+            if (marcasData) setMarcas(marcasData);
+            if (categoriasData) setCategorias(categoriasData);
+            if (configData) setConfiguracionGlobal(configData);
+            if (historialData) setPedidosHistorial(historialData);
+            if (combosData) setCombos(combosData);
+            if (repartosData) setPedidosReparto(repartosData);
+            if (depsData && depsData.length > 0) setDepositos(depsData);
+
+            if (productosData) {
+                let filtrados = productosData;
+                if (filtroMarca !== "TODAS") filtrados = filtrados.filter(p => p.marca?.nombre === filtroMarca);
+                if (filtroCategoria !== "TODAS") filtrados = filtrados.filter(p => p.categoria?.nombre === filtroCategoria);
+                setProductosCatalogo(filtrados);
+            }
+
+            if (deudoresRes?.success && deudoresRes.data) {
+                setDeudoresList(deudoresRes.data);
+            }
+
+            // Sincronizar pedidos pendientes si hay cola offline
+            await intentarSincronizar();
+
             router.refresh();
-            cargarHistorial();
-            cargarCombos();
-            cargarRepartos();
-            intentarSincronizar();
-        });
+            toast.success("¡Datos, stock y precios 100% actualizados!", { id: toastId });
+        } catch (error) {
+            console.error("Error en hard refresh:", error);
+            toast.error("Hubo un error al actualizar datos. Verificá la conexión.", { id: toastId });
+        } finally {
+            setRefrescando(false);
+        }
     };
 
     // ==========================================
@@ -621,11 +677,18 @@ export default function PwaVendedor() {
                             {tabActiva === 'COBRANZAS' && <><Bookmark className="mr-2 h-6 w-6 text-indigo-600" /> Cobranzas</>}
                         </h1>
                         <div className="flex gap-2 items-center">
-                            <Button variant="outline" size="sm" onClick={handleRefresh} className="h-9 w-9 p-0 rounded-xl bg-white border-zinc-200">
-                                <RefreshCw className="h-4 w-4 text-zinc-600" />
+                            <Button
+                                type="button"
+                                onClick={handleHardRefresh}
+                                disabled={refrescando}
+                                title="Actualizar todo: catálogo, stock, precios y pedidos"
+                                className="h-10 px-3.5 rounded-2xl bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-500 hover:to-blue-500 text-white font-black text-xs shadow-lg shadow-indigo-500/30 border border-indigo-300/40 flex items-center gap-1.5 transition-all active:scale-95 ring-2 ring-indigo-400/40 hover:ring-indigo-400 animate-pulse hover:animate-none"
+                            >
+                                <RefreshCw className={`h-4 w-4 ${refrescando ? 'animate-spin text-amber-300' : 'text-white'}`} />
+                                <span className="font-bold">{refrescando ? 'Actualizando...' : 'Actualizar'}</span>
                             </Button>
                             <form action={logout}>
-                                <Button type="submit" variant="outline" size="sm" className="bg-red-50 text-red-600 border-red-200 hover:bg-red-100 font-bold rounded-xl shadow-sm px-2">
+                                <Button type="submit" variant="outline" size="sm" className="h-10 bg-red-50 text-red-600 border-red-200 hover:bg-red-100 font-bold rounded-2xl shadow-sm px-3 text-xs">
                                     <LogOut className="w-4 h-4 mr-1" /> Salir
                                 </Button>
                             </form>
@@ -970,13 +1033,24 @@ export default function PwaVendedor() {
 
                                                 {/* RESUMEN ARTÍCULOS Y TOTAL */}
                                                 <div className="flex justify-between items-center pt-2">
-                                                    <span className="text-xs text-slate-500">
-                                                        {p.detalles?.length || 0} artículos
+                                                    <span className="text-xs text-slate-500 font-medium">
+                                                        📦 {p.detalles?.length || 0} artículo{p.detalles?.length === 1 ? '' : 's'}
                                                     </span>
                                                     <span className="font-black text-lg text-slate-900">
                                                         ${p.total.toFixed(2)}
                                                     </span>
                                                 </div>
+
+                                                {/* BOTÓN VER DETALLE COMPLETO */}
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setPedidoVer(p)}
+                                                    className="w-full h-10 rounded-2xl border-indigo-200 text-indigo-700 font-bold bg-indigo-50/60 hover:bg-indigo-100 flex items-center justify-center gap-1.5 shadow-sm text-xs"
+                                                >
+                                                    <Eye className="h-4 w-4 text-indigo-600" /> Ver Detalle de Artículos ({p.detalles?.length || 0})
+                                                </Button>
 
                                                 {/* MOTIVO SI NO ENTREGADO */}
                                                 {esNoEntregado && p.motivo_no_entrega && (
@@ -1207,7 +1281,21 @@ export default function PwaVendedor() {
                     <div className="bg-white p-5 border-b border-zinc-100 shrink-0">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="font-black text-2xl text-zinc-900">Catálogo de Productos</h2>
-                            <Button variant="ghost" size="icon" onClick={() => setCatalogoAbierto(false)} className="bg-zinc-100 rounded-2xl h-10 w-10"><X className="h-5 w-5" /></Button>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleHardRefresh}
+                                    disabled={refrescando}
+                                    title="Actualizar catálogo"
+                                    className="h-10 px-3 rounded-2xl bg-indigo-50 border-indigo-200 text-indigo-700 font-bold text-xs flex items-center gap-1 shadow-sm hover:bg-indigo-100 active:scale-95"
+                                >
+                                    <RefreshCw className={`h-3.5 w-3.5 ${refrescando ? 'animate-spin text-indigo-600' : 'text-indigo-600'}`} />
+                                    <span>{refrescando ? '...' : 'Actualizar'}</span>
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => setCatalogoAbierto(false)} className="bg-zinc-100 rounded-2xl h-10 w-10"><X className="h-5 w-5" /></Button>
+                            </div>
                         </div>
                         <div className="relative mb-3">
                             <Search className="absolute left-4 top-3.5 h-5 w-5 text-zinc-300" />
@@ -1499,70 +1587,190 @@ export default function PwaVendedor() {
             {/* DRAWER VER PEDIDO */}
             {pedidoVer && (
                 <div className="fixed inset-0 z-[60] bg-zinc-900 flex flex-col p-4 pt-safe animate-in zoom-in-95 duration-300">
-                    <div className="flex-1 bg-white rounded-3xl p-6 overflow-y-auto relative shadow-2xl">
-                        <Button variant="ghost" size="icon" onClick={() => setPedidoVer(null)} className="absolute top-4 right-4 bg-zinc-100 rounded-full h-10 w-10 text-zinc-500"><X className="h-5 w-5" /></Button>
+                    <div className="flex-1 bg-white rounded-3xl p-6 overflow-y-auto relative shadow-2xl space-y-5">
+                        <Button variant="ghost" size="icon" onClick={() => setPedidoVer(null)} className="absolute top-4 right-4 bg-zinc-100 rounded-full h-10 w-10 text-zinc-500 hover:bg-zinc-200"><X className="h-5 w-5" /></Button>
 
-                        <div className="text-center border-b border-dashed border-zinc-300 pb-5 mb-5 mt-2">
+                        {/* CABECERA */}
+                        <div className="text-center border-b border-dashed border-zinc-300 pb-5 pt-2">
+                            <span className="text-[11px] font-black text-indigo-600 uppercase tracking-widest block mb-0.5">Comprobante de Pedido</span>
                             <h2 className="font-black text-2xl text-zinc-900 tracking-tight">PEDIDO #{pedidoVer.numero}</h2>
-                            <p className="text-xs font-bold text-zinc-400 uppercase mt-2">{pedidoVer.cliente?.nombre_razon_social}</p>
-                            <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
-                                <div className={`text-[10px] font-black px-2 py-1 rounded-lg inline-block ${
-                                    pedidoVer.estado === 'PENDIENTE' ? 'bg-amber-100 text-amber-700' :
-                                    pedidoVer.estado === 'CANCELADO' ? 'bg-red-100 text-red-600' :
-                                    pedidoVer.estado === 'ARMADO' ? 'bg-indigo-100 text-indigo-700' :
-                                    'bg-emerald-100 text-emerald-700'
+                            <p className="text-sm font-bold text-slate-800 uppercase mt-1">{pedidoVer.cliente?.nombre_razon_social}</p>
+                            {pedidoVer.cliente?.dni_cuit && (
+                                <p className="text-[11px] text-zinc-400 font-mono">CUIT/DNI: {pedidoVer.cliente.dni_cuit}</p>
+                            )}
+
+                            <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3">
+                                <div className={`text-[10px] font-black px-2.5 py-1 rounded-lg ${
+                                    pedidoVer.estado === 'PENDIENTE' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                                    pedidoVer.estado === 'CANCELADO' ? 'bg-red-100 text-red-700 border border-red-200' :
+                                    pedidoVer.estado === 'ARMADO' || pedidoVer.estado === 'LISTO_ENTREGA' ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' :
+                                    pedidoVer.estado === 'ENTREGADO' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                                    'bg-rose-100 text-rose-800 border border-rose-200'
                                 }`}>
-                                    {pedidoVer.estado}
+                                    {pedidoVer.estado === 'ARMADO' || pedidoVer.estado === 'LISTO_ENTREGA' ? '🚚 LISTO / POR ENTREGAR' : pedidoVer.estado}
                                 </div>
                                 {pedidoVer.ventaId ? (
-                                    <div className="text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-1 rounded-lg">
+                                    <div className="text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg">
                                         🧾 Facturado (Venta #{pedidoVer.ventaId})
                                     </div>
                                 ) : (
-                                    <div className="text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-200 px-2 py-1 rounded-lg">
+                                    <div className="text-[10px] font-black bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-lg">
                                         ⏳ Sin Facturar
                                     </div>
                                 )}
                                 {pedidoVer.fecha_entrega && (
-                                    <div className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded-lg">
-                                        📅 Entrega: {new Date(pedidoVer.fecha_entrega).toLocaleDateString()}
+                                    <div className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 px-2.5 py-1 rounded-lg">
+                                        📅 Entrega: {new Date(pedidoVer.fecha_entrega).toLocaleDateString('es-AR')}
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        <div className="space-y-4 mb-6">
-                            {pedidoVer.detalles?.map((item: any, i: number) => (
-                                <div key={i} className="flex justify-between items-start">
-                                    <div className="max-w-[70%]">
-                                        <p className="font-bold text-xs text-zinc-800 leading-tight">{item.cantidad}x {item.producto?.nombre_producto || 'Producto'}</p>
-                                        {item.combo_nombre && (
-                                            <span className="inline-block mt-0.5 text-[9px] bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded border border-indigo-200">
-                                                📦 Combo: {item.combo_nombre}
-                                            </span>
-                                        )}
-                                        {item.descuento_individual > 0 && <p className="text-[9px] font-black text-emerald-600">Dto: {item.descuento_individual}%</p>}
+                        {/* DATOS DE CONTACTO Y ENTREGA */}
+                        {(pedidoVer.cliente?.direccion || pedidoVer.cliente?.telefono) && (
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2.5 text-xs">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">📍 Datos de Entrega y Contacto</span>
+                                {pedidoVer.cliente?.direccion && (
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-slate-800 font-medium flex items-center gap-1.5">
+                                            <MapPin className="h-4 w-4 text-indigo-600 shrink-0" />
+                                            {pedidoVer.cliente.direccion}
+                                        </span>
+                                        <a
+                                            href={`https://maps.google.com/?q=${encodeURIComponent(pedidoVer.cliente.direccion)}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-xs font-bold text-indigo-600 bg-white border border-indigo-200 px-2.5 py-1 rounded-lg shrink-0 shadow-sm hover:bg-indigo-50"
+                                        >
+                                            Ver Mapa
+                                        </a>
                                     </div>
-                                    <p className="font-black text-sm text-zinc-900">${item.subtotal.toFixed(2)}</p>
-                                </div>
-                            ))}
+                                )}
+                                {pedidoVer.cliente?.telefono && (
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-slate-800 font-medium flex items-center gap-1.5">
+                                            <Phone className="h-4 w-4 text-emerald-600 shrink-0" />
+                                            {pedidoVer.cliente.telefono}
+                                        </span>
+                                        <a
+                                            href={`tel:${pedidoVer.cliente.telefono}`}
+                                            className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg shrink-0 shadow-sm hover:bg-emerald-100"
+                                        >
+                                            Llamar
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* DETALLE DE ARTÍCULOS */}
+                        <div>
+                            <div className="flex justify-between items-center mb-3">
+                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
+                                    📦 Artículos a Entregar ({pedidoVer.detalles?.length || 0})
+                                </span>
+                            </div>
+
+                            <div className="space-y-3 divide-y divide-slate-100">
+                                {pedidoVer.detalles?.map((item: any, i: number) => (
+                                    <div key={i} className="pt-3 first:pt-0 flex justify-between items-start">
+                                        <div className="max-w-[70%]">
+                                            <div className="flex items-center gap-2">
+                                                <span className="bg-indigo-600 text-white font-black text-xs px-2 py-0.5 rounded-md">
+                                                    {item.cantidad}x
+                                                </span>
+                                                <p className="font-bold text-xs text-slate-900 leading-tight">
+                                                    {item.producto?.nombre_producto || 'Producto'}
+                                                </p>
+                                            </div>
+                                            {item.producto?.codigo_articulo && (
+                                                <p className="text-[10px] text-slate-400 font-mono mt-0.5 ml-8">
+                                                    SKU: {item.producto.codigo_articulo}
+                                                </p>
+                                            )}
+                                            {item.combo_nombre && (
+                                                <span className="inline-block mt-1 ml-8 text-[9px] bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded border border-indigo-200">
+                                                    📦 Combo: {item.combo_nombre}
+                                                </span>
+                                            )}
+                                            {item.descuento_individual > 0 && (
+                                                <p className="text-[9px] font-black text-emerald-600 ml-8 mt-0.5">
+                                                    Dto: {item.descuento_individual}%
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-black text-sm text-slate-900">${item.subtotal.toFixed(2)}</p>
+                                            <p className="text-[10px] text-slate-400">${item.precio_unitario?.toFixed(2)} c/u</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
 
-                        <div className="border-t border-dashed border-zinc-300 pt-5 mb-6">
-                            <div className="flex justify-between items-center mb-6">
-                                <span className="font-black text-zinc-400">TOTAL</span>
+                        {/* TOTAL Y CONDICIÓN DE PAGO */}
+                        <div className="border-t border-dashed border-zinc-300 pt-4 bg-slate-50 -mx-6 px-6 pb-2 rounded-b-2xl">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs font-bold text-slate-500 uppercase">Método de Pago</span>
+                                <span className="text-xs font-black text-slate-800 uppercase bg-white border border-slate-200 px-2.5 py-0.5 rounded-md">
+                                    {pedidoVer.metodo_pago?.replace('_', ' ') || 'CUENTA CORRIENTE'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                                <span className="font-black text-slate-600 text-sm">TOTAL A COBRAR / ENTREGAR</span>
                                 <span className="font-black text-2xl text-indigo-600">${pedidoVer.total.toFixed(2)}</span>
                             </div>
                         </div>
 
+                        {/* NOTAS */}
                         {pedidoVer.notas && (
-                            <div className="mt-4 bg-amber-50 p-3 rounded-xl border border-amber-100 italic text-xs text-amber-900">
-                                <b>Notas:</b> &quot;{pedidoVer.notas}&quot;
+                            <div className="bg-amber-50 p-3.5 rounded-2xl border border-amber-200/70 text-xs text-amber-950">
+                                <b className="font-black flex items-center gap-1 mb-1">📝 Notas / Indicaciones:</b>
+                                <p className="font-medium whitespace-pre-wrap">{pedidoVer.notas}</p>
                             </div>
                         )}
                     </div>
 
+                    {/* BOTONERA INFERIOR */}
                     <div className="pt-4 shrink-0 space-y-2">
+                        {/* ACCIONES DE REPARTO (Si está para entregar) */}
+                        {(pedidoVer.estado === 'ARMADO' || pedidoVer.estado === 'LISTO_ENTREGA') && (
+                            <div className="grid grid-cols-2 gap-2">
+                                <Button
+                                    onClick={() => {
+                                        handleMarcarEntregado(pedidoVer.id);
+                                        setPedidoVer(null);
+                                    }}
+                                    className="h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg text-sm"
+                                >
+                                    <CheckCircle2 className="h-5 w-5 mr-1.5" /> Marcar Entregado
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setModalNoEntrega(pedidoVer);
+                                        setMotivoNoEntrega("");
+                                        setPedidoVer(null);
+                                    }}
+                                    className="h-14 border-rose-200 text-rose-600 hover:bg-rose-50 font-bold rounded-2xl text-sm"
+                                >
+                                    <Ban className="h-5 w-5 mr-1.5" /> No Entregado
+                                </Button>
+                            </div>
+                        )}
+
+                        {pedidoVer.estado === 'NO_ENTREGADO' && (
+                            <Button
+                                onClick={() => {
+                                    handleMarcarEntregado(pedidoVer.id);
+                                    setPedidoVer(null);
+                                }}
+                                className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg text-sm"
+                            >
+                                <CheckCircle2 className="h-5 w-5 mr-1.5" /> Reintentar y Entregar
+                            </Button>
+                        )}
+
                         {(pedidoVer.estado === 'PENDIENTE' || pedidoVer.estado === 'APROBADO') && (
                             <>
                                 <Button onClick={() => handleMarcarListoEntrega(pedidoVer)} className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-500/20 rounded-2xl font-black text-white">
@@ -1574,8 +1782,9 @@ export default function PwaVendedor() {
                                 </div>
                             </>
                         )}
-                        <Button onClick={() => setPedidoVer(null)} className="w-full h-14 bg-zinc-800 hover:bg-zinc-900 shadow-xl shadow-zinc-800/20 rounded-2xl font-black text-white">
-                            CERRAR
+
+                        <Button onClick={() => setPedidoVer(null)} className="w-full h-12 bg-zinc-800 hover:bg-zinc-900 rounded-2xl font-bold text-white text-sm">
+                            Cerrar Detalle
                         </Button>
                     </div>
                 </div>
