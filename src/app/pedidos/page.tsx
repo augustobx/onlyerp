@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { obtenerTodosLosPedidos, cambiarEstadoPedidoAdmin, editarPedidoAdmin, recalcularPreciosPendientes, actualizarFechaEntregaPedido } from "@/app/actions/pedidos";
 import { buscarProductos, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
-import { redondearPrecio } from "@/lib/utils";
+import { redondearPrecio, formatFechaLocal, formatFechaInput, parsearFechaEntrega } from "@/lib/utils";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,12 @@ export default function AdminPedidosPage() {
     const [carritoEditar, setCarritoEditar] = useState<any[]>([]);
     const [queryProducto, setQueryProducto] = useState("");
     const [productosBuscados, setProductosBuscados] = useState<any[]>([]);
+    const [fechaEntregaModalEditar, setFechaEntregaModalEditar] = useState<string>("");
+    const [notasModalEditar, setNotasModalEditar] = useState<string>("");
+
+    // Fecha Entrega Activa (Panel Derecho)
+    const [fechaEntregaActiva, setFechaEntregaActiva] = useState<string>("");
+    const [guardandoFecha, setGuardandoFecha] = useState(false);
 
     // Modal de facturación
     const [modalFacturar, setModalFacturar] = useState(false);
@@ -57,6 +63,14 @@ export default function AdminPedidosPage() {
             if (primerPendiente) setPedidoActivo(primerPendiente);
         }
     };
+
+    useEffect(() => {
+        if (pedidoActivo) {
+            setFechaEntregaActiva(formatFechaInput(pedidoActivo.fecha_entrega));
+        } else {
+            setFechaEntregaActiva("");
+        }
+    }, [pedidoActivo?.id, pedidoActivo?.fecha_entrega]);
 
     const vendedores = Array.from(new Set(pedidos.map(p => p.usuario?.nombre).filter(Boolean)));
 
@@ -95,6 +109,8 @@ export default function AdminPedidosPage() {
             precio_final: d.precio_final,
             subtotal: d.subtotal
         })));
+        setFechaEntregaModalEditar(formatFechaInput(pedidoActivo.fecha_entrega));
+        setNotasModalEditar(pedidoActivo.notas || "");
         setModalEditar(true);
     };
 
@@ -145,7 +161,14 @@ export default function AdminPedidosPage() {
         const total = subtotal - (pedidoActivo.descuento_global || 0);
 
         const toastId = toast.loading(`Guardando cambios en pedido #${pedidoActivo.numero}...`);
-        const res = await editarPedidoAdmin(pedidoActivo.id, carritoEditar, subtotal, total, pedidoActivo.notas || "");
+        const res = await editarPedidoAdmin(
+            pedidoActivo.id,
+            carritoEditar,
+            subtotal,
+            total,
+            notasModalEditar,
+            fechaEntregaModalEditar || null
+        );
         if (res.success) {
             toast.success("Pedido editado correctamente", { id: toastId });
             await cargarPedidos();
@@ -371,8 +394,15 @@ export default function AdminPedidosPage() {
                                 </div>
                                 <p className="font-bold text-sm text-slate-800 leading-tight mb-1">{p.cliente?.nombre_razon_social}</p>
                                 <div className="flex justify-between items-end mt-2">
-                                    <div className="flex items-center text-[10px] text-slate-500 font-medium">
-                                        <User className="w-3 h-3 mr-1" /> {p.usuario?.nombre}
+                                    <div className="flex flex-col gap-0.5">
+                                        <div className="flex items-center text-[10px] text-slate-500 font-medium">
+                                            <User className="w-3 h-3 mr-1" /> {p.usuario?.nombre}
+                                        </div>
+                                        {p.fecha_entrega && (
+                                            <div className="flex items-center text-[10px] text-indigo-700 font-bold">
+                                                <Calendar className="w-3 h-3 mr-1 text-indigo-500" /> Entrega: {formatFechaLocal(p.fecha_entrega)}
+                                            </div>
+                                        )}
                                     </div>
                                     <span className="font-black text-indigo-700">${p.total.toFixed(2)}</span>
                                 </div>
@@ -584,27 +614,52 @@ export default function AdminPedidosPage() {
                                         )}
 
                                         {/* Fecha de Entrega Programada */}
-                                        <div className="mt-3 bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                                        <div className="mt-3 bg-indigo-50/80 p-3 rounded-xl border border-indigo-100">
                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                                <p className="text-[10px] font-bold text-indigo-700 uppercase flex items-center gap-1">
-                                                    <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Fecha Entrega Programada:
-                                                </p>
-                                                <input
-                                                    type="date"
-                                                    defaultValue={pedidoActivo.fecha_entrega ? new Date(pedidoActivo.fecha_entrega).toISOString().split('T')[0] : ''}
-                                                    onChange={async (e) => {
-                                                        if (!e.target.value) return;
-                                                        const res = await actualizarFechaEntregaPedido(pedidoActivo.id, e.target.value);
-                                                        if (res.success) {
-                                                            toast.success("¡Fecha de entrega actualizada!");
-                                                            setPedidoActivo({ ...pedidoActivo, fecha_entrega: new Date(e.target.value) });
-                                                            cargarPedidos();
-                                                        } else {
-                                                            toast.error(res.error);
-                                                        }
-                                                    }}
-                                                    className="text-xs font-bold bg-white border border-indigo-200 rounded px-2 py-1 text-indigo-900 outline-none shadow-sm"
-                                                />
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-indigo-700 uppercase flex items-center gap-1">
+                                                        <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Fecha Entrega Programada:
+                                                    </p>
+                                                    {pedidoActivo.fecha_entrega ? (
+                                                        <p className="text-xs font-semibold text-indigo-950 mt-0.5">
+                                                            Actualmente: <span className="font-bold">{formatFechaLocal(pedidoActivo.fecha_entrega)}</span>
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-xs text-slate-400 font-medium mt-0.5">Sin fecha programada</p>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        key={pedidoActivo.id}
+                                                        type="date"
+                                                        value={fechaEntregaActiva}
+                                                        onChange={(e) => setFechaEntregaActiva(e.target.value)}
+                                                        className="text-xs font-bold bg-white border border-indigo-200 rounded-lg px-2.5 py-1.5 text-indigo-900 outline-none shadow-sm focus:ring-2 focus:ring-indigo-400"
+                                                    />
+                                                    <Button
+                                                        size="sm"
+                                                        disabled={guardandoFecha || fechaEntregaActiva === formatFechaInput(pedidoActivo.fecha_entrega)}
+                                                        onClick={async () => {
+                                                            setGuardandoFecha(true);
+                                                            const toastId = toast.loading("Guardando fecha de entrega...");
+                                                            const res = await actualizarFechaEntregaPedido(pedidoActivo.id, fechaEntregaActiva || null);
+                                                            if (res.success) {
+                                                                toast.success("¡Fecha de entrega actualizada con éxito!", { id: toastId });
+                                                                setPedidoActivo({
+                                                                    ...pedidoActivo,
+                                                                    fecha_entrega: parsearFechaEntrega(fechaEntregaActiva)
+                                                                });
+                                                                await cargarPedidos();
+                                                            } else {
+                                                                toast.error(res.error || "Error al actualizar fecha", { id: toastId });
+                                                            }
+                                                            setGuardandoFecha(false);
+                                                        }}
+                                                        className="h-8 px-3 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm"
+                                                    >
+                                                        {guardandoFecha ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : "Guardar"}
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -862,6 +917,33 @@ export default function AdminPedidosPage() {
                             {carritoEditar.length === 0 && (
                                 <p className="text-center text-red-500 text-sm font-bold py-4">El pedido quedará vacío y podría ser inválido.</p>
                             )}
+
+                            {/* Fecha de Entrega y Notas en Modal */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100">
+                                <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                        📅 Fecha de Entrega Programada
+                                    </label>
+                                    <Input
+                                        type="date"
+                                        value={fechaEntregaModalEditar}
+                                        onChange={(e) => setFechaEntregaModalEditar(e.target.value)}
+                                        className="bg-slate-50 border-slate-200 text-xs h-9"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                                        📝 Notas del Pedido
+                                    </label>
+                                    <Input
+                                        type="text"
+                                        value={notasModalEditar}
+                                        onChange={(e) => setNotasModalEditar(e.target.value)}
+                                        placeholder="Notas o aclaraciones..."
+                                        className="bg-slate-50 border-slate-200 text-xs h-9"
+                                    />
+                                </div>
+                            </div>
 
                         </div>
 

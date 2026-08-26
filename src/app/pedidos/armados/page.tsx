@@ -22,7 +22,7 @@ import {
   marcarPedidoNoEntregado,
   cambiarEstadoPedidoAdmin
 } from "@/app/actions/pedidos";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatFechaLocal, formatFechaInput } from "@/lib/utils";
 
 export default function PedidosArmadosPage() {
   const [isPending, startTransition] = useTransition();
@@ -421,8 +421,8 @@ export default function PedidosArmadosPage() {
                           </strong>
                         </span>
                         {pedido.fecha_entrega && (
-                          <span className="text-[11px] text-slate-400 block">
-                            Fecha entrega: {new Date(pedido.fecha_entrega).toLocaleDateString("es-AR")}
+                          <span className="text-[11px] text-indigo-700 font-semibold block">
+                            Fecha entrega: {formatFechaLocal(pedido.fecha_entrega)}
                           </span>
                         )}
                       </div>
@@ -487,9 +487,7 @@ export default function PedidosArmadosPage() {
                         onClick={() => {
                           setPedidoAsignarModal(pedido);
                           setRepartidorSeleccionado(pedido.repartidorId ? String(pedido.repartidorId) : "");
-                          setFechaSeleccionada(
-                            pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toISOString().split("T")[0] : ""
-                          );
+                          setFechaSeleccionada(formatFechaInput(pedido.fecha_entrega));
                         }}
                         className="h-8 text-xs font-bold"
                       >

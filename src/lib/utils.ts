@@ -178,7 +178,19 @@ export function formatCurrency(value: number, currency: "ARS" | "USD" = "ARS") {
 
 export function formatFechaLocal(date: string | Date | null | undefined): string {
     if (!date) return "";
-    return new Date(date).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+    if (typeof date === 'string') {
+        if (/^\d{4}-\d{2}-\d{2}T00:00:00/.test(date)) {
+            const [y, m, d] = date.split('T')[0].split('-');
+            return `${d}/${m}/${y}`;
+        }
+        if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            const [y, m, d] = date.split('-');
+            return `${d}/${m}/${y}`;
+        }
+    }
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
 }
 
 export function formatHoraLocal(date: string | Date | null | undefined): string {
@@ -189,4 +201,53 @@ export function formatHoraLocal(date: string | Date | null | undefined): string 
 export function formatFechaHoraLocal(date: string | Date | null | undefined): string {
     if (!date) return "";
     return new Date(date).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+}
+
+/** Formatea una fecha o string ISO a YYYY-MM-DD para <input type="date"> */
+export function formatFechaInput(date: string | Date | null | undefined): string {
+    if (!date) return "";
+    if (typeof date === 'string') {
+        if (/^\d{4}-\d{2}-\d{2}T00:00:00/.test(date)) {
+            return date.split('T')[0];
+        }
+        if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return date;
+        }
+    }
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return "";
+    try {
+        const parts = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Argentina/Buenos_Aires',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).format(d);
+        return parts;
+    } catch {
+        return d.toISOString().split('T')[0];
+    }
+}
+
+/** Parsea un string de fecha (ej. "2026-08-28") a Date fijando las 12:00:00 UTC para evitar desfasajes horarios */
+export function parsearFechaEntrega(fecha: string | Date | null | undefined): Date | null {
+    if (!fecha) return null;
+    if (fecha instanceof Date) {
+        if (isNaN(fecha.getTime())) return null;
+        return fecha;
+    }
+    if (typeof fecha === 'string') {
+        const trimmed = fecha.trim();
+        if (!trimmed) return null;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+            return new Date(`${trimmed}T12:00:00.000Z`);
+        }
+        if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) {
+            const soloFecha = trimmed.split('T')[0];
+            return new Date(`${soloFecha}T12:00:00.000Z`);
+        }
+        const d = new Date(trimmed);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    return null;
 }

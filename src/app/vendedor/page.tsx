@@ -13,7 +13,7 @@ import { registrarClientePWA } from "@/app/actions/clientes";
 import { getClientSession, logout } from "@/app/actions/auth";
 import { getClientesDeudores, getFichaCuentaCorriente, registrarPagoCC } from "@/app/actions/cuentas-corrientes";
 import { guardarOffline, obtenerTodosOffline, eliminarOffline, STORE_PEDIDOS, STORE_CLIENTES } from "@/lib/offline-db";
-import { redondearPrecio, calcularPrecioConCascada, resolverMargenYDescuento, formatCurrency } from "@/lib/utils";
+import { redondearPrecio, calcularPrecioConCascada, resolverMargenYDescuento, formatCurrency, formatFechaLocal } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -546,7 +546,7 @@ export default function PwaVendedor() {
     // Marcar Listo para Entrega (toma el vendedor actual y su fecha de entrega programada)
     const handleMarcarListoEntrega = async (pedido: any) => {
         if (!isOnline) return toast.error("Debés estar conectado para actualizar el estado del pedido.");
-        const fechaTexto = pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString() : 'hoy';
+        const fechaTexto = pedido.fecha_entrega ? formatFechaLocal(pedido.fecha_entrega) : 'hoy';
         if (!confirm(`¿Marcar Pedido #${pedido.numero} como LISTO PARA ENTREGA? Quedará programado para el ${fechaTexto} a tu nombre.`)) return;
 
         const toastId = toast.loading("Marcando listo para entrega...");
@@ -967,7 +967,7 @@ export default function PwaVendedor() {
                                                                 Pedido #{p.numero}
                                                             </span>
                                                             <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-md">
-                                                                📅 {p.fecha_entrega ? `Entrega: ${new Date(p.fecha_entrega).toLocaleDateString()}` : `Emisión: ${new Date(p.fecha).toLocaleDateString()}`}
+                                                                📅 {p.fecha_entrega ? `Entrega: ${formatFechaLocal(p.fecha_entrega)}` : `Emisión: ${formatFechaLocal(p.fecha)}`}
                                                             </span>
                                                             {p.ventaId ? (
                                                                 <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded-md border border-emerald-200">
@@ -1620,7 +1620,7 @@ export default function PwaVendedor() {
                                 )}
                                 {pedidoVer.fecha_entrega && (
                                     <div className="text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 px-2.5 py-1 rounded-lg">
-                                        📅 Entrega: {new Date(pedidoVer.fecha_entrega).toLocaleDateString('es-AR')}
+                                        📅 Entrega: {formatFechaLocal(pedidoVer.fecha_entrega)}
                                     </div>
                                 )}
                             </div>

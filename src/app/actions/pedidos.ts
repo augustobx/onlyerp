@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getClientSession } from "./auth";
 import { emitirComprobanteAFIP } from "./afip";
-import { calcularPrecioConCascada, redondearPrecio } from "@/lib/utils";
+import { calcularPrecioConCascada, redondearPrecio, parsearFechaEntrega } from "@/lib/utils";
 
 // ============================================================================
 // HELPER: RESOLVER DEPÓSITO ACTIVO DINÁMICAMENTE
@@ -109,7 +109,7 @@ export async function registrarPedidoPWA(data: any) {
                     descuento_global: data.descuento_global || 0,
                     total: data.total,
                     notas: data.notas || null,
-                    fecha_entrega: data.fecha_entrega ? new Date(data.fecha_entrega) : null,
+                    fecha_entrega: parsearFechaEntrega(data.fecha_entrega),
                     estado: 'PENDIENTE',
                     metodo_pago: data.metodoPago || "CUENTA_CORRIENTE",
                     monto_abonado: data.montoAbonado || 0,
@@ -633,7 +633,8 @@ export async function editarPedidoAdmin(
     nuevoCarrito: any[],
     subtotal: number,
     total: number,
-    notas: string
+    notas: string,
+    fechaEntrega?: string | Date | null
 ) {
     try {
         const resultado = await prisma.$transaction(async (tx) => {
@@ -700,23 +701,29 @@ export async function editarPedidoAdmin(
 
             const fechaHora = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
 
+            const dataToUpdate: any = {
+                subtotal: subtotal,
+                total: total,
+                notas: notas + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> PEDIDO EDITADO.`,
+                detalles: {
+                    create: nuevoCarrito.map((item: any) => ({
+                        productoId: item.productoId,
+                        cantidad: item.cantidad,
+                        precio_unitario: item.precio_unitario,
+                        descuento_individual: item.descuento_individual || 0,
+                        precio_final: item.precio_final,
+                        subtotal: item.subtotal
+                    }))
+                }
+            };
+
+            if (fechaEntrega !== undefined) {
+                dataToUpdate.fecha_entrega = parsearFechaEntrega(fechaEntrega);
+            }
+
             const pedidoActualizado = await tx.pedido.update({
                 where: { id: pedidoActual.id },
-                data: {
-                    subtotal: subtotal,
-                    total: total,
-                    notas: notas + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> PEDIDO EDITADO.`,
-                    detalles: {
-                        create: nuevoCarrito.map((item: any) => ({
-                            productoId: item.productoId,
-                            cantidad: item.cantidad,
-                            precio_unitario: item.precio_unitario,
-                            descuento_individual: item.descuento_individual || 0,
-                            precio_final: item.precio_final,
-                            subtotal: item.subtotal
-                        }))
-                    }
-                }
+                data: dataToUpdate
             });
 
             return pedidoActualizado;
@@ -877,9 +884,12 @@ export async function marcarPedidoListoEntrega(pedidoId: number, repartidorId?: 
             ? (repartidorId ? Number(repartidorId) : null)
             : (pedido.repartidorId || pedido.usuarioId || null);
 
-        const finalFechaEntrega = fechaEntrega !== undefined
-            ? (fechaEntrega ? new Date(fechaEntrega) : null)
-            : (pedido.fecha_entrega || new Date());
+        let finalFechaEntrega: Date | null;
+        if (fechaEntrega !== undefined) {
+            finalFechaEntrega = parsearFechaEntrega(fechaEntrega);
+        } else {
+            finalFechaEntrega = pedido.fecha_entrega || parsearFechaEntrega(new Date());
+        }
 
         const actualizado = await prisma.pedido.update({
             where: { id: pedidoId },
@@ -964,8 +974,8 @@ export async function obtenerPedidosArmados(filtroFecha?: string, repartidorId?:
             where.repartidorId = Number(repartidorId);
         }
         if (filtroFecha) {
-            const start = new Date(filtroFecha + "T00:00:00");
-            const end = new Date(filtroFecha + "T23:59:59.999");
+            const start = new Date(`${filtroFecha}T00:00:00.000Z`);
+            const end = new Date(`${filtroFecha}T23:59:59.999Z`);
             where.fecha_entrega = { gte: start, lte: end };
         }
 
@@ -1025,10 +1035,9 @@ export async function obtenerPedidosParaReparto(repartidorId?: number) {
     }
 }
 
-export async function actualizarFechaEntregaPedido(pedidoId: number, fechaEntrega: string | Date) {
+export async function actualizarFechaEntregaPedido(pedidoId: number, fechaEntrega: string | Date | null | undefined) {
     try {
-        const fechaObj = new Date(fechaEntrega);
-        if (isNaN(fechaObj.getTime())) throw new Error("Fecha de entrega no válida.");
+        const fechaObj = parsearFechaEntrega(fechaEntrega);
 
         const actualizado = await prisma.pedido.update({
             where: { id: Number(pedidoId) },
