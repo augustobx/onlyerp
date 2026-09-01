@@ -5,6 +5,7 @@ import { crearSesion, cerrarSesion, getSessionUser } from "@/lib/session";
 import { getTenantContext } from "@/lib/tenant-context";
 import { verifyPassword, hashPassword } from "@/lib/password";
 import { redirect } from "next/navigation";
+import { actualizarEstadoMembresiaTenant } from "@/lib/membership";
 
 export async function getClientSession() {
   const payload = await getSessionUser();
@@ -93,8 +94,10 @@ export async function login(formData: FormData) {
       return { success: false, error: "Usuario o contraseña incorrectos." };
     }
 
-    // Comprobar estado del tenant
-    if (usuario.tenant.estado === "SUSPENDIDO") {
+    // Actualizar automáticamente el estado si la membresía venció
+    const tenantActualizado = await actualizarEstadoMembresiaTenant(usuario.tenantId);
+
+    if (tenantActualizado?.estado === "SUSPENDIDO") {
       return {
         success: false,
         error: "La suscripción de la empresa está suspendida. Contactá al soporte de NanoLabs.",

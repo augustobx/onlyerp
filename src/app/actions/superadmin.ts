@@ -5,6 +5,7 @@ import { crearSuperAdminSesion, cerrarSuperAdminSesion, requireSuperAdmin } from
 import { verifyPassword, hashPassword } from "@/lib/password";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { suspenderTenantsVencidos } from "@/lib/membership";
 
 export async function superAdminLogin(formData: FormData) {
   try {
@@ -42,6 +43,7 @@ export async function superAdminLogout() {
 
 export async function getSuperAdminDashboard() {
   await requireSuperAdmin();
+  await suspenderTenantsVencidos();
 
   const [
     totalTenants,
@@ -90,6 +92,7 @@ export async function getSuperAdminDashboard() {
 
 export async function getTenantsList() {
   await requireSuperAdmin();
+  await suspenderTenantsVencidos();
 
   return prisma.tenant.findMany({
     orderBy: { id: "desc" },
@@ -109,6 +112,7 @@ export async function getTenantsList() {
 
 export async function getTenantDetail(tenantId: number) {
   await requireSuperAdmin();
+  await suspenderTenantsVencidos();
 
   return prisma.tenant.findUnique({
     where: { id: tenantId },
@@ -153,6 +157,8 @@ export type CreateTenantInput = {
   adminUsername: string;
   adminNombre: string;
   adminPassword: string;
+  fechaAlta?: string;
+  fechaVencimiento?: string;
 };
 
 export async function createTenant(input: CreateTenantInput) {
@@ -180,6 +186,8 @@ export async function createTenant(input: CreateTenantInput) {
           telefono: input.telefono?.trim() || null,
           email: input.email?.trim() || null,
           estado: "ACTIVO",
+          fecha_alta: input.fechaAlta ? new Date(input.fechaAlta + "T12:00:00") : new Date(),
+          fecha_vencimiento: input.fechaVencimiento ? new Date(input.fechaVencimiento + "T23:59:59") : null,
         },
       });
 
@@ -282,6 +290,8 @@ export async function updateTenant(tenantId: number, data: {
   direccion?: string | null;
   telefono?: string | null;
   email?: string | null;
+  fecha_alta?: string | null;
+  fecha_vencimiento?: string | null;
 }) {
   await requireSuperAdmin();
 
@@ -298,6 +308,14 @@ export async function updateTenant(tenantId: number, data: {
         ...(data.direccion !== undefined && { direccion: data.direccion?.trim() || null }),
         ...(data.telefono !== undefined && { telefono: data.telefono?.trim() || null }),
         ...(data.email !== undefined && { email: data.email?.trim() || null }),
+        ...(data.fecha_alta !== undefined && {
+          fecha_alta: data.fecha_alta ? new Date(data.fecha_alta + "T12:00:00") : new Date(),
+        }),
+        ...(data.fecha_vencimiento !== undefined && {
+          fecha_vencimiento: data.fecha_vencimiento
+            ? new Date(data.fecha_vencimiento + "T23:59:59")
+            : null,
+        }),
       },
     });
 

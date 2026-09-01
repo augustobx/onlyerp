@@ -55,6 +55,8 @@ export function TenantsManagerClient({
       adminNombre: formData.get("adminNombre") as string,
       adminUsername: formData.get("adminUsername") as string,
       adminPassword: formData.get("adminPassword") as string,
+      fechaAlta: formData.get("fechaAlta") as string,
+      fechaVencimiento: formData.get("fechaVencimiento") as string,
     };
 
     try {
@@ -260,6 +262,27 @@ export function TenantsManagerClient({
                       .nanoapps.ar
                     </span>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Fecha de Inicio *</label>
+                  <input
+                    type="date"
+                    name="fechaAlta"
+                    required
+                    defaultValue={new Date().toISOString().slice(0, 10)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Fecha de Vencimiento *</label>
+                  <input
+                    type="date"
+                    name="fechaVencimiento"
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  />
                 </div>
 
                 <div>

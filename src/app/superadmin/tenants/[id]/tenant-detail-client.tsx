@@ -93,6 +93,8 @@ export function TenantDetailClient({
         telefono: formData.get("telefono") as string,
         email: formData.get("email") as string,
         direccion: formData.get("direccion") as string,
+        fecha_alta: formData.get("fecha_alta") as string,
+        fecha_vencimiento: formData.get("fecha_vencimiento") as string,
         modulos_override: JSON.stringify(overrides),
       });
 
@@ -179,7 +181,7 @@ export function TenantDetailClient({
               )}
             </div>
             <div className="text-xs text-indigo-400 font-mono mt-1 flex items-center gap-2">
-              <span>{tenant.slug}.onlyerp.site</span>
+              <span>{tenant.slug}.nanoapps.ar</span>
               {tenant.dominio_personalizado && (
                 <>
                   <span>•</span>
@@ -247,6 +249,28 @@ export function TenantDetailClient({
                 <option value="SUSPENDIDO">Suspendido (Bloqueo de acceso)</option>
                 <option value="CANCELADO">Cancelado / Baja</option>
               </select>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Fecha de Inicio</label>
+                <input
+                  type="date"
+                  name="fecha_alta"
+                  defaultValue={tenant.fecha_alta ? new Date(tenant.fecha_alta).toISOString().slice(0, 10) : ""}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Fecha de Vencimiento</label>
+                <input
+                  type="date"
+                  name="fecha_vencimiento"
+                  defaultValue={tenant.fecha_vencimiento ? new Date(tenant.fecha_vencimiento).toISOString().slice(0, 10) : ""}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+              </div>
             </div>
 
             <div>
