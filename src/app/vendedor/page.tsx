@@ -39,7 +39,7 @@ export default function PwaVendedor() {
     const [listas, setListas] = useState<any[]>([]);
     const [marcas, setMarcas] = useState<any[]>([]);
     const [categorias, setCategorias] = useState<any[]>([]);
-    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false });
+    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false, aplicar_iva_en_precios: false });
     const [pedidosHistorial, setPedidosHistorial] = useState<any[]>([]);
     const [filtroHistorial, setFiltroHistorial] = useState("");
     const [refrescando, setRefrescando] = useState(false);
@@ -121,8 +121,11 @@ export default function PwaVendedor() {
             }
         });
         
-        getClientSession().then((s) => {
+        getClientSession().then((s: any) => {
             if (s && s.permisos && s.permisos.includes("COBRAR_CC")) setPuedeCobrar(true);
+            if (s?.rol === 'REPARTIDOR') {
+                setTabActiva('REPARTOS');
+            }
             if (s?.sucursalId) {
                 getDepositos(Number(s.sucursalId)).then(deps => {
                     if (deps && deps.length > 0) {
@@ -291,12 +294,13 @@ export default function PwaVendedor() {
         return calcularPrecioConCascada(
             producto.precio_costo,
             descuentoFinal,
-            0, // IVA 0% SISTEMA COMPLETO
+            producto.alicuota_iva || 0,
             aumProv,
             aumMarca,
             aumCat,
             margenFinal,
-            configuracionGlobal.redondear_a_cinco
+            configuracionGlobal.redondear_a_cinco,
+            configuracionGlobal.aplicar_iva_en_precios
         );
     };
 
@@ -1247,31 +1251,68 @@ export default function PwaVendedor() {
                 </div>
             )}
 
-            {/* NAVBAR INFERIOR CON TODAS LAS VISTAS */}
+            {/* NAVBAR INFERIOR ULTRA-MODERNO FLOTANTE (GLASSMORPHISM) */}
             {!vistaRemito && !catalogoAbierto && (
-                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-zinc-200 shadow-[0_-10px_20px_rgba(0,0,0,0.05)] pb-safe z-40 flex">
-                    <button onClick={() => setTabActiva('NUEVO')} className={`flex-1 flex flex-col items-center py-2.5 ${tabActiva === 'NUEVO' ? 'text-indigo-600 font-black' : 'text-zinc-400'}`}>
-                        <Plus className="w-5 h-5 mb-0.5" />
-                        <span className="text-[9px] uppercase tracking-wider">Nuevo</span>
-                    </button>
-                    <button onClick={() => setTabActiva('COMBOS')} className={`flex-1 flex flex-col items-center py-2.5 ${tabActiva === 'COMBOS' ? 'text-amber-600 font-black' : 'text-zinc-400'}`}>
-                        <Sparkles className="w-5 h-5 mb-0.5" />
-                        <span className="text-[9px] uppercase tracking-wider">Combos</span>
-                    </button>
-                    <button onClick={() => setTabActiva('REPARTOS')} className={`flex-1 flex flex-col items-center py-2.5 ${tabActiva === 'REPARTOS' ? 'text-indigo-600 font-black' : 'text-zinc-400'}`}>
-                        <Truck className="w-5 h-5 mb-0.5" />
-                        <span className="text-[9px] uppercase tracking-wider">Repartos</span>
-                    </button>
-                    <button onClick={() => setTabActiva('HISTORIAL')} className={`flex-1 flex flex-col items-center py-2.5 ${tabActiva === 'HISTORIAL' ? 'text-indigo-600 font-black' : 'text-zinc-400'}`}>
-                        <History className="w-5 h-5 mb-0.5" />
-                        <span className="text-[9px] uppercase tracking-wider">Pedidos</span>
-                    </button>
-                    {puedeCobrar && (
-                        <button onClick={() => setTabActiva('COBRANZAS')} className={`flex-1 flex flex-col items-center py-2.5 ${tabActiva === 'COBRANZAS' ? 'text-indigo-600 font-black' : 'text-zinc-400'}`}>
-                            <Bookmark className="w-5 h-5 mb-0.5" />
-                            <span className="text-[9px] uppercase tracking-wider">Cobranzas</span>
+                <div className="fixed bottom-0 left-0 right-0 z-40 p-3 pb-safe pointer-events-none">
+                    <nav className="max-w-md mx-auto bg-slate-900/95 text-white backdrop-blur-lg border border-slate-800/80 rounded-2xl shadow-2xl p-1.5 flex items-center justify-between pointer-events-auto">
+                        <button
+                            onClick={() => setTabActiva('NUEVO')}
+                            className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
+                                tabActiva === 'NUEVO'
+                                    ? 'bg-indigo-600 text-white font-black shadow-md shadow-indigo-600/30'
+                                    : 'text-slate-400 hover:text-white'
+                            }`}
+                        >
+                            <Plus className="w-4 h-4 mb-0.5" />
+                            <span className="text-[9px] uppercase tracking-wider font-bold">Nuevo</span>
                         </button>
-                    )}
+                        <button
+                            onClick={() => setTabActiva('COMBOS')}
+                            className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
+                                tabActiva === 'COMBOS'
+                                    ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
+                                    : 'text-slate-400 hover:text-white'
+                            }`}
+                        >
+                            <Sparkles className="w-4 h-4 mb-0.5" />
+                            <span className="text-[9px] uppercase tracking-wider font-bold">Combos</span>
+                        </button>
+                        <button
+                            onClick={() => setTabActiva('REPARTOS')}
+                            className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
+                                tabActiva === 'REPARTOS'
+                                    ? 'bg-emerald-600 text-white font-black shadow-md shadow-emerald-600/30'
+                                    : 'text-slate-400 hover:text-white'
+                            }`}
+                        >
+                            <Truck className="w-4 h-4 mb-0.5" />
+                            <span className="text-[9px] uppercase tracking-wider font-bold">Repartos</span>
+                        </button>
+                        <button
+                            onClick={() => setTabActiva('HISTORIAL')}
+                            className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
+                                tabActiva === 'HISTORIAL'
+                                    ? 'bg-blue-600 text-white font-black shadow-md shadow-blue-600/30'
+                                    : 'text-slate-400 hover:text-white'
+                            }`}
+                        >
+                            <History className="w-4 h-4 mb-0.5" />
+                            <span className="text-[9px] uppercase tracking-wider font-bold">Pedidos</span>
+                        </button>
+                        {puedeCobrar && (
+                            <button
+                                onClick={() => setTabActiva('COBRANZAS')}
+                                className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
+                                    tabActiva === 'COBRANZAS'
+                                        ? 'bg-purple-600 text-white font-black shadow-md shadow-purple-600/30'
+                                        : 'text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                <Bookmark className="w-4 h-4 mb-0.5" />
+                                <span className="text-[9px] uppercase tracking-wider font-bold">Cobranzas</span>
+                            </button>
+                        )}
+                    </nav>
                 </div>
             )}
 
@@ -1660,6 +1701,52 @@ export default function PwaVendedor() {
                                         </a>
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        {/* PREVENTISTA RESPONSABLE QUE LEVANTÓ EL PEDIDO */}
+                        {pedidoVer.usuario && (
+                            <div className="bg-amber-50/80 p-3.5 rounded-2xl border border-amber-200/90 space-y-2 text-xs">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+                                        <User className="h-3.5 w-3.5 text-amber-700" /> Preventista Responsable
+                                    </span>
+                                    <Badge variant="outline" className="border-amber-300 text-amber-900 bg-amber-100/60 font-bold text-[9px] px-1.5 py-0">
+                                        {pedidoVer.usuario.rol === 'MIXTO' ? 'PREVENTA & REPARTO' : pedidoVer.usuario.rol || 'PREVENTISTA'}
+                                    </Badge>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 pt-0.5">
+                                    <div>
+                                        <p className="font-black text-sm text-slate-900">{pedidoVer.usuario.nombre}</p>
+                                        {pedidoVer.usuario.telefono ? (
+                                            <p className="text-[11px] text-emerald-800 font-mono font-bold flex items-center gap-1 mt-0.5">
+                                                <Phone className="h-3 w-3 text-emerald-600" /> {pedidoVer.usuario.telefono}
+                                            </p>
+                                        ) : (
+                                            <p className="text-[10px] text-slate-400">Sin teléfono registrado</p>
+                                        )}
+                                    </div>
+                                    {pedidoVer.usuario.telefono && (
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <a
+                                                href={`tel:${pedidoVer.usuario.telefono}`}
+                                                className="text-xs font-bold text-slate-800 bg-white border border-amber-300 px-2.5 py-1 rounded-xl shadow-xs hover:bg-amber-100 flex items-center gap-1"
+                                                title="Llamar al Preventista"
+                                            >
+                                                <Phone className="h-3.5 w-3.5 text-amber-700" /> Llamar
+                                            </a>
+                                            <a
+                                                href={`https://wa.me/${pedidoVer.usuario.telefono.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hola ${pedidoVer.usuario.nombre}, te consulto por el Pedido #${pedidoVer.numero} de ${pedidoVer.cliente?.nombre_razon_social}: `)}`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-2.5 py-1 rounded-xl shadow-xs flex items-center gap-1"
+                                                title="WhatsApp al Preventista"
+                                            >
+                                                💬 WhatsApp
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 

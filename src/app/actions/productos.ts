@@ -3,12 +3,15 @@
 import prisma from "@/lib/prisma";
 import { productoSchema, ProductoFormValues } from "@/lib/validations";
 import { revalidatePath } from "next/cache";
+import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 export async function getNextCodigoArticulo() {
+  const tenant = await getTenantContext();
+  if (!tenant) return "000001";
+
   const lastProducto = await prisma.producto.findFirst({
-    orderBy: {
-      id: "desc",
-    },
+    where: { tenantId: tenant.id },
+    orderBy: { id: "desc" },
   });
 
   if (!lastProducto || !lastProducto.codigo_articulo) {
@@ -27,17 +30,18 @@ export async function checkCodigoUnico(
   valor: string,
   excludeId?: number
 ) {
-  // "0" is the default barcode, allow duplicates
   if (campo === "codigo_barras" && (!valor || valor === "0")) return true;
 
+  const tenant = await getTenantContext();
+  if (!tenant) return true;
+
   const whereClause: any = {
+    tenantId: tenant.id,
     [campo]: valor,
   };
 
   if (excludeId) {
-    whereClause.id = {
-      not: excludeId,
-    };
+    whereClause.id = { not: excludeId };
   }
 
   const existing = await prisma.producto.findFirst({
@@ -49,26 +53,31 @@ export async function checkCodigoUnico(
 
 export async function crearProducto(data: ProductoFormValues) {
   try {
+    const tenant = await requireTenant();
     const validatedData = productoSchema.parse(data);
 
     const isCodigoArticuloUnique = await checkCodigoUnico("codigo_articulo", validatedData.codigo_articulo);
     if (!isCodigoArticuloUnique) {
-      return { success: false, error: "El código de artículo ya existe." };
+      return { success: false, error: "El código de artículo ya existe en tu empresa." };
     }
 
     if (validatedData.codigo_barras && validatedData.codigo_barras !== "0") {
       const isCodigoBarrasUnique = await checkCodigoUnico("codigo_barras", validatedData.codigo_barras);
       if (!isCodigoBarrasUnique) {
-        return { success: false, error: "El código de barras ya existe." };
+        return { success: false, error: "El código de barras ya existe en tu empresa." };
       }
     }
 
-    const activeListas = validatedData.listas_precios.filter(l => l.isActive);
-    const todosLosDepositos = await prisma.deposito.findMany({ select: { id: true } });
+    const activeListas = validatedData.listas_precios.filter((l) => l.isActive);
+    const todosLosDepositos = await prisma.deposito.findMany({
+      where: { tenantId: tenant.id },
+      select: { id: true },
+    });
 
     const producto = await prisma.$transaction(async (tx) => {
       const prod = await tx.producto.create({
         data: {
+          tenantId: tenant.id,
           codigo_articulo: validatedData.codigo_articulo,
           codigo_barras: validatedData.codigo_barras || "0",
           fecha_ingreso: validatedData.fecha_ingreso,
@@ -83,37 +92,40 @@ export async function crearProducto(data: ProductoFormValues) {
           stock_recomendado: validatedData.stock_recomendado,
           tipo_medicion: validatedData.tipo_medicion,
           moneda: validatedData.moneda,
-          listas_precios: activeListas.length > 0 ? {
-            create: activeListas.map((lista) => ({
-              listaPrecioId: lista.listaPrecioId,
-              margen_personalizado: lista.margen_personalizado ?? null,
-            })),
-          } : undefined,
+          listas_precios:
+            activeListas.length > 0
+              ? {
+                  create: activeListas.map((lista) => ({
+                    listaPrecioId: lista.listaPrecioId,
+                    margen_personalizado: lista.margen_personalizado ?? null,
+                  })),
+                }
+              : undefined,
           stocks: {
-            create: todosLosDepositos.map(d => {
+            create: todosLosDepositos.map((d) => {
               const stockUi = validatedData.stocks?.find((s) => s.depositoId === d.id);
               return {
                 depositoId: d.id,
-                cantidad: stockUi ? stockUi.cantidad : 0
+                cantidad: stockUi ? stockUi.cantidad : 0,
               };
-            })
-          }
+            }),
+          },
         },
       });
 
-      // Crear movimientos de stock si la cantidad inicial es mayor a 0
       for (const d of todosLosDepositos) {
         const stockUi = validatedData.stocks?.find((s) => s.depositoId === d.id);
         if (stockUi && stockUi.cantidad !== 0) {
-           await tx.movimientoStock.create({
-             data: {
-               productoId: prod.id,
-               depositoDestinoId: d.id,
-               cantidad: Math.abs(stockUi.cantidad),
-               tipo: stockUi.cantidad > 0 ? "ENTRADA" : "SALIDA",
-               motivo: "Stock inicial s/ Sistema"
-             }
-           });
+          await tx.movimientoStock.create({
+            data: {
+              tenantId: tenant.id,
+              productoId: prod.id,
+              depositoDestinoId: d.id,
+              cantidad: Math.abs(stockUi.cantidad),
+              tipo: stockUi.cantidad > 0 ? "ENTRADA" : "SALIDA",
+              motivo: "Stock inicial s/ Sistema",
+            },
+          });
         }
       }
 
@@ -130,21 +142,22 @@ export async function crearProducto(data: ProductoFormValues) {
 
 export async function actualizarProducto(id: number, data: ProductoFormValues) {
   try {
+    const tenant = await requireTenant();
     const validatedData = productoSchema.parse(data);
 
     const isCodigoArticuloUnique = await checkCodigoUnico("codigo_articulo", validatedData.codigo_articulo, id);
     if (!isCodigoArticuloUnique) {
-      return { success: false, error: "El código de artículo ya existe." };
+      return { success: false, error: "El código de artículo ya existe en tu empresa." };
     }
 
     if (validatedData.codigo_barras && validatedData.codigo_barras !== "0") {
       const isCodigoBarrasUnique = await checkCodigoUnico("codigo_barras", validatedData.codigo_barras, id);
       if (!isCodigoBarrasUnique) {
-        return { success: false, error: "El código de barras ya existe." };
+        return { success: false, error: "El código de barras ya existe en tu empresa." };
       }
     }
 
-    const activeListas = validatedData.listas_precios.filter(l => l.isActive);
+    const activeListas = validatedData.listas_precios.filter((l) => l.isActive);
 
     const producto = await prisma.$transaction(async (tx) => {
       await tx.productoListaPrecio.deleteMany({
@@ -168,12 +181,15 @@ export async function actualizarProducto(id: number, data: ProductoFormValues) {
           stock_recomendado: validatedData.stock_recomendado,
           tipo_medicion: validatedData.tipo_medicion,
           moneda: validatedData.moneda,
-          listas_precios: activeListas.length > 0 ? {
-            create: activeListas.map((lista) => ({
-              listaPrecioId: lista.listaPrecioId,
-              margen_personalizado: lista.margen_personalizado ?? null,
-            })),
-          } : undefined,
+          listas_precios:
+            activeListas.length > 0
+              ? {
+                  create: activeListas.map((lista) => ({
+                    listaPrecioId: lista.listaPrecioId,
+                    margen_personalizado: lista.margen_personalizado ?? null,
+                  })),
+                }
+              : undefined,
         },
       });
     });
@@ -188,47 +204,53 @@ export async function actualizarProducto(id: number, data: ProductoFormValues) {
 
 export async function getProductos() {
   try {
+    const tenant = await getTenantContext();
+    if (!tenant) return [];
+
     const productos = await prisma.producto.findMany({
+      where: { tenantId: tenant.id },
       include: {
         proveedor: {
           include: {
             listas_precios: true,
-          }
+          },
         },
         marca: true,
         categoria: true,
         stocks: {
-          include: { 
+          include: {
             deposito: {
-              include: { sucursal: true }
-            } 
-          }
+              include: { sucursal: true },
+            },
+          },
         },
         listas_precios: {
           include: {
             listaPrecio: true,
-          }
-        },
-        DetallePedido: {
-          where: {
-            pedido: { estado: { in: ["PENDIENTE", "APROBADO", "ARMADO", "LISTO_ENTREGA"] } }
           },
-          select: { cantidad: true }
-        }
+        },
+        detalles_pedido: {
+          where: {
+            pedido: { estado: { in: ["PENDIENTE", "APROBADO", "ARMADO", "LISTO_ENTREGA"] } },
+          },
+          select: { cantidad: true },
+        },
       },
       orderBy: {
         createdAt: "desc",
       },
     });
 
-    return productos.map(p => {
+    return productos.map((p) => {
       const stockFisico = p.stocks.reduce((acc, current) => acc + current.cantidad, 0);
-      const stockComprometido = p.DetallePedido ? p.DetallePedido.reduce((acc, current) => acc + current.cantidad, 0) : 0;
+      const stockComprometido = p.detalles_pedido
+        ? p.detalles_pedido.reduce((acc, current) => acc + current.cantidad, 0)
+        : 0;
       return {
         ...p,
         stock_actual: stockFisico - stockComprometido,
         stock_fisico: stockFisico,
-        stock_comprometido: stockComprometido
+        stock_comprometido: stockComprometido,
       };
     });
   } catch (error) {
@@ -239,47 +261,52 @@ export async function getProductos() {
 
 export async function getProductoById(id: number) {
   try {
-    const producto = await prisma.producto.findUnique({
-      where: { id },
+    const tenant = await getTenantContext();
+    if (!tenant) return null;
+
+    const producto = await prisma.producto.findFirst({
+      where: { id, tenantId: tenant.id },
       include: {
         proveedor: {
           include: {
             listas_precios: true,
-          }
+          },
         },
         marca: true,
         categoria: true,
         stocks: {
-          include: { 
+          include: {
             deposito: {
-              include: { sucursal: true }
-            } 
-          }
+              include: { sucursal: true },
+            },
+          },
         },
         listas_precios: {
           include: {
             listaPrecio: true,
-          }
-        },
-        DetallePedido: {
-          where: {
-            pedido: { estado: { in: ["PENDIENTE", "APROBADO", "ARMADO", "LISTO_ENTREGA"] } }
           },
-          select: { cantidad: true }
-        }
+        },
+        detalles_pedido: {
+          where: {
+            pedido: { estado: { in: ["PENDIENTE", "APROBADO", "ARMADO", "LISTO_ENTREGA"] } },
+          },
+          select: { cantidad: true },
+        },
       },
     });
 
     if (!producto) return null;
 
     const stockFisico = producto.stocks.reduce((acc, current) => acc + current.cantidad, 0);
-    const stockComprometido = producto.DetallePedido ? producto.DetallePedido.reduce((acc, current) => acc + current.cantidad, 0) : 0;
+    const stockComprometido = producto.detalles_pedido
+      ? producto.detalles_pedido.reduce((acc, current) => acc + current.cantidad, 0)
+      : 0;
 
     return {
       ...producto,
       stock_actual: stockFisico - stockComprometido,
       stock_fisico: stockFisico,
-      stock_comprometido: stockComprometido
+      stock_comprometido: stockComprometido,
     };
   } catch (error) {
     console.error("Error fetching product:", error);
@@ -289,12 +316,13 @@ export async function getProductoById(id: number) {
 
 export async function getProveedores() {
   try {
-    const proveedores = await prisma.proveedor.findMany({
-      orderBy: {
-        nombre: "asc",
-      },
+    const tenant = await getTenantContext();
+    if (!tenant) return [];
+
+    return await prisma.proveedor.findMany({
+      where: { tenantId: tenant.id },
+      orderBy: { nombre: "asc" },
     });
-    return proveedores;
   } catch (error) {
     console.error("Error fetching providers:", error);
     return [];
@@ -303,20 +331,25 @@ export async function getProveedores() {
 
 export async function crearProveedor(nombre: string) {
   try {
-    if (!nombre.trim()) {
-      return { success: false, error: "El nombre es obligatorio" };
-    }
+    const tenant = await requireTenant();
+    if (!nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
 
     const existing = await prisma.proveedor.findUnique({
-      where: { nombre: nombre.trim() },
+      where: {
+        tenantId_nombre: {
+          tenantId: tenant.id,
+          nombre: nombre.trim(),
+        },
+      },
     });
 
     if (existing) {
-      return { success: false, error: "El proveedor ya existe" };
+      return { success: false, error: "El proveedor ya existe en tu empresa." };
     }
 
     const proveedor = await prisma.proveedor.create({
       data: {
+        tenantId: tenant.id,
         nombre: nombre.trim(),
       },
     });
@@ -331,11 +364,14 @@ export async function crearProveedor(nombre: string) {
 
 export async function getCategorias() {
   try {
-    const categorias = await prisma.categoria.findMany({
+    const tenant = await getTenantContext();
+    if (!tenant) return [];
+
+    return await prisma.categoria.findMany({
+      where: { tenantId: tenant.id },
       include: { marca: { include: { proveedor: true } } },
       orderBy: { nombre: "asc" },
     });
-    return categorias;
   } catch (error) {
     console.error("Error fetching categories:", error);
     return [];
@@ -344,11 +380,14 @@ export async function getCategorias() {
 
 export async function getMarcas() {
   try {
-    const marcas = await prisma.marca.findMany({
+    const tenant = await getTenantContext();
+    if (!tenant) return [];
+
+    return await prisma.marca.findMany({
+      where: { tenantId: tenant.id },
       include: { proveedor: true },
       orderBy: { nombre: "asc" },
     });
-    return marcas;
   } catch (error) {
     console.error("Error fetching brands:", error);
     return [];
@@ -357,11 +396,13 @@ export async function getMarcas() {
 
 export async function getMarcasPorProveedor(proveedorId: number) {
   try {
-    const marcas = await prisma.marca.findMany({
-      where: { proveedorId },
+    const tenant = await getTenantContext();
+    if (!tenant) return [];
+
+    return await prisma.marca.findMany({
+      where: { tenantId: tenant.id, proveedorId },
       orderBy: { nombre: "asc" },
     });
-    return marcas;
   } catch (error) {
     console.error("Error fetching brands for provider:", error);
     return [];
@@ -370,11 +411,13 @@ export async function getMarcasPorProveedor(proveedorId: number) {
 
 export async function getCategoriasPorMarca(marcaId: number) {
   try {
-    const categorias = await prisma.categoria.findMany({
-      where: { marcaId },
+    const tenant = await getTenantContext();
+    if (!tenant) return [];
+
+    return await prisma.categoria.findMany({
+      where: { tenantId: tenant.id, marcaId },
       orderBy: { nombre: "asc" },
     });
-    return categorias;
   } catch (error) {
     console.error("Error fetching categories for brand:", error);
     return [];
@@ -383,15 +426,26 @@ export async function getCategoriasPorMarca(marcaId: number) {
 
 export async function crearMarca(data: { nombre: string; proveedorId: number }) {
   try {
+    const tenant = await requireTenant();
     if (!data.nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
 
-    const existing = await prisma.marca.findFirst({
-      where: { nombre: data.nombre.trim(), proveedorId: data.proveedorId },
+    const existing = await prisma.marca.findUnique({
+      where: {
+        tenantId_nombre_proveedorId: {
+          tenantId: tenant.id,
+          nombre: data.nombre.trim(),
+          proveedorId: data.proveedorId,
+        },
+      },
     });
-    if (existing) return { success: false, error: "Esta marca ya existe para este proveedor" };
+    if (existing) return { success: false, error: "Esta marca ya existe para este proveedor en tu empresa." };
 
     const marca = await prisma.marca.create({
-      data: { nombre: data.nombre.trim(), proveedorId: data.proveedorId },
+      data: {
+        tenantId: tenant.id,
+        nombre: data.nombre.trim(),
+        proveedorId: data.proveedorId,
+      },
     });
     revalidatePath("/inventario/nuevo");
     return { success: true, data: marca };
@@ -402,10 +456,13 @@ export async function crearMarca(data: { nombre: string; proveedorId: number }) 
 
 export async function getListasPrecioGlobales() {
   try {
-    const listas = await prisma.listaPrecio.findMany({
+    const tenant = await getTenantContext();
+    if (!tenant) return [];
+
+    return await prisma.listaPrecio.findMany({
+      where: { tenantId: tenant.id },
       orderBy: { id: "asc" },
     });
-    return listas;
   } catch (error) {
     console.error("Error fetching price lists:", error);
     return [];
@@ -414,15 +471,17 @@ export async function getListasPrecioGlobales() {
 
 export async function crearCategoria(nombre: string, marcaId: number, aumento_porcentaje: number = 0) {
   try {
+    const tenant = await requireTenant();
     if (!nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
     if (!marcaId) return { success: false, error: "La marca padre es obligatoria" };
 
     const categoria = await prisma.categoria.create({
       data: {
+        tenantId: tenant.id,
         nombre: nombre.trim(),
         marcaId: marcaId,
         aumento_porcentaje: aumento_porcentaje,
-      }
+      },
     });
     revalidatePath("/inventario/nuevo");
     revalidatePath("/categorias");
@@ -432,18 +491,27 @@ export async function crearCategoria(nombre: string, marcaId: number, aumento_po
   }
 }
 
-export async function crearListaPrecioGlobal(data: { nombre: string, margen_defecto: number }) {
+export async function crearListaPrecioGlobal(data: { nombre: string; margen_defecto: number }) {
   try {
+    const tenant = await requireTenant();
     if (!data.nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
 
-    const existing = await prisma.listaPrecio.findUnique({ where: { nombre: data.nombre.trim() } });
-    if (existing) return { success: false, error: "La lista de precios ya existe" };
+    const existing = await prisma.listaPrecio.findUnique({
+      where: {
+        tenantId_nombre: {
+          tenantId: tenant.id,
+          nombre: data.nombre.trim(),
+        },
+      },
+    });
+    if (existing) return { success: false, error: "La lista de precios ya existe en tu empresa." };
 
     const lista = await prisma.listaPrecio.create({
       data: {
+        tenantId: tenant.id,
         nombre: data.nombre.trim(),
-        margen_defecto: data.margen_defecto
-      }
+        margen_defecto: data.margen_defecto,
+      },
     });
     revalidatePath("/inventario/nuevo");
     return { success: true, data: lista };
@@ -452,10 +520,6 @@ export async function crearListaPrecioGlobal(data: { nombre: string, margen_defe
   }
 }
 
-
-// ==========================================
-// EDICIÓN RÁPIDA DE STOCK Y PRECIO (CON HISTORIAL)
-// ==========================================
 export async function actualizarStockRapido(
   id: number,
   cantidad_sumar: number,
@@ -465,18 +529,21 @@ export async function actualizarStockRapido(
   usuarioId?: number
 ) {
   try {
+    const tenant = await requireTenant();
+
     await prisma.$transaction(async (tx) => {
-      const prodAnterior = await tx.producto.findUnique({ where: { id } });
+      const prodAnterior = await tx.producto.findFirst({
+        where: { id, tenantId: tenant.id },
+      });
       if (!prodAnterior) throw new Error("Producto no encontrado");
 
-      // Buscar si el producto ya existe en esa sucursal/depósito
       let stockUbi = await tx.stockUbicacion.findUnique({
-        where: { productoId_depositoId: { productoId: id, depositoId } }
+        where: { productoId_depositoId: { productoId: id, depositoId } },
       });
 
       if (!stockUbi) {
         stockUbi = await tx.stockUbicacion.create({
-          data: { productoId: id, depositoId, cantidad: 0 }
+          data: { productoId: id, depositoId, cantidad: 0 },
         });
       }
 
@@ -488,37 +555,36 @@ export async function actualizarStockRapido(
       else if (cantidad_sumar !== 0) tipoMovimiento = "INGRESO_STOCK";
       else if (precio_costo_nuevo !== prodAnterior.precio_costo) tipoMovimiento = "CAMBIO_PRECIO";
 
-      // Actualizar recomendación y costo global
       await tx.producto.update({
         where: { id },
         data: {
           stock_recomendado,
-          precio_costo: precio_costo_nuevo
-        }
+          precio_costo: precio_costo_nuevo,
+        },
       });
 
-      // Si hay cambio de stock, registrar en Pivot y Movimientos
       if (cantidad_sumar !== 0) {
         await tx.stockUbicacion.update({
           where: { productoId_depositoId: { productoId: id, depositoId } },
-          data: { cantidad: stock_nuevo_loc }
+          data: { cantidad: stock_nuevo_loc },
         });
 
         await tx.movimientoStock.create({
           data: {
+            tenantId: tenant.id,
             productoId: id,
             depositoDestinoId: depositoId,
             cantidad: cantidad_sumar,
             tipo: "AJUSTE",
-            usuarioId: usuarioId || null
-          }
+            usuarioId: usuarioId || null,
+          },
         });
       }
 
-      // Mantener Historial de Inventario Clásico
       if (tipoMovimiento !== "AJUSTE") {
         await tx.historialInventario.create({
           data: {
+            tenantId: tenant.id,
             productoId: id,
             tipo_registro: tipoMovimiento,
             stock_anterior: stockActualLoc,
@@ -526,8 +592,8 @@ export async function actualizarStockRapido(
             cantidad_agregada: cantidad_sumar,
             precio_anterior: prodAnterior.precio_costo,
             precio_nuevo: precio_costo_nuevo,
-            usuarioId: usuarioId || null
-          }
+            usuarioId: usuarioId || null,
+          },
         });
       }
     });
@@ -542,15 +608,15 @@ export async function actualizarStockRapido(
   }
 }
 
-// ==========================================
-// MÉTRICAS E HISTORIAL DE INVENTARIO
-// ==========================================
 export async function getHistorialProducto(productoId: number) {
   try {
+    const tenant = await getTenantContext();
+    if (!tenant) return { success: false, error: "Tenant no encontrado" };
+
     const historial = await prisma.historialInventario.findMany({
-      where: { productoId },
+      where: { productoId, tenantId: tenant.id },
       include: { usuario: true },
-      orderBy: { fecha: 'desc' }
+      orderBy: { fecha: "desc" },
     });
     return { success: true, data: historial };
   } catch (error) {
@@ -559,21 +625,19 @@ export async function getHistorialProducto(productoId: number) {
   }
 }
 
-// ==========================================
-// EDICIÓN Y BORRADO DE CATEGORÍAS
-// ==========================================
 export async function actualizarCategoria(id: number, nombre: string, marcaId: number, aumento_porcentaje: number = 0) {
   try {
     if (!nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
     if (!marcaId) return { success: false, error: "La marca padre es obligatoria" };
 
-    const data: any = { 
-      nombre: nombre.trim(),
-      marcaId: marcaId,
-      aumento_porcentaje: aumento_porcentaje
-    };
-
-    await prisma.categoria.update({ where: { id }, data });
+    await prisma.categoria.update({
+      where: { id },
+      data: {
+        nombre: nombre.trim(),
+        marcaId: marcaId,
+        aumento_porcentaje: aumento_porcentaje,
+      },
+    });
     revalidatePath("/categorias");
     revalidatePath("/inventario/nuevo");
     revalidatePath("/inventario");
@@ -594,15 +658,12 @@ export async function eliminarCategoria(id: number) {
   }
 }
 
-// ==========================================
-// EDICIÓN Y BORRADO DE LISTAS DE PRECIO
-// ==========================================
-export async function actualizarListaPrecioGlobal(id: number, data: { nombre: string, margen_defecto: number }) {
+export async function actualizarListaPrecioGlobal(id: number, data: { nombre: string; margen_defecto: number }) {
   try {
     if (!data.nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
     await prisma.listaPrecio.update({
       where: { id },
-      data: { nombre: data.nombre.trim(), margen_defecto: data.margen_defecto }
+      data: { nombre: data.nombre.trim(), margen_defecto: data.margen_defecto },
     });
     revalidatePath("/listas-precio");
     revalidatePath("/inventario");

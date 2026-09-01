@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 export type CompraData = {
   fecha: string;
@@ -20,88 +21,88 @@ export type CompraData = {
 
 export async function registrarCompra(data: CompraData) {
   try {
+    const tenant = await requireTenant();
     const { fecha, productoId, costo_base, costo_final, notas, impuestos } = data;
 
-    // 1. Create the Compra
-    const compra = await prisma.compra.create({
-      data: {
-        fecha: new Date(fecha),
-        productoId,
-        costo_base,
-        costo_final,
-        cantidad: data.cantidad || 0,
-        depositoId: data.depositoId,
-        notas,
-        impuestos: {
-          create: impuestos.map((imp) => ({
-            nombre: imp.nombre,
-            porcentaje: imp.porcentaje,
-            monto: imp.monto,
-          })),
-        },
-      },
-    });
-
-    // 1.5 Update Stock if cantidad and depositoId are provided
-    if (data.cantidad && data.cantidad > 0 && data.depositoId) {
-      // Create MovimientoStock
-      await prisma.movimientoStock.create({
+    const compra = await prisma.$transaction(async (tx) => {
+      const compra = await tx.compra.create({
         data: {
+          tenantId: tenant.id,
+          fecha: new Date(fecha),
           productoId,
-          depositoDestinoId: data.depositoId,
-          cantidad: data.cantidad,
-          tipo: "INGRESO_COMPRA",
-          motivo: `Ingreso por compra #${compra.id}`,
-          fecha: new Date(fecha)
-        }
-      });
-
-      // Update StockUbicacion
-      await prisma.stockUbicacion.upsert({
-        where: {
-          productoId_depositoId: {
-            productoId,
-            depositoId: data.depositoId
-          }
-        },
-        update: {
-          cantidad: { increment: data.cantidad }
-        },
-        create: {
-          productoId,
+          costo_base,
+          costo_final,
+          cantidad: data.cantidad || 0,
           depositoId: data.depositoId,
-          cantidad: data.cantidad
-        }
+          notas,
+          impuestos: {
+            create: impuestos.map((imp) => ({
+              nombre: imp.nombre,
+              porcentaje: imp.porcentaje,
+              monto: imp.monto,
+            })),
+          },
+        },
       });
-    }
 
-    // 2. Update the product's precio_costo
-    const producto = await prisma.producto.findUnique({
-      where: { id: productoId }
+      if (data.cantidad && data.cantidad > 0 && data.depositoId) {
+        await tx.movimientoStock.create({
+          data: {
+            tenantId: tenant.id,
+            productoId,
+            depositoDestinoId: data.depositoId,
+            cantidad: data.cantidad,
+            tipo: "INGRESO_COMPRA",
+            motivo: `Ingreso por compra #${compra.id}`,
+            fecha: new Date(fecha),
+          },
+        });
+
+        await tx.stockUbicacion.upsert({
+          where: {
+            productoId_depositoId: {
+              productoId,
+              depositoId: data.depositoId,
+            },
+          },
+          update: {
+            cantidad: { increment: data.cantidad },
+          },
+          create: {
+            productoId,
+            depositoId: data.depositoId,
+            cantidad: data.cantidad,
+          },
+        });
+      }
+
+      const producto = await tx.producto.findFirst({
+        where: { id: productoId, tenantId: tenant.id },
+      });
+
+      if (producto) {
+        await tx.historialPrecio.create({
+          data: {
+            tenantId: tenant.id,
+            productoId,
+            precio_costo_anterior: producto.precio_costo,
+            precio_costo_nuevo: costo_final,
+            motivo: `Actualización por carga de compra #${compra.id}`,
+            porcentaje_cambio:
+              producto.precio_costo > 0 ? ((costo_final - producto.precio_costo) / producto.precio_costo) * 100 : 0,
+          },
+        });
+
+        await tx.producto.update({
+          where: { id: productoId },
+          data: {
+            precio_costo: costo_final,
+          },
+        });
+      }
+
+      return compra;
     });
-
-    if (producto) {
-      // Record history
-      await prisma.historialPrecio.create({
-        data: {
-          productoId,
-          precio_costo_anterior: producto.precio_costo,
-          precio_costo_nuevo: costo_final,
-          motivo: `Actualización por carga de compra #${compra.id}`,
-          porcentaje_cambio: producto.precio_costo > 0 
-            ? ((costo_final - producto.precio_costo) / producto.precio_costo) * 100 
-            : 0
-        }
-      });
-
-      // Update product
-      await prisma.producto.update({
-        where: { id: productoId },
-        data: {
-          precio_costo: costo_final
-        }
-      });
-    }
 
     revalidatePath("/compras");
     revalidatePath("/productos");
@@ -119,7 +120,10 @@ export async function getHistorialCompras(filtros?: {
   productoId?: number;
 }) {
   try {
-    let where: any = {};
+    const tenant = await getTenantContext();
+    if (!tenant) return [];
+
+    let where: any = { tenantId: tenant.id };
 
     if (filtros?.desde && filtros?.hasta) {
       where.fecha = {
@@ -139,7 +143,7 @@ export async function getHistorialCompras(filtros?: {
           select: {
             nombre_producto: true,
             codigo_articulo: true,
-          }
+          },
         },
         impuestos: true,
       },
@@ -157,8 +161,11 @@ export async function getHistorialCompras(filtros?: {
 
 export async function getUltimaCompra(productoId: number) {
   try {
+    const tenant = await getTenantContext();
+    if (!tenant) return null;
+
     const ultima = await prisma.compra.findFirst({
-      where: { productoId },
+      where: { productoId, tenantId: tenant.id },
       include: {
         impuestos: true,
       },

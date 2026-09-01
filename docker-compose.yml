@@ -1,4 +1,4 @@
-name: tommasi
+name: onlyerp
 
 x-logging: &default-logging
   driver: json-file
@@ -9,6 +9,7 @@ x-logging: &default-logging
 services:
   db:
     image: mysql:8.0.43
+    container_name: onlyerp-db
     restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
@@ -39,6 +40,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: migrator
+    container_name: onlyerp-migrator
     profiles: ["tools"]
     environment:
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
@@ -58,6 +60,9 @@ services:
       target: runner
       secrets:
         - next_server_actions_encryption_key
+    container_name: onlyerp-web
+    ports:
+      - "3000:3000"
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -90,7 +95,7 @@ services:
 
 networks:
   internal:
-    name: tommasi_internal
+    name: onlyerp_internal
     internal: true
   proxy:
     external: true
@@ -98,8 +103,9 @@ networks:
 
 volumes:
   mysql_data:
-    name: tommasi_mysql_data
+    name: onlyerp_mysql_data
 
 secrets:
   next_server_actions_encryption_key:
     file: ./.secrets/next-server-actions.key
+

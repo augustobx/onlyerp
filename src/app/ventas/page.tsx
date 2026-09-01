@@ -7,7 +7,7 @@ import {
     Search, ShoppingCart, Trash2, User, FileText, CheckCircle2, Loader2,
     Plus, X, PackageSearch, Truck, StickyNote, UserPlus, Printer,
     CheckSquare, Square, AlertTriangle, CreditCard, MessageSquare, Eye,
-    ClipboardList, Calendar
+    ClipboardList, Calendar, Receipt
 } from "lucide-react";
 
 import { buscarClientes, buscarProductos, previsualizarProximoComprobante, registrarVenta, getConsumidorFinal, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
@@ -21,6 +21,7 @@ import {
     formatCantidad, getUnidadLabel, getStepParaMedicion,
     type TipoMedicionType,
 } from "@/lib/utils";
+import { generarLinkWhatsAppComprobante, generarLinkWhatsAppPedido } from "@/lib/whatsapp";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,7 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { ModuleHelpButton } from "@/components/module-help-modal";
 
 export default function PuntoDeVentaPage() { return <PuntoDeVentaTabsPage />; }
 
@@ -41,7 +43,7 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
     // ESTADOS DEL SISTEMA
     // ==========================================
     const [listasGlobales, setListasGlobales] = useState<any[]>([]);
-    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false });
+    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false, aplicar_iva_en_precios: false });
 
     // Sucursales y Depósitos Activos
     const [usuarioSesion, setUsuarioSesion] = useState<any>(null);
@@ -60,7 +62,16 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
     const [showProductoModal, setShowProductoModal] = useState(false);
 
     // Modal de Éxito e Impresión
-    const [ventaExitosa, setVentaExitosa] = useState<{ id: number, comprobante: string } | null>(null);
+    const [ventaExitosa, setVentaExitosa] = useState<{
+        id: number;
+        comprobante: string;
+        puntoVenta?: number;
+        numeroComprobante?: number;
+        tipoComprobante?: string;
+        total?: number;
+        clienteNombre?: string;
+        clienteTelefono?: string;
+    } | null>(null);
     const [imprimirConDescuentos, setImprimirConDescuentos] = useState(true);
 
     // Cliente
@@ -108,6 +119,7 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
         numero: number;
         vendedorNombre: string;
         clienteNombre: string;
+        clienteTelefono?: string;
         total: number;
         fechaEntrega?: string;
     } | null>(null);
@@ -253,10 +265,6 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
         const listaIDNum = Number(listaPrecioSeleccionada);
         const pivot = producto.listas_precios?.find((p: any) => p.listaPrecioId === listaIDNum);
 
-        // === VALIDACIÓN DE LISTA ===
-        if (!pivot) {
-            return toast.error("Este producto no está habilitado para la lista seleccionada.");
-        }
 
         const depoPivot = producto.stocks?.find((s: any) => s.depositoId === depositoActivoId);
         const stockFisico = depoPivot ? depoPivot.cantidad : 0;
@@ -290,7 +298,7 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
 
         const precioBaseCalculado = calcularPrecioConCascada(
             producto.precio_costo, producto.descuento_proveedor, producto.alicuota_iva,
-            aumProv, aumMarca, aumCat, margenFinal, configuracionGlobal.redondear_a_cinco
+            aumProv, aumMarca, aumCat, margenFinal, configuracionGlobal.redondear_a_cinco, configuracionGlobal.aplicar_iva_en_precios
         );
 
         const tipo = (producto.tipo_medicion || "UNIDAD") as TipoMedicionType;
@@ -336,7 +344,7 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
 
                 const precioBaseCalculado = calcularPrecioConCascada(
                     prod.precio_costo, prod.descuento_proveedor, prod.alicuota_iva,
-                    aumProv, aumMarca, aumCat, margenFinal, configuracionGlobal.redondear_a_cinco
+                    aumProv, aumMarca, aumCat, margenFinal, configuracionGlobal.redondear_a_cinco, configuracionGlobal.aplicar_iva_en_precios
                 );
 
                 const nuevoPrecioUnitario = Number(precioBaseCalculado.toFixed(2));
@@ -522,7 +530,13 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                 toast.success("¡Venta registrada exitosamente!");
                 setVentaExitosa({
                     id: res.ventaId,
-                    comprobante: `000${comprobanteNumeros.punto_venta}-${comprobanteNumeros.numero_str}`
+                    comprobante: `000${comprobanteNumeros.punto_venta}-${comprobanteNumeros.numero_str}`,
+                    puntoVenta: comprobanteNumeros.punto_venta,
+                    numeroComprobante: comprobanteNumeros.proximoNumero,
+                    tipoComprobante: tipoComprobante,
+                    total: totalVenta,
+                    clienteNombre: clienteSeleccionado?.nombre_razon_social,
+                    clienteTelefono: clienteSeleccionado?.telefono
                 });
 
                 // Reset — Auto-seleccionar CF de nuevo
@@ -597,6 +611,7 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                     numero: res.data.numero,
                     vendedorNombre: vendNombre,
                     clienteNombre: clienteSeleccionado.nombre_razon_social,
+                    clienteTelefono: clienteSeleccionado.telefono,
                     total: totalFinal,
                     fechaEntrega: fechaEntregaPedido
                 });
@@ -715,6 +730,7 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                             <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Nº Documento</p>
                             <p className="text-lg font-mono font-bold text-slate-700 dark:text-slate-300">000{comprobanteNumeros.punto_venta}-{comprobanteNumeros.numero_str}</p>
                         </div>
+                        <ModuleHelpButton moduloId="ventas" />
                     </div>
                 ) : (
                     <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto xl:ml-auto">
@@ -961,24 +977,29 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                             <div className="mt-4 space-y-4">
                                 {modoOperativo === 'VENTA' ? (
                                     <>
-                                        <div className="p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-xl border border-slate-200 dark:border-zinc-700 flex flex-col items-center justify-center text-center">
-                                            <span className="text-[10px] font-bold uppercase text-slate-500 tracking-widest mb-1">Total a Cobrar</span>
-                                            <span className="text-4xl font-black tracking-tighter text-indigo-600 dark:text-indigo-400">${totalFinal.toFixed(2)}</span>
+                                        <div className="p-4 bg-[#090d16] text-white rounded-2xl border border-slate-800 shadow-inner flex flex-col items-center justify-center text-center relative overflow-hidden">
+                                            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-indigo-500 via-emerald-400 to-cyan-400"></div>
+                                            <span className="text-[10px] font-black uppercase text-indigo-300 tracking-widest mb-1 flex items-center gap-1.5">
+                                                <Receipt className="h-3 w-3 text-emerald-400" /> TOTAL A COBRAR
+                                            </span>
+                                            <span className="text-4xl font-black font-mono tracking-tight text-emerald-400 drop-shadow-sm">
+                                                ${totalFinal.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </span>
                                         </div>
 
                                         {/* === PAGOS MÚLTIPLES (VENTA DIRECTA) === */}
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between">
                                                 <Label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1">
-                                                    <CreditCard className="h-3 w-3" /> Métodos de Pago
+                                                    <CreditCard className="h-3 w-3 text-indigo-600" /> Formas de Pago
                                                 </Label>
-                                                <Button type="button" variant="ghost" size="sm" onClick={agregarLineaPago} className="text-indigo-600 hover:text-indigo-700 text-xs h-7">
-                                                    <Plus className="h-3 w-3 mr-1" /> Agregar
+                                                <Button type="button" variant="ghost" size="sm" onClick={agregarLineaPago} className="text-indigo-600 hover:text-indigo-700 text-xs h-7 font-bold">
+                                                    <Plus className="h-3 w-3 mr-1" /> Dividir Pago
                                                 </Button>
                                             </div>
 
                                             {pagos.map((pago, i) => (
-                                                <div key={i} className="flex flex-col gap-2 p-2 mb-2 bg-slate-50 dark:bg-zinc-800/10 rounded-lg border border-slate-100 dark:border-zinc-800/50">
+                                                <div key={i} className="flex flex-col gap-2 p-2.5 mb-2 bg-slate-50 dark:bg-zinc-800/20 rounded-xl border border-slate-200/70 dark:border-zinc-800">
                                                     <div className="flex gap-2 items-center">
                                                         <Select value={pago.metodo_pago} onValueChange={(val) => {
                                                             actualizarPago(i, "metodo_pago", val || "");
@@ -992,29 +1013,44 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                                                                 <SelectValue />
                                                             </SelectTrigger>
                                                             <SelectContent>
-                                                                <SelectItem value="CONTADO">Efectivo</SelectItem>
-                                                                <SelectItem value="CUENTA_CORRIENTE" className="text-orange-600 font-bold">Cta. Corriente</SelectItem>
-                                                                <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
-                                                                <SelectItem value="TARJETA">Tarjeta</SelectItem>
+                                                                <SelectItem value="CONTADO">💵 Efectivo</SelectItem>
+                                                                <SelectItem value="CUENTA_CORRIENTE" className="text-orange-600 font-bold">🏛️ Cta. Corriente</SelectItem>
+                                                                <SelectItem value="TRANSFERENCIA">📲 Transferencia / QR</SelectItem>
+                                                                <SelectItem value="TARJETA">💳 Tarjeta Débito/Crédito</SelectItem>
                                                                 {resumenFinanciero && resumenFinanciero.saldo_a_favor > 0 && (
                                                                     <SelectItem value="SALDO_A_FAVOR" className="text-emerald-600 font-bold">
-                                                                        Usar Saldo a Favor (Disp: ${resumenFinanciero.saldo_a_favor.toFixed(2)})
+                                                                        ✨ Saldo a Favor (${resumenFinanciero.saldo_a_favor.toFixed(2)})
                                                                     </SelectItem>
                                                                 )}
                                                             </SelectContent>
                                                         </Select>
                                                         <div className="relative w-28">
-                                                            <span className="absolute left-2 top-2 text-slate-400 text-xs">$</span>
+                                                            <span className="absolute left-2.5 top-2 text-slate-400 text-xs font-mono font-bold">$</span>
                                                             <Input type="number" step="0.01" placeholder={pagos.length === 1 ? totalFinal.toFixed(2) : "0.00"}
                                                                 value={pago.monto} onChange={(e) => actualizarPago(i, "monto", e.target.value)}
-                                                                className="h-9 pl-5 text-right font-bold bg-white dark:bg-zinc-900 border-slate-200" />
+                                                                className="h-9 pl-6 text-right font-mono font-black bg-white dark:bg-zinc-900 border-slate-200" />
                                                         </div>
                                                         {pagos.length > 1 && (
-                                                            <Button variant="ghost" size="icon" onClick={() => eliminarLineaPago(i)} className="h-8 w-8 text-red-400 hover:text-red-600 shrink-0">
+                                                            <Button variant="ghost" size="icon" onClick={() => eliminarLineaPago(i)} className="h-8 w-8 text-rose-500 hover:text-rose-700 shrink-0">
                                                                 <X className="h-3 w-3" />
                                                             </Button>
                                                         )}
                                                     </div>
+
+                                                    {/* ACCESOS RÁPIDOS DE BILLETES EFECTIVO */}
+                                                    {pago.metodo_pago === 'CONTADO' && (
+                                                        <div className="flex gap-1 items-center flex-wrap pt-0.5">
+                                                            <button type="button" onClick={() => actualizarPago(i, "monto", totalFinal.toFixed(2))} className="text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 transition-colors">
+                                                                Exacto
+                                                            </button>
+                                                            {[5000, 10000, 20000, 50000].map(val => (
+                                                                <button key={val} type="button" onClick={() => actualizarPago(i, "monto", String(val))} className="text-[10px] font-bold bg-white hover:bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 transition-colors font-mono">
+                                                                    ${(val / 1000)}k
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
                                                     {pago.metodo_pago === 'TARJETA' && (
                                                         <div className="flex gap-2 items-center flex-wrap pt-1 animate-in fade-in">
                                                             <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-2 py-1 rounded-md border border-slate-200 dark:border-zinc-700">
@@ -1242,6 +1278,26 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                             <div onClick={() => window.location.href = `/imprimir/a4/${ventaExitosa.id}?descuentos=${imprimirConDescuentos}`} className="block">
                                 <Button variant="outline" className="w-full h-12 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-base"><FileText className="h-5 w-5 mr-2" /> Imprimir Hoja A4</Button>
                             </div>
+                            {ventaExitosa.clienteTelefono && (
+                                <a
+                                    href={generarLinkWhatsAppComprobante({
+                                        telefono: ventaExitosa.clienteTelefono,
+                                        clienteNombre: ventaExitosa.clienteNombre || "Cliente",
+                                        tipoComprobante: ventaExitosa.tipoComprobante || "COMPROBANTE_X",
+                                        puntoVenta: ventaExitosa.puntoVenta || 1,
+                                        numeroComprobante: ventaExitosa.numeroComprobante || 1,
+                                        total: ventaExitosa.total || 0,
+                                        urlComprobante: typeof window !== 'undefined' ? `${window.location.origin}/imprimir/ticket/${ventaExitosa.id}` : undefined
+                                    })}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="block"
+                                >
+                                    <Button className="w-full h-12 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base shadow-sm">
+                                        <MessageSquare className="h-5 w-5 mr-2" /> Enviar por WhatsApp
+                                    </Button>
+                                </a>
+                            )}
                             <div className="pt-4 mt-2 border-t border-slate-100 dark:border-zinc-800">
                                 <Button variant="ghost" onClick={() => setVentaExitosa(null)} className="w-full h-12 text-slate-500 hover:text-slate-900 dark:hover:text-white font-bold">
                                     Cerrar y Vender
@@ -1288,14 +1344,32 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                             </div>
 
                             <div className="space-y-2 pt-1">
+                                {pedidoExitoso.clienteTelefono && (
+                                    <a
+                                        href={generarLinkWhatsAppPedido({
+                                            telefono: pedidoExitoso.clienteTelefono,
+                                            clienteNombre: pedidoExitoso.clienteNombre,
+                                            numeroPedido: pedidoExitoso.numero,
+                                            total: pedidoExitoso.total,
+                                            fechaEntrega: pedidoExitoso.fechaEntrega
+                                        })}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="block w-full"
+                                    >
+                                        <Button className="w-full h-11 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-sm">
+                                            <MessageSquare className="h-4 w-4 mr-2" /> Notificar al Cliente (WhatsApp)
+                                        </Button>
+                                    </a>
+                                )}
                                 <Link href="/pedidos" className="block w-full">
                                     <Button className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-sm">
                                         <ClipboardList className="h-4 w-4 mr-2" /> Ir a Gestión de Pedidos
                                     </Button>
                                 </Link>
-                                <Link href="/pedidos/armados" className="block w-full">
+                                <Link href="/logistica/hojas-de-ruta" className="block w-full">
                                     <Button variant="outline" className="w-full h-11 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-sm">
-                                        <Truck className="h-4 w-4 mr-2" /> Ir a Despacho y Repartos
+                                        <Truck className="h-4 w-4 mr-2" /> Ir a Hojas de Ruta y Repartos
                                     </Button>
                                 </Link>
                             </div>
@@ -1428,15 +1502,16 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
 
                                         const precioPreview = calcularPrecioConCascada(
                                             prod.precio_costo, prod.descuento_proveedor, prod.alicuota_iva,
-                                            aumProv, aumMarca, aumCat, margenFinal
+                                            aumProv, aumMarca, aumCat, margenFinal,
+                                            configuracionGlobal.redondear_a_cinco,
+                                            configuracionGlobal.aplicar_iva_en_precios
                                         );
 
                                         const sinStock = prod.stock_actual <= 0;
-                                        const noTieneLista = !pivot;
                                         const tipo = (prod.tipo_medicion || "UNIDAD") as TipoMedicionType;
 
                                         return (
-                                            <div key={prod.id} className={`flex flex-col p-3 rounded-xl border transition-all bg-white dark:bg-zinc-900 shadow-sm gap-2 ${sinStock ? 'border-red-200 bg-red-50/50 opacity-75' : noTieneLista ? 'border-amber-200 bg-amber-50/50 opacity-75' : 'border-slate-200 dark:border-zinc-700 hover:border-indigo-200 hover:bg-white dark:hover:bg-zinc-800'}`}>
+                                            <div key={prod.id} className={`flex flex-col p-3 rounded-xl border transition-all bg-white dark:bg-zinc-900 shadow-sm gap-2 ${sinStock ? 'border-amber-200 bg-amber-50/20' : 'border-slate-200 dark:border-zinc-700 hover:border-indigo-200 hover:bg-white dark:hover:bg-zinc-800'}`}>
                                                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                                                     <div className="flex-1">
                                                         <p className="font-semibold text-sm">{prod.nombre_producto}</p>
@@ -1446,18 +1521,17 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                                                             Stock: {formatCantidad(prod.stock_actual, tipo)} {getUnidadLabel(tipo)}
                                                         </span>
                                                         {sinStock && <Badge variant="destructive" className="text-[10px] h-5"><AlertTriangle className="h-3 w-3 mr-1" />SIN STOCK</Badge>}
-                                                        {noTieneLista && <Badge variant="outline" className="text-[10px] h-5 border-amber-300 text-amber-700">NO EN ESTA LISTA</Badge>}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0">
                                                     <div className="text-right">
                                                         <p className="text-[10px] uppercase font-bold text-slate-400">Precio Final</p>
-                                                        <p className="font-black text-lg text-slate-900 dark:text-slate-100">{noTieneLista ? "-" : `$${precioPreview.toFixed(2)}`}</p>
+                                                        <p className="font-black text-lg text-slate-900 dark:text-slate-100">${precioPreview.toFixed(2)}</p>
                                                     </div>
                                                     <Button variant="outline" size="icon" className="h-9 w-9 text-slate-500 hover:text-indigo-600" onClick={() => setExpandedProdId(expandedProdId === prod.id ? null : prod.id)}>
                                                         <Eye className="h-4 w-4" />
                                                     </Button>
-                                                    <Button onClick={() => handleAgregarAlCarrito(prod)} size="sm" disabled={sinStock || noTieneLista}
+                                                    <Button onClick={() => handleAgregarAlCarrito(prod)} size="sm"
                                                         className="bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white dark:text-slate-900 h-9 px-4 disabled:opacity-40">
                                                         <Plus className="h-4 w-4 mr-1" /> Añadir
                                                     </Button>

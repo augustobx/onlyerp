@@ -147,3 +147,16 @@ dist
 public/sw.js
 public/sw.js.map
 public/workbox-*.js
+
+# Build/debug artifacts (dev only)
+*_errors.txt
+*_errors.log
+*_out.txt
+*_output*.log
+compile_errors.txt
+errors.txt
+prisma_out.txt
+ts_out.txt
+tsc-out.txt
+tsc_out.txt
+test_*.js

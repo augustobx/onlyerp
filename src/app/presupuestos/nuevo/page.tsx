@@ -30,7 +30,7 @@ export default function NuevoPresupuestoPage() {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [listasGlobales, setListasGlobales] = useState<any[]>([]);
-    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false });
+    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false, aplicar_iva_en_precios: false });
 
     const [clienteQuery, setClienteQuery] = useState("");
     const [clientesResultados, setClientesResultados] = useState<any[]>([]);
@@ -82,7 +82,7 @@ export default function NuevoPresupuestoPage() {
         if (!listaPrecioSeleccionada) return toast.error("Seleccione una lista de precios.");
         const listaIDNum = Number(listaPrecioSeleccionada);
         const pivot = prod.listas_precios?.find((p: any) => p.listaPrecioId === listaIDNum);
-        if (!pivot) return toast.error("Este producto no está habilitado para la lista seleccionada.");
+
 
         const listaGlobal = listasGlobales.find(l => l.id === listaIDNum);
         const margenFinal = pivot?.margen_personalizado ?? listaGlobal?.margen_defecto ?? 0;
@@ -90,7 +90,17 @@ export default function NuevoPresupuestoPage() {
         const aumMarca = prod.marca?.aumento_porcentaje || 0;
         const aumCat = prod.categoria?.aumento_porcentaje || 0;
 
-        const precio = calcularPrecioConCascada(prod.precio_costo, prod.descuento_proveedor, prod.alicuota_iva, aumProv, aumMarca, aumCat, margenFinal, configuracionGlobal.redondear_a_cinco);
+        const precio = calcularPrecioConCascada(
+            prod.precio_costo,
+            prod.descuento_proveedor,
+            prod.alicuota_iva,
+            aumProv,
+            aumMarca,
+            aumCat,
+            margenFinal,
+            configuracionGlobal.redondear_a_cinco,
+            configuracionGlobal.aplicar_iva_en_precios
+        );
         const tipo = (prod.tipo_medicion || "UNIDAD") as TipoMedicionType;
 
         setCarrito([...carrito, {
@@ -307,7 +317,17 @@ export default function NuevoPresupuestoPage() {
                                     const pivot = prod.listas_precios?.find((p: any) => p.listaPrecioId === listaIDNum);
                                     const listaGlobal = listasGlobales.find(l => l.id === listaIDNum);
                                     const margenFinal = (pivot?.margen_personalizado ?? listaGlobal?.margen_defecto ?? 0);
-                                    const precio = calcularPrecioConCascada(prod.precio_costo, prod.descuento_proveedor, prod.alicuota_iva, prod.proveedor?.aumento_porcentaje || 0, prod.marca?.aumento_porcentaje || 0, prod.categoria?.aumento_porcentaje || 0, margenFinal, configuracionGlobal.redondear_a_cinco);
+                                    const precio = calcularPrecioConCascada(
+                                        prod.precio_costo,
+                                        prod.descuento_proveedor,
+                                        prod.alicuota_iva,
+                                        prod.proveedor?.aumento_porcentaje || 0,
+                                        prod.marca?.aumento_porcentaje || 0,
+                                        prod.categoria?.aumento_porcentaje || 0,
+                                        margenFinal,
+                                        configuracionGlobal.redondear_a_cinco,
+                                        configuracionGlobal.aplicar_iva_en_precios
+                                    );
                                     const sinLista = !pivot;
                                     return (
                                         <div key={prod.id} className={`flex justify-between items-center p-3 rounded-xl border bg-white shadow-sm ${sinLista ? 'opacity-50 border-amber-200' : 'border-slate-200 hover:border-emerald-200'}`}>

@@ -2,149 +2,163 @@
 
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 // ==========================================
 // 1. LISTADO DE PRESUPUESTOS
 // ==========================================
 export async function getPresupuestos(filtros?: {
-    termino?: string;
-    estado?: string;
-    fecha_desde?: string;
-    fecha_hasta?: string;
+  termino?: string;
+  estado?: string;
+  fecha_desde?: string;
+  fecha_hasta?: string;
 }) {
-    try {
-        const where: any = {};
+  try {
+    const tenant = await getTenantContext();
+    if (!tenant) return { success: false, error: "Tenant no encontrado" };
 
-        if (filtros?.estado && filtros.estado !== "TODOS") {
-            where.estado = filtros.estado;
-        }
+    const where: any = { tenantId: tenant.id };
 
-        if (filtros?.termino && filtros.termino.length >= 2) {
-            where.cliente = {
-                OR: [
-                    { nombre_razon_social: { contains: filtros.termino } },
-                    { dni_cuit: { contains: filtros.termino } }
-                ]
-            };
-        }
-
-        if (filtros?.fecha_desde || filtros?.fecha_hasta) {
-            where.fecha = {};
-            if (filtros.fecha_desde) where.fecha.gte = new Date(`${filtros.fecha_desde}T00:00:00.000Z`);
-            if (filtros.fecha_hasta) where.fecha.lte = new Date(`${filtros.fecha_hasta}T23:59:59.999Z`);
-        }
-
-        const presupuestos = await prisma.presupuesto.findMany({
-            where,
-            include: {
-                cliente: true,
-                listaPrecio: true,
-                _count: { select: { detalles: true } }
-            },
-            orderBy: { fecha: 'desc' }
-        });
-
-        return { success: true, data: presupuestos };
-    } catch (error: any) {
-        console.error("Error al cargar presupuestos:", error);
-        return { success: false, error: "Error al cargar presupuestos." };
+    if (filtros?.estado && filtros.estado !== "TODOS") {
+      where.estado = filtros.estado;
     }
+
+    if (filtros?.termino && filtros.termino.length >= 2) {
+      where.cliente = {
+        tenantId: tenant.id,
+        OR: [
+          { nombre_razon_social: { contains: filtros.termino } },
+          { dni_cuit: { contains: filtros.termino } },
+        ],
+      };
+    }
+
+    if (filtros?.fecha_desde || filtros?.fecha_hasta) {
+      where.fecha = {};
+      if (filtros.fecha_desde) where.fecha.gte = new Date(`${filtros.fecha_desde}T00:00:00.000Z`);
+      if (filtros.fecha_hasta) where.fecha.lte = new Date(`${filtros.fecha_hasta}T23:59:59.999Z`);
+    }
+
+    const presupuestos = await prisma.presupuesto.findMany({
+      where,
+      include: {
+        cliente: true,
+        listaPrecio: true,
+        _count: { select: { detalles: true } },
+      },
+      orderBy: { fecha: "desc" },
+    });
+
+    return { success: true, data: presupuestos };
+  } catch (error: any) {
+    console.error("Error al cargar presupuestos:", error);
+    return { success: false, error: "Error al cargar presupuestos." };
+  }
 }
 
 // ==========================================
 // 2. DETALLE DE PRESUPUESTO
 // ==========================================
 export async function getPresupuestoById(id: number) {
-    try {
-        const presupuesto = await prisma.presupuesto.findUnique({
-            where: { id },
-            include: {
-                cliente: true,
-                listaPrecio: true,
-                detalles: {
-                    include: {
-                        producto: {
-                            include: {
-                                proveedor: true,
-                                marca: true,
-                                categoria: true,
-                            }
-                        }
-                    }
-                }
-            }
-        });
+  try {
+    const tenant = await getTenantContext();
+    if (!tenant) return { success: false, error: "Tenant no encontrado" };
 
-        if (!presupuesto) return { success: false, error: "Presupuesto no encontrado." };
+    const presupuesto = await prisma.presupuesto.findFirst({
+      where: { id, tenantId: tenant.id },
+      include: {
+        cliente: true,
+        listaPrecio: true,
+        detalles: {
+          include: {
+            producto: {
+              include: {
+                proveedor: true,
+                marca: true,
+                categoria: true,
+              },
+            },
+          },
+        },
+      },
+    });
 
-        return { success: true, data: presupuesto };
-    } catch (error: any) {
-        return { success: false, error: "Error al cargar el presupuesto." };
-    }
+    if (!presupuesto) return { success: false, error: "Presupuesto no encontrado." };
+
+    return { success: true, data: presupuesto };
+  } catch {
+    return { success: false, error: "Error al cargar el presupuesto." };
+  }
 }
 
 // ==========================================
-// 3. CREAR PRESUPUESTO (NO AFECTA STOCK)
+// 3. CREAR PRESUPUESTO
 // ==========================================
 export async function crearPresupuesto(data: {
-    clienteId: number;
-    listaPrecioId: number;
-    vigencia_dias: number;
-    notas: string;
+  clienteId: number;
+  listaPrecioId: number;
+  vigencia_dias: number;
+  notas: string;
+  subtotal: number;
+  descuento_global: number;
+  total: number;
+  carrito: {
+    productoId: number;
+    cantidad: number;
+    precio_unitario: number;
+    descuento_individual: number;
+    precio_final: number;
     subtotal: number;
-    descuento_global: number;
-    total: number;
-    carrito: {
-        productoId: number;
-        cantidad: number;
-        precio_unitario: number;
-        descuento_individual: number;
-        precio_final: number;
-        subtotal: number;
-    }[];
+  }[];
 }) {
-    try {
-        // Generate next numero
-        const lastPresupuesto = await prisma.presupuesto.findFirst({
-            orderBy: { numero: 'desc' }
-        });
-        const nextNumero = (lastPresupuesto?.numero ?? 0) + 1;
+  try {
+    const tenant = await requireTenant();
 
-        const presupuesto = await prisma.presupuesto.create({
-            data: {
-                numero: nextNumero,
-                clienteId: data.clienteId,
-                listaPrecioId: data.listaPrecioId,
-                vigencia_dias: data.vigencia_dias,
-                notas: data.notas || null,
-                subtotal: data.subtotal,
-                descuento_global: data.descuento_global,
-                total: data.total,
-                detalles: {
-                    create: data.carrito.map(item => ({
-                        productoId: item.productoId,
-                        cantidad: item.cantidad,
-                        precio_unitario: item.precio_unitario,
-                        descuento_individual: item.descuento_individual,
-                        precio_final: item.precio_final,
-                        subtotal: item.subtotal
-                    }))
-                }
-            }
-        });
+    const secuencia = await prisma.secuenciaPresupuesto.upsert({
+      where: { tenantId: tenant.id },
+      update: { numero_actual: { increment: 1 } },
+      create: { tenantId: tenant.id, numero_actual: 1 },
+    });
+    const nextNumero = secuencia.numero_actual;
 
-        revalidatePath("/presupuestos");
-        return { success: true, data: presupuesto };
-    } catch (error: any) {
-        console.error("Error al crear presupuesto:", error);
-        return { success: false, error: error.message || "Error al crear el presupuesto." };
-    }
+    const presupuesto = await prisma.presupuesto.create({
+      data: {
+        tenantId: tenant.id,
+        numero: nextNumero,
+        clienteId: data.clienteId,
+        listaPrecioId: data.listaPrecioId,
+        vigencia_dias: data.vigencia_dias,
+        notas: data.notas || null,
+        subtotal: data.subtotal,
+        descuento_global: data.descuento_global,
+        total: data.total,
+        detalles: {
+          create: data.carrito.map((item) => ({
+            productoId: item.productoId,
+            cantidad: item.cantidad,
+            precio_unitario: item.precio_unitario,
+            descuento_individual: item.descuento_individual,
+            precio_final: item.precio_final,
+            subtotal: item.subtotal,
+          })),
+        },
+      },
+    });
+
+    revalidatePath("/presupuestos");
+    return { success: true, data: presupuesto };
+  } catch (error: any) {
+    console.error("Error al crear presupuesto:", error);
+    return { success: false, error: error.message || "Error al crear el presupuesto." };
+  }
 }
 
 // ==========================================
 // 4. ACTUALIZAR PRESUPUESTO
 // ==========================================
-export async function actualizarPresupuesto(id: number, data: {
+export async function actualizarPresupuesto(
+  id: number,
+  data: {
     clienteId: number;
     listaPrecioId: number;
     vigencia_dias: number;
@@ -153,60 +167,65 @@ export async function actualizarPresupuesto(id: number, data: {
     descuento_global: number;
     total: number;
     carrito: {
-        productoId: number;
-        cantidad: number;
-        precio_unitario: number;
-        descuento_individual: number;
-        precio_final: number;
-        subtotal: number;
+      productoId: number;
+      cantidad: number;
+      precio_unitario: number;
+      descuento_individual: number;
+      precio_final: number;
+      subtotal: number;
     }[];
-}) {
-    try {
-        const existing = await prisma.presupuesto.findUnique({ where: { id } });
-        if (!existing) return { success: false, error: "Presupuesto no encontrado." };
-        if (existing.estado !== 'PENDIENTE') return { success: false, error: "Solo se pueden editar presupuestos pendientes." };
+  }
+) {
+  try {
+    const tenant = await requireTenant();
 
-        await prisma.$transaction(async (tx) => {
-            // Borrar detalles actuales
-            await tx.detallePresupuesto.deleteMany({ where: { presupuestoId: id } });
+    const existing = await prisma.presupuesto.findFirst({
+      where: { id, tenantId: tenant.id },
+    });
+    if (!existing) return { success: false, error: "Presupuesto no encontrado." };
+    if (existing.estado !== "PENDIENTE") return { success: false, error: "Solo se pueden editar presupuestos pendientes." };
 
-            // Actualizar presupuesto con nuevos datos
-            await tx.presupuesto.update({
-                where: { id },
-                data: {
-                    clienteId: data.clienteId,
-                    listaPrecioId: data.listaPrecioId,
-                    vigencia_dias: data.vigencia_dias,
-                    notas: data.notas || null,
-                    subtotal: data.subtotal,
-                    descuento_global: data.descuento_global,
-                    total: data.total,
-                    detalles: {
-                        create: data.carrito.map(item => ({
-                            productoId: item.productoId,
-                            cantidad: item.cantidad,
-                            precio_unitario: item.precio_unitario,
-                            descuento_individual: item.descuento_individual,
-                            precio_final: item.precio_final,
-                            subtotal: item.subtotal
-                        }))
-                    }
-                }
-            });
-        });
+    await prisma.$transaction(async (tx) => {
+      await tx.detallePresupuesto.deleteMany({ where: { presupuestoId: id } });
 
-        revalidatePath("/presupuestos");
-        return { success: true };
-    } catch (error: any) {
-        console.error("Error al actualizar presupuesto:", error);
-        return { success: false, error: error.message || "Error al actualizar." };
-    }
+      await tx.presupuesto.update({
+        where: { id },
+        data: {
+          clienteId: data.clienteId,
+          listaPrecioId: data.listaPrecioId,
+          vigencia_dias: data.vigencia_dias,
+          notas: data.notas || null,
+          subtotal: data.subtotal,
+          descuento_global: data.descuento_global,
+          total: data.total,
+          detalles: {
+            create: data.carrito.map((item) => ({
+              productoId: item.productoId,
+              cantidad: item.cantidad,
+              precio_unitario: item.precio_unitario,
+              descuento_individual: item.descuento_individual,
+              precio_final: item.precio_final,
+              subtotal: item.subtotal,
+            })),
+          },
+        },
+      });
+    });
+
+    revalidatePath("/presupuestos");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error al actualizar presupuesto:", error);
+    return { success: false, error: error.message || "Error al actualizar." };
+  }
 }
 
 // ==========================================
 // 5. CONVERTIR PRESUPUESTO → VENTA
 // ==========================================
-export async function convertirPresupuestoAVenta(presupuestoId: number, ventaData: {
+export async function convertirPresupuestoAVenta(
+  presupuestoId: number,
+  ventaData: {
     clienteId: number;
     listaPrecioId: number;
     tipo_comprobante: string;
@@ -219,79 +238,90 @@ export async function convertirPresupuestoAVenta(presupuestoId: number, ventaDat
     sucursalId: number;
     depositoId: number;
     carrito: {
-        productoId: number;
-        cantidad: number;
-        precio_unitario: number;
-        descuento_individual: number;
-        precio_final: number;
-        subtotal: number;
+      productoId: number;
+      cantidad: number;
+      precio_unitario: number;
+      descuento_individual: number;
+      precio_final: number;
+      subtotal: number;
     }[];
-}) {
-    try {
-        const presupuesto = await prisma.presupuesto.findUnique({ where: { id: presupuestoId } });
-        if (!presupuesto) return { success: false, error: "Presupuesto no encontrado." };
-        if (presupuesto.estado !== 'PENDIENTE') return { success: false, error: "Solo se pueden convertir presupuestos pendientes." };
+  }
+) {
+  try {
+    const tenant = await requireTenant();
 
-        // Import registrarVenta
-        const { registrarVenta } = await import("./ventas");
+    const presupuesto = await prisma.presupuesto.findFirst({
+      where: { id: presupuestoId, tenantId: tenant.id },
+    });
+    if (!presupuesto) return { success: false, error: "Presupuesto no encontrado." };
+    if (presupuesto.estado !== "PENDIENTE") return { success: false, error: "Solo se pueden convertir presupuestos pendientes." };
 
-        const resultado = await registrarVenta({
-            ...ventaData,
-            metodo_pago: ventaData.pagos[0]?.metodo_pago || 'CONTADO',
-            fecha_emision: new Date().toISOString(),
-            presupuestoOrigenId: presupuestoId,
-            detalles: presupuesto.notas,
-        });
+    const { registrarVenta } = await import("./ventas");
 
-        if (resultado.success) {
-            // Marcar como convertido
-            await prisma.presupuesto.update({
-                where: { id: presupuestoId },
-                data: { estado: 'CONVERTIDO' }
-            });
+    const resultado = await registrarVenta({
+      ...ventaData,
+      metodo_pago: ventaData.pagos[0]?.metodo_pago || "CONTADO",
+      fecha_emision: new Date().toISOString(),
+      presupuestoOrigenId: presupuestoId,
+      detalles: `Convertido desde Presupuesto #${presupuesto.numero}${presupuesto.notas ? ` | ${presupuesto.notas}` : ""}`,
+    });
 
-            revalidatePath("/presupuestos");
-        }
+    if (resultado.success) {
+      await prisma.presupuesto.update({
+        where: { id: presupuestoId },
+        data: { estado: "CONVERTIDO" },
+      });
 
-        return resultado;
-    } catch (error: any) {
-        console.error("Error al convertir presupuesto:", error);
-        return { success: false, error: error.message || "Error al convertir el presupuesto a venta." };
+      revalidatePath("/presupuestos");
     }
+
+    return resultado;
+  } catch (error: any) {
+    console.error("Error al convertir presupuesto:", error);
+    return { success: false, error: error.message || "Error al convertir el presupuesto a venta." };
+  }
 }
 
 // ==========================================
 // 6. CANCELAR / ELIMINAR PRESUPUESTO
 // ==========================================
 export async function cancelarPresupuesto(id: number) {
-    try {
-        const existing = await prisma.presupuesto.findUnique({ where: { id } });
-        if (!existing) return { success: false, error: "Presupuesto no encontrado." };
-        if (existing.estado !== 'PENDIENTE') return { success: false, error: "Solo se pueden cancelar presupuestos pendientes." };
+  try {
+    const tenant = await requireTenant();
 
-        await prisma.presupuesto.update({
-            where: { id },
-            data: { estado: 'CANCELADO' }
-        });
+    const existing = await prisma.presupuesto.findFirst({
+      where: { id, tenantId: tenant.id },
+    });
+    if (!existing) return { success: false, error: "Presupuesto no encontrado." };
+    if (existing.estado !== "PENDIENTE") return { success: false, error: "Solo se pueden cancelar presupuestos pendientes." };
 
-        revalidatePath("/presupuestos");
-        return { success: true };
-    } catch (error: any) {
-        return { success: false, error: "Error al cancelar el presupuesto." };
-    }
+    await prisma.presupuesto.update({
+      where: { id },
+      data: { estado: "CANCELADO" },
+    });
+
+    revalidatePath("/presupuestos");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Error al cancelar el presupuesto." };
+  }
 }
 
 export async function eliminarPresupuesto(id: number) {
-    try {
-        const existing = await prisma.presupuesto.findUnique({ where: { id } });
-        if (!existing) return { success: false, error: "Presupuesto no encontrado." };
-        if (existing.estado === 'CONVERTIDO') return { success: false, error: "No se puede eliminar un presupuesto ya convertido a venta." };
+  try {
+    const tenant = await requireTenant();
 
-        await prisma.presupuesto.delete({ where: { id } });
+    const existing = await prisma.presupuesto.findFirst({
+      where: { id, tenantId: tenant.id },
+    });
+    if (!existing) return { success: false, error: "Presupuesto no encontrado." };
+    if (existing.estado === "CONVERTIDO") return { success: false, error: "No se puede eliminar un presupuesto ya convertido a venta." };
 
-        revalidatePath("/presupuestos");
-        return { success: true };
-    } catch (error: any) {
-        return { success: false, error: "Error al eliminar el presupuesto." };
-    }
+    await prisma.presupuesto.delete({ where: { id } });
+
+    revalidatePath("/presupuestos");
+    return { success: true };
+  } catch {
+    return { success: false, error: "Error al eliminar el presupuesto." };
+  }
 }

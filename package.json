@@ -1,6 +1,6 @@
 {
-  "name": "tendecosistem",
-  "version": "0.1.0",
+  "name": "onlyerp",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
@@ -44,5 +44,8 @@
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
   }
 }

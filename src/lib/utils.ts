@@ -13,9 +13,9 @@ export function calcularCostoNeto(precioCosto: number, descuentoProveedor: numbe
   return precioCosto - (precioCosto * (descuentoProveedor || 0)) / 100;
 }
 
-export function calcularCostoIva(costoNeto: number, alicuotaIva: number = 0) {
-  // IVA desactivado globalmente (0% IVA)
-  return costoNeto;
+export function calcularCostoIva(costoNeto: number, alicuotaIva: number = 0, aplicarIva: boolean = false) {
+  if (!aplicarIva) return costoNeto;
+  return costoNeto * (1 + (alicuotaIva || 0) / 100);
 }
 
 export function calcularPrecioFinal(costoIva: number, porcentajeMarcacion: number = 0) {
@@ -32,13 +32,13 @@ export function redondearPrecio(precio: number, activo: boolean): number {
 }
 
 // ==========================================
-// CÁLCULO CON CASCADA P → M → C (IVA 0% POR DEFECTO)
+// CÁLCULO CON CASCADA P → M → C (IVA CONFIGURABLE)
 // ==========================================
 
 /**
  * Calcula el precio final aplicando la cascada:
  * 1. Costo Neto = precioCosto * (1 - descProv/100)
- * 2. Costo + IVA (0% por defecto)
+ * 2. Costo + IVA (según configuración global aplicarIva)
  * 3. + Aumento Proveedor %
  * 4. + Aumento Marca %
  * 5. + Aumento Categoría %
@@ -52,10 +52,11 @@ export function calcularPrecioConCascada(
   aumentoMarca: number = 0,
   aumentoCategoria: number = 0,
   margenLista: number = 0,
-  redondearA5: boolean = false
+  redondearA5: boolean = false,
+  aplicarIva: boolean = false
 ): number {
   const costoNeto = calcularCostoNeto(precioCosto, descuentoProveedor || 0);
-  const costoIva = calcularCostoIva(costoNeto, alicuotaIva || 0);
+  const costoIva = calcularCostoIva(costoNeto, alicuotaIva || 0, aplicarIva);
   const conAumProv = costoIva * (1 + (aumentoProveedor || 0) / 100);
   const conAumMarca = conAumProv * (1 + (aumentoMarca || 0) / 100);
   const conAumCat = conAumMarca * (1 + (aumentoCategoria || 0) / 100);
@@ -101,6 +102,51 @@ export function resolverMargenYDescuento(
   }
 
   return { margenFinal, descuentoFinal };
+}
+
+/**
+ * Resuelve el precio unitario aplicando escalas de precio por volumen si la cantidad califica.
+ * Si el producto tiene escalas (ej: +12 unidades = $900 o 10% desc), aplica el mejor tramo alcanzado.
+ */
+export function resolverPrecioConEscala(
+  producto: any,
+  cantidad: number,
+  precioBase: number,
+  listaId?: number
+): { precioFinal: number; escalaAplicada: boolean; textoEscala?: string } {
+  if (!producto.escalas_precio || producto.escalas_precio.length === 0 || cantidad <= 0) {
+    return { precioFinal: precioBase, escalaAplicada: false };
+  }
+
+  // Filtrar escalas que apliquen a la lista seleccionada o a todas las listas
+  const escalasValidas = producto.escalas_precio
+    .filter((e: any) => (!e.listaPrecioId || (listaId && e.listaPrecioId === listaId)) && cantidad >= e.cantidad_minima)
+    .sort((a: any, b: any) => b.cantidad_minima - a.cantidad_minima); // Mayor volumen primero
+
+  if (escalasValidas.length === 0) {
+    return { precioFinal: precioBase, escalaAplicada: false };
+  }
+
+  const mejorEscala = escalasValidas[0];
+
+  if (mejorEscala.precio_unitario !== null && mejorEscala.precio_unitario !== undefined && mejorEscala.precio_unitario > 0) {
+    return {
+      precioFinal: mejorEscala.precio_unitario,
+      escalaAplicada: true,
+      textoEscala: `Escala x${mejorEscala.cantidad_minima}+ ($${mejorEscala.precio_unitario.toFixed(2)})`
+    };
+  }
+
+  if (mejorEscala.descuento_porcentaje !== null && mejorEscala.descuento_porcentaje !== undefined && mejorEscala.descuento_porcentaje > 0) {
+    const conDesc = precioBase * (1 - mejorEscala.descuento_porcentaje / 100);
+    return {
+      precioFinal: conDesc,
+      escalaAplicada: true,
+      textoEscala: `Escala x${mejorEscala.cantidad_minima}+ (-${mejorEscala.descuento_porcentaje}%)`
+    };
+  }
+
+  return { precioFinal: precioBase, escalaAplicada: false };
 }
 
 // ==========================================

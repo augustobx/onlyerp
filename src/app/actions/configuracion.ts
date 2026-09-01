@@ -1,64 +1,82 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-
-const prisma = new PrismaClient();
+import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 // --- CATEGORÍAS ---
 export async function getCategorias() {
-    return await prisma.categoria.findMany({
-        orderBy: { nombre: 'asc' }
-    });
+  const tenant = await getTenantContext();
+  if (!tenant) return [];
+
+  return await prisma.categoria.findMany({
+    where: { tenantId: tenant.id },
+    orderBy: { nombre: "asc" },
+  });
 }
 
 export async function crearCategoria(formData: FormData) {
-    const nombre = formData.get("nombre") as string;
-    if (!nombre) return;
+  const tenant = await requireTenant();
+  const nombre = formData.get("nombre") as string;
+  if (!nombre) return;
 
-    await prisma.categoria.create({
-        data: { nombre }
-    });
+  await prisma.categoria.create({
+    data: { tenantId: tenant.id, nombre },
+  });
 
-    // Refresca las páginas para que se vea el cambio al instante
-    revalidatePath("/categorias");
-    revalidatePath("/inventario/nuevo");
+  revalidatePath("/categorias");
+  revalidatePath("/inventario/nuevo");
 }
 
 // --- LISTAS DE PRECIOS ---
 export async function getListasPrecio() {
-    return await prisma.listaPrecio.findMany({
-        orderBy: { nombre: 'asc' }
-    });
+  const tenant = await getTenantContext();
+  if (!tenant) return [];
+
+  return await prisma.listaPrecio.findMany({
+    where: { tenantId: tenant.id },
+    orderBy: { nombre: "asc" },
+  });
 }
 
 export async function crearListaPrecio(formData: FormData) {
-    const nombre = formData.get("nombre") as string;
-    const margen_defecto = parseFloat(formData.get("margen_defecto") as string);
+  const tenant = await requireTenant();
+  const nombre = formData.get("nombre") as string;
+  const margen_defecto = parseFloat(formData.get("margen_defecto") as string);
 
-    if (!nombre || isNaN(margen_defecto)) return;
+  if (!nombre || isNaN(margen_defecto)) return;
 
-    await prisma.listaPrecio.create({
-        data: { nombre, margen_defecto }
-    });
+  await prisma.listaPrecio.create({
+    data: { tenantId: tenant.id, nombre, margen_defecto },
+  });
 
-    revalidatePath("/listas-precio");
-    revalidatePath("/inventario/nuevo");
+  revalidatePath("/listas-precio");
+  revalidatePath("/inventario/nuevo");
 }
 
 // --- SUCURSALES Y DEPÓSITOS ---
 export async function getSucursales() {
-    return await prisma.sucursal.findMany({
-        where: { estado: true },
-        include: { depositos: true },
-        orderBy: { nombre: 'asc' }
-    });
+  const tenant = await getTenantContext();
+  if (!tenant) return [];
+
+  return await prisma.sucursal.findMany({
+    where: { tenantId: tenant.id, estado: true },
+    include: { depositos: true },
+    orderBy: { nombre: "asc" },
+  });
 }
 
 export async function getDepositos(sucursalId?: number) {
-    const whereClause = sucursalId ? { sucursalId, estado: true } : { estado: true };
-    return await prisma.deposito.findMany({
-        where: whereClause,
-        orderBy: { nombre: 'asc' }
-    });
+  const tenant = await getTenantContext();
+  if (!tenant) return [];
+
+  const whereClause: any = { tenantId: tenant.id, estado: true };
+  if (sucursalId) {
+    whereClause.sucursalId = sucursalId;
+  }
+
+  return await prisma.deposito.findMany({
+    where: whereClause,
+    orderBy: { nombre: "asc" },
+  });
 }

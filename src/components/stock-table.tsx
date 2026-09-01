@@ -205,12 +205,13 @@ export const getColumns = (
       const precioFinal = calcularPrecioConCascada(
         row.original.precio_costo,
         descuentoFinal,
-        row.original.alicuota_iva || 0, // IVA desactivado (0%)
+        row.original.alicuota_iva || 0,
         row.original.aumento_proveedor || 0,
         row.original.aumento_marca || 0,
         row.original.aumento_categoria || 0,
         margenFinal,
-        configGlobal?.redondear_a_cinco
+        configGlobal?.redondear_a_cinco,
+        configGlobal?.aplicar_iva_en_precios
       );
 
       return <div className="text-right font-bold whitespace-nowrap text-slate-700 dark:text-slate-300">{formatCurrency(precioFinal, row.original.moneda)}</div>;
@@ -236,8 +237,13 @@ export const getColumns = (
               <DropdownMenuGroup>
                 <DropdownMenuLabel className="text-xs text-slate-400 uppercase tracking-wider font-bold">Acciones</DropdownMenuLabel>
                 <DropdownMenuItem className="p-0 cursor-pointer mb-1">
+                  <Link href={`/inventario/${producto.id}/kardex`} className="flex items-center w-full px-2 py-1.5 text-emerald-700 font-bold hover:bg-emerald-50 rounded-sm transition-colors">
+                    <History className="mr-2 h-4 w-4 text-emerald-600" /> Kardex de Stock
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="p-0 cursor-pointer mb-1">
                   <button onClick={() => handleAbrirHistorial(producto)} className="flex items-center w-full px-2 py-1.5 text-indigo-600 font-semibold hover:bg-indigo-50 rounded-sm transition-colors">
-                    <History className="mr-2 h-4 w-4" /> Ver Historial
+                    <History className="mr-2 h-4 w-4" /> Historial de Cambios
                   </button>
                 </DropdownMenuItem>
                 <DropdownMenuItem className="p-0 cursor-pointer">

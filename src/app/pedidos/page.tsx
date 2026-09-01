@@ -13,8 +13,9 @@ import { toast } from "sonner";
 import {
     Search, ClipboardList, CheckCircle2, Ban, Receipt, User, Clock,
     Package, X, FileText, CreditCard, Edit, Calendar, Plus, Minus,
-    RefreshCw, Truck, Printer, ExternalLink, RotateCcw, AlertTriangle
+    RefreshCw, Truck, Printer, ExternalLink, RotateCcw, AlertTriangle, Phone
 } from "lucide-react";
+import { ModuleHelpButton } from "@/components/module-help-modal";
 
 export default function AdminPedidosPage() {
     const [pedidos, setPedidos] = useState<any[]>([]);
@@ -280,7 +281,8 @@ export default function AdminPedidosPage() {
                         <h2 className="font-black text-lg text-slate-800 flex items-center">
                             <ClipboardList className="mr-2 h-5 w-5 text-indigo-600" /> Recepción de Pedidos
                         </h2>
-                        <div className="flex gap-1.5">
+                        <div className="flex items-center gap-1.5">
+                            <ModuleHelpButton moduloId="pedidos" />
                             <Link href="/pedidos/armados">
                                 <Button variant="outline" size="sm" className="text-[10px] h-7 px-2 border-indigo-200 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-100 font-bold">
                                     <Truck className="h-3 w-3 mr-1 text-indigo-600" /> Armados / Despacho
@@ -424,139 +426,167 @@ export default function AdminPedidosPage() {
                     </div>
                 ) : (
                     <>
-                        {/* Cabecera del Detalle */}
-                        <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50/50 shrink-0">
-                            <div>
-                                <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                                    <h2 className="text-2xl font-black text-slate-900">Pedido #{pedidoActivo.numero}</h2>
-                                    
-                                    {/* Insignia Logística */}
-                                    <span className={`text-xs font-black px-3 py-1 rounded-lg border ${getEstadoColor(pedidoActivo.estado)}`}>
-                                        {pedidoActivo.estado === 'ARMADO' ? '🚚 ARMADO' : pedidoActivo.estado}
-                                    </span>
+                        {/* Cabecera del Detalle con Ciclo de Vida */}
+                        <div className="p-5 border-b border-slate-200 bg-white shrink-0 space-y-4">
+                            
+                            {/* Fila 1: Título, Números y Estados */}
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                <div>
+                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">Pedido #{pedidoActivo.numero}</h2>
+                                        
+                                        {/* Insignia Logística */}
+                                        <span className={`text-xs font-black px-3 py-1 rounded-lg border ${getEstadoColor(pedidoActivo.estado)}`}>
+                                            {pedidoActivo.estado === 'ARMADO' ? '🚚 ARMADO' : pedidoActivo.estado}
+                                        </span>
 
-                                    {/* Insignia Fiscal */}
-                                    {estaFacturado ? (
-                                        <span className="text-xs font-black px-3 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                                            <Receipt className="w-3.5 h-3.5" />
-                                            {pedidoActivo.venta
-                                                ? `${pedidoActivo.venta.tipo_comprobante?.replace('_', ' ')} 000${pedidoActivo.venta.punto_venta}-${pedidoActivo.venta.numero_comprobante}`
-                                                : `FACTURADO (Venta #${pedidoActivo.ventaId})`}
-                                        </span>
-                                    ) : (
-                                        <span className="text-xs font-black px-3 py-1 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
-                                            <Clock className="w-3.5 h-3.5" /> PENDIENTE DE FACTURAR
-                                        </span>
-                                    )}
+                                        {/* Insignia Fiscal */}
+                                        {estaFacturado ? (
+                                            <span className="text-xs font-black px-3 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                                                <Receipt className="w-3.5 h-3.5 text-emerald-600" />
+                                                {pedidoActivo.venta
+                                                    ? `${pedidoActivo.venta.tipo_comprobante?.replace('_', ' ')} 000${pedidoActivo.venta.punto_venta}-${pedidoActivo.venta.numero_comprobante}`
+                                                    : `FACTURADO (Venta #${pedidoActivo.ventaId})`}
+                                            </span>
+                                        ) : (
+                                            <span className="text-xs font-black px-3 py-1 rounded-lg bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                                                <Clock className="w-3.5 h-3.5 text-amber-600" /> PENDIENTE DE FACTURAR
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                                        <Clock className="w-3.5 h-3.5 text-slate-400" /> Emisión: {new Date(pedidoActivo.fecha).toLocaleString('es-AR')}
+                                    </p>
                                 </div>
-                                <p className="text-sm font-medium text-slate-500 flex items-center">
-                                    <Clock className="w-4 h-4 mr-1" /> Emisión: {new Date(pedidoActivo.fecha).toLocaleString('es-AR')}
-                                </p>
+
+                                {/* Acciones Fiscales (Facturación / Impresión) */}
+                                <div className="flex items-center gap-2">
+                                    {!estaFacturado && pedidoActivo.estado !== 'RECHAZADO' && pedidoActivo.estado !== 'CANCELADO' ? (
+                                        <Button
+                                            disabled={cargando}
+                                            onClick={abrirModalFacturar}
+                                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-sm text-xs h-10 px-4 rounded-xl"
+                                        >
+                                            <Receipt className="w-4 h-4 mr-1.5" /> Facturar Pedido
+                                        </Button>
+                                    ) : estaFacturado && ventaId ? (
+                                        <div className="flex gap-1.5">
+                                            <Link href={`/imprimir/ticket/${ventaId}`} target="_blank">
+                                                <Button variant="outline" size="sm" className="border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs h-9 rounded-xl">
+                                                    <Printer className="w-4 h-4 mr-1 text-emerald-600" /> Ticket 80mm
+                                                </Button>
+                                            </Link>
+                                            <Link href={`/imprimir/a4/${ventaId}`} target="_blank">
+                                                <Button variant="outline" size="sm" className="border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs h-9 rounded-xl">
+                                                    <FileText className="w-4 h-4 mr-1 text-emerald-600" /> Factura A4
+                                                </Button>
+                                            </Link>
+                                        </div>
+                                    ) : null}
+                                </div>
                             </div>
 
-                            {/* BOTONERA DE ACCIONES GENERALES Y COMPLETAS */}
-                            <div className="flex flex-wrap items-center gap-2">
-                                
-                                {/* 1. Botón Facturar (Disponible si aún no se ha facturado) */}
-                                {!estaFacturado && pedidoActivo.estado !== 'RECHAZADO' && pedidoActivo.estado !== 'CANCELADO' && (
-                                    <Button
-                                        disabled={cargando}
-                                        onClick={abrirModalFacturar}
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-sm text-xs h-9"
-                                    >
-                                        <Receipt className="w-4 h-4 mr-1.5" /> Facturar Pedido
-                                    </Button>
-                                )}
-
-                                {/* 2. Botones de Impresión si ya fue facturado */}
-                                {estaFacturado && ventaId && (
-                                    <div className="flex gap-1.5">
-                                        <Link href={`/imprimir/ticket/${ventaId}`} target="_blank">
-                                            <Button variant="outline" size="sm" className="border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs h-9">
-                                                <Printer className="w-4 h-4 mr-1 text-emerald-600" /> Ticket 80mm
-                                            </Button>
-                                        </Link>
-                                        <Link href={`/imprimir/a4/${ventaId}`} target="_blank">
-                                            <Button variant="outline" size="sm" className="border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-bold text-xs h-9">
-                                                <FileText className="w-4 h-4 mr-1 text-emerald-600" /> Factura A4
-                                            </Button>
-                                        </Link>
+                            {/* Fila 2: BARRA DE CICLO DE VIDA (STEPPER OPERATIVO) */}
+                            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 flex flex-col md:flex-row items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto text-xs font-bold">
+                                    {/* Paso 1: Tomado */}
+                                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl ${
+                                        pedidoActivo.estado === 'PENDIENTE'
+                                            ? 'bg-amber-100 text-amber-900 border border-amber-300 font-black'
+                                            : 'bg-white text-slate-400 border border-slate-200'
+                                    }`}>
+                                        <span>1. Tomado</span>
                                     </div>
-                                )}
+                                    <span className="text-slate-300 font-bold">➔</span>
 
-                                {/* 3. Botones según estado logístico */}
-                                {pedidoActivo.estado === 'PENDIENTE' && (
-                                    <>
-                                        {!estaFacturado && (
-                                            <Button disabled={cargando} onClick={abrirModalEditar} variant="outline" className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold text-xs h-9">
-                                                <Edit className="w-4 h-4 mr-1.5" /> Editar
+                                    {/* Paso 2: Armado */}
+                                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl ${
+                                        pedidoActivo.estado === 'ARMADO' || pedidoActivo.estado === 'APROBADO' || pedidoActivo.estado === 'LISTO_ENTREGA'
+                                            ? 'bg-indigo-100 text-indigo-900 border border-indigo-300 font-black'
+                                            : 'bg-white text-slate-400 border border-slate-200'
+                                    }`}>
+                                        <span>2. Armado / Depósito</span>
+                                    </div>
+                                    <span className="text-slate-300 font-bold">➔</span>
+
+                                    {/* Paso 3: Entregado */}
+                                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-xl ${
+                                        pedidoActivo.estado === 'ENTREGADO'
+                                            ? 'bg-emerald-100 text-emerald-900 border border-emerald-300 font-black'
+                                            : 'bg-white text-slate-400 border border-slate-200'
+                                    }`}>
+                                        <span>3. Entregado</span>
+                                    </div>
+                                </div>
+
+                                {/* BOTONERA PRINCIPAL SECUENCIAL (PASO SIGUIENTE CLARO) */}
+                                <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                                    
+                                    {/* CASO A: Pedido PENDIENTE */}
+                                    {pedidoActivo.estado === 'PENDIENTE' && (
+                                        <>
+                                            {!estaFacturado && (
+                                                <Button disabled={cargando} onClick={abrirModalEditar} variant="outline" className="border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs h-9 rounded-xl">
+                                                    <Edit className="w-3.5 h-3.5 mr-1 text-slate-500" /> Editar
+                                                </Button>
+                                            )}
+                                            <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-md shadow-indigo-600/20 text-xs h-9 px-4 rounded-xl">
+                                                <Truck className="w-4 h-4 mr-1.5" /> 📦 Armar Pedido (Paso Siguiente)
                                             </Button>
-                                        )}
-                                        <Button disabled={cargando} onClick={() => procesarPedido('APROBADO')} className="bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm text-xs h-9">
-                                            <CheckCircle2 className="w-4 h-4 mr-1.5" /> Aprobar
-                                        </Button>
-                                        <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm text-xs h-9">
-                                            <Truck className="w-4 h-4 mr-1.5" /> Listo p/ Entrega (Armar)
-                                        </Button>
-                                        <Button disabled={cargando} onClick={() => procesarPedido('ENTREGADO')} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-sm text-xs h-9">
-                                            <CheckCircle2 className="w-4 h-4 mr-1.5" /> Marcar Entregado
-                                        </Button>
-                                        {!estaFacturado && (
-                                            <Button disabled={cargando} onClick={() => procesarPedido('RECHAZADO')} variant="outline" className="border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs h-9">
-                                                <Ban className="w-4 h-4 mr-1.5" /> Rechazar
+                                            {!estaFacturado && (
+                                                <Button disabled={cargando} onClick={() => procesarPedido('RECHAZADO')} variant="ghost" className="text-rose-600 hover:bg-rose-50 font-bold text-xs h-9 rounded-xl">
+                                                    <Ban className="w-3.5 h-3.5 mr-1" /> Cancelar
+                                                </Button>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {/* CASO B: Pedido APROBADO */}
+                                    {pedidoActivo.estado === 'APROBADO' && (
+                                        <>
+                                            {!estaFacturado && (
+                                                <Button disabled={cargando} onClick={abrirModalEditar} variant="outline" className="border-slate-200 text-slate-700 hover:bg-slate-100 font-bold text-xs h-9 rounded-xl">
+                                                    <Edit className="w-3.5 h-3.5 mr-1" /> Editar
+                                                </Button>
+                                            )}
+                                            <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-md text-xs h-9 px-4 rounded-xl">
+                                                <Truck className="w-4 h-4 mr-1.5" /> 📦 Marcar Armado
                                             </Button>
-                                        )}
-                                    </>
-                                )}
+                                        </>
+                                    )}
 
-                                {pedidoActivo.estado === 'APROBADO' && (
-                                    <>
-                                        {!estaFacturado && (
-                                            <Button disabled={cargando} onClick={abrirModalEditar} variant="outline" className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold text-xs h-9">
-                                                <Edit className="w-4 h-4 mr-1.5" /> Editar
+                                    {/* CASO C: Pedido ARMADO / LISTO_ENTREGA */}
+                                    {['ARMADO', 'LISTO_ENTREGA'].includes(pedidoActivo.estado) && (
+                                        <>
+                                            <Button disabled={cargando} onClick={() => procesarPedido('NO_ENTREGADO')} variant="outline" className="border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-xs h-9 rounded-xl">
+                                                <Ban className="w-3.5 h-3.5 mr-1" /> No Entregado
                                             </Button>
-                                        )}
-                                        <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm text-xs h-9">
-                                            <Truck className="w-4 h-4 mr-1.5" /> Listo p/ Entrega (Armar)
-                                        </Button>
-                                        <Button disabled={cargando} onClick={() => procesarPedido('ENTREGADO')} className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold shadow-sm text-xs h-9">
-                                            <CheckCircle2 className="w-4 h-4 mr-1.5" /> Marcar Entregado
-                                        </Button>
-                                        {!estaFacturado && (
-                                            <Button disabled={cargando} onClick={() => procesarPedido('RECHAZADO')} variant="outline" className="border-red-200 text-red-600 hover:bg-red-50 font-bold text-xs h-9">
-                                                <Ban className="w-4 h-4 mr-1.5" /> Rechazar
+                                            <Button disabled={cargando} onClick={() => procesarPedido('ENTREGADO')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md shadow-emerald-600/20 text-xs h-9 px-4 rounded-xl">
+                                                <CheckCircle2 className="w-4 h-4 mr-1.5" /> ✅ Confirmar Entrega
                                             </Button>
-                                        )}
-                                    </>
-                                )}
+                                        </>
+                                    )}
 
-                                {['ARMADO', 'LISTO_ENTREGA'].includes(pedidoActivo.estado) && (
-                                    <>
-                                        <Button disabled={cargando} onClick={() => procesarPedido('ENTREGADO')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm text-xs h-9">
-                                            <CheckCircle2 className="w-4 h-4 mr-1.5" /> Marcar Entregado
-                                        </Button>
-                                        <Button disabled={cargando} onClick={() => procesarPedido('NO_ENTREGADO')} variant="outline" className="border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-xs h-9">
-                                            <Ban className="w-4 h-4 mr-1.5" /> No Entregado
-                                        </Button>
-                                    </>
-                                )}
+                                    {/* CASO D: Pedido NO_ENTREGADO */}
+                                    {pedidoActivo.estado === 'NO_ENTREGADO' && (
+                                        <>
+                                            <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-9 rounded-xl">
+                                                <RotateCcw className="w-3.5 h-3.5 mr-1" /> Reintentar Reparto
+                                            </Button>
+                                            <Button disabled={cargando} onClick={() => procesarPedido('ENTREGADO')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs h-9 rounded-xl">
+                                                <CheckCircle2 className="w-4 h-4 mr-1.5" /> Marcar Entregado
+                                            </Button>
+                                        </>
+                                    )}
 
-                                {pedidoActivo.estado === 'NO_ENTREGADO' && (
-                                    <>
-                                        <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm text-xs h-9">
-                                            <RotateCcw className="w-4 h-4 mr-1.5" /> Reintentar y Armar
+                                    {/* CASO E: Pedido ENTREGADO */}
+                                    {pedidoActivo.estado === 'ENTREGADO' && (
+                                        <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} variant="outline" className="border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs h-9 rounded-xl">
+                                            <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-400" /> Re-abrir Despacho
                                         </Button>
-                                        <Button disabled={cargando} onClick={() => procesarPedido('ENTREGADO')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm text-xs h-9">
-                                            <CheckCircle2 className="w-4 h-4 mr-1.5" /> Marcar Entregado
-                                        </Button>
-                                    </>
-                                )}
+                                    )}
 
-                                {pedidoActivo.estado === 'ENTREGADO' && (
-                                    <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} variant="outline" className="border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-xs h-9">
-                                        <RotateCcw className="w-4 h-4 mr-1.5" /> Re-abrir Despacho
-                                    </Button>
-                                )}
+                                </div>
                             </div>
                         </div>
 
@@ -578,8 +608,46 @@ export default function AdminPedidosPage() {
 
                                 <Card className="border-slate-200 shadow-none">
                                     <CardHeader className="p-4 pb-2"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Información de Operación</p></CardHeader>
-                                    <CardContent className="p-4 pt-0">
-                                        <p className="font-bold text-slate-800 text-base flex items-center"><User className="w-4 h-4 mr-2 text-slate-400" /> Vendedor: {pedidoActivo.usuario?.nombre}</p>
+                                    <CardContent className="p-4 pt-0 space-y-3">
+                                        {/* PREVENTISTA RESPONSABLE */}
+                                        <div className="flex items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">
+                                            <div>
+                                                <p className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                                                    <User className="w-3.5 h-3.5 text-indigo-600" />
+                                                    <span>Levantado por: <b className="text-slate-900">{pedidoActivo.usuario?.nombre || 'Oficina Central'}</b></span>
+                                                </p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <Badge variant="outline" className="text-[9px] font-black border-amber-300 text-amber-800 bg-amber-50 px-1.5 py-0">
+                                                        {pedidoActivo.usuario?.rol === 'MIXTO' ? '🔄 PREVENTA & REPARTO' : pedidoActivo.usuario?.rol === 'VENDEDOR' ? '📱 PREVENTISTA' : pedidoActivo.usuario?.rol || 'OPERADOR'}
+                                                    </Badge>
+                                                    {pedidoActivo.usuario?.telefono && (
+                                                        <span className="text-[10px] text-emerald-700 font-mono font-bold flex items-center gap-1">
+                                                            <Phone className="h-2.5 w-2.5" /> {pedidoActivo.usuario.telefono}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {pedidoActivo.usuario?.telefono && (
+                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                    <a
+                                                        href={`tel:${pedidoActivo.usuario.telefono}`}
+                                                        className="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 p-1.5 rounded-lg flex items-center justify-center transition-colors shadow-xs"
+                                                        title="Llamar al Preventista"
+                                                    >
+                                                        <Phone className="h-3 w-3 text-slate-600" />
+                                                    </a>
+                                                    <a
+                                                        href={`https://wa.me/${pedidoActivo.usuario.telefono.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hola ${pedidoActivo.usuario.nombre}, te consulto sobre el Pedido #${pedidoActivo.numero} (${pedidoActivo.cliente?.nombre_razon_social}): `)}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-2 py-1 rounded-lg flex items-center gap-1 transition-colors shadow-xs"
+                                                        title="WhatsApp al Preventista"
+                                                    >
+                                                        💬 WhatsApp
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
 
                                         {/* Referencia a la Factura / Venta */}
                                         {estaFacturado ? (

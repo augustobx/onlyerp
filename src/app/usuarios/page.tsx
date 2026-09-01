@@ -3,7 +3,8 @@
 import { useState, useEffect, useTransition } from "react";
 import { toast } from "sonner";
 import {
-    Users, ShieldCheck, UserPlus, KeyRound, Loader2, X, CheckSquare, Square, Trash2, Edit, Ban, CheckCircle
+    Users, ShieldCheck, UserPlus, KeyRound, Loader2, X, CheckSquare, Square, Trash2, Edit, Ban, CheckCircle,
+    Phone, Truck, ShoppingBag, RefreshCw, Smartphone
 } from "lucide-react";
 import { getUsuarios, guardarUsuario, eliminarUsuario, toggleActivoUsuario } from "@/app/actions/usuarios";
 import { getSucursales } from "@/app/actions/configuracion";
@@ -15,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// Lista de todos los módulos que se pueden bloquear
+// Lista de todos los módulos que se pueden bloquear para personal de oficina / cajeros
 const MODULOS_SISTEMA = [
     { id: "VENTAS", nombre: "Terminal de Ventas", desc: "Facturar y cobrar en el mostrador." },
     { id: "CAJA", nombre: "Caja Diaria", desc: "Abrir/cerrar turnos y registrar egresos." },
@@ -27,8 +28,9 @@ const MODULOS_SISTEMA = [
     { id: "CONFIGURACION", nombre: "Configuración", desc: "Cambiar datos de la empresa e impresiones." }
 ];
 
-const MODULOS_VENDEDOR = [
-    { id: "COBRAR_CC", nombre: "Cobranzas en Calle", desc: "Permitir a este vendedor cobrar cuentas corrientes desde la App PWA." }
+const MODULOS_CAMPO = [
+    { id: "COBRAR_CC", nombre: "Cobranzas en Calle", desc: "Permitir cobrar cuentas corrientes y recibir dinero desde la App PWA." },
+    { id: "VER_TODO_STOCK", nombre: "Consultar Catálogo Completo", desc: "Permitir ver el stock de todos los depósitos en la PWA." }
 ];
 
 export default function GestionUsuariosPage() {
@@ -65,10 +67,9 @@ export default function GestionUsuariosPage() {
             setSucursalSeleccionada(user.sucursalId ? String(user.sucursalId) : "null");
             setRolSeleccionado(user.rol || "CAJERO");
         } else {
-            // Permisos por defecto para un empleado nuevo
             setPermisosSeleccionados(["VENTAS", "CLIENTES"]);
             setSucursalSeleccionada("null");
-            setRolSeleccionado("CAJERO");
+            setRolSeleccionado("VENDEDOR");
         }
         setShowModal(true);
     };
@@ -103,7 +104,7 @@ export default function GestionUsuariosPage() {
     };
 
     const handleDelete = (id: number) => {
-        if (!confirm("Atención: Eliminar físicamente un usuario puede causar errores si tiene ventas a su nombre. Se recomienda 'Suspender'. ¿Seguro que deseás eliminarlo por completo?")) return;
+        if (!confirm("Atención: Eliminar físicamente un usuario puede causar errores si tiene operaciones a su nombre. Se recomienda 'Suspender'. ¿Seguro que deseás eliminarlo por completo?")) return;
         startTransition(async () => {
             const res = await eliminarUsuario(id);
             if (res.success) {
@@ -115,15 +116,11 @@ export default function GestionUsuariosPage() {
         });
     };
 
-    // NUEVO: Handler para suspender/activar
     const handleToggleEstado = (id: number, estadoActual: boolean) => {
-        const accion = estadoActual ? "suspender (no podrá iniciar sesión)" : "reactivar";
-        if (!confirm(`¿Seguro que deseás ${accion} a este usuario?`)) return;
-
         startTransition(async () => {
             const res = await toggleActivoUsuario(id, estadoActual);
             if (res.success) {
-                toast.success(`Cuenta ${estadoActual ? 'suspendida' : 'reactivada'} correctamente.`);
+                toast.success(estadoActual ? "Usuario suspendido." : "Usuario reactivado.");
                 cargarUsuarios();
             } else {
                 toast.error(res.error);
@@ -131,34 +128,39 @@ export default function GestionUsuariosPage() {
         });
     };
 
-    if (loading) return <div className="flex justify-center mt-32"><Loader2 className="animate-spin h-8 w-8 text-indigo-600" /></div>;
+    const getRolBadge = (rol: string) => {
+        switch (rol) {
+            case "ADMIN":
+                return <Badge className="bg-indigo-600 text-white font-bold text-[10px]">⭐ ADMIN</Badge>;
+            case "VENDEDOR":
+                return <Badge className="bg-amber-500 text-slate-950 font-black text-[10px]">📱 PREVENTISTA</Badge>;
+            case "REPARTIDOR":
+                return <Badge className="bg-emerald-600 text-white font-bold text-[10px]">🚚 REPARTIDOR</Badge>;
+            case "MIXTO":
+                return <Badge className="bg-purple-600 text-white font-bold text-[10px]">🔄 PREVENTA & REPARTO</Badge>;
+            default:
+                return <Badge className="bg-slate-600 text-white font-bold text-[10px]">🏪 CAJERO</Badge>;
+        }
+    };
 
     return (
-        <div className="flex flex-col gap-6 max-w-5xl mx-auto min-h-[calc(100vh-6rem)] pb-12">
+        <div className="space-y-6 max-w-7xl mx-auto pb-12">
 
             {/* HEADER */}
-            <div className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-5 rounded-2xl shadow-sm">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-5 rounded-2xl shadow-sm gap-4">
                 <div className="flex items-center gap-4">
                     <div className="bg-indigo-50 dark:bg-indigo-500/10 p-3 rounded-xl">
                         <ShieldCheck className="h-6 w-6 text-indigo-600" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Control de Accesos</h2>
-                        <p className="text-sm text-slate-500 mt-0.5">Gestioná tu equipo y decidí qué módulos pueden usar.</p>
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Usuarios & Perfiles de Campo</h2>
+                        <p className="text-sm text-slate-500 mt-0.5">Administrá preventistas, choferes repartidores y operadores de caja.</p>
                     </div>
                 </div>
-                <Button onClick={() => handleAbrirModal(null)} className="bg-slate-900 hover:bg-slate-800 text-white font-medium shadow-sm h-10 px-5">
+                <Button onClick={() => handleAbrirModal(null)} className="bg-slate-900 hover:bg-slate-800 text-white font-medium shadow-sm h-10 px-5 rounded-xl">
                     <UserPlus className="h-4 w-4 mr-2" /> Nuevo Usuario
                 </Button>
             </div>
-
-            {usuarios.length === 0 && (
-                <div className="bg-orange-50 border border-orange-200 p-6 rounded-xl text-center space-y-2">
-                    <ShieldCheck className="h-10 w-10 text-orange-400 mx-auto" />
-                    <h3 className="text-orange-800 font-bold text-lg">No hay usuarios en el sistema</h3>
-                    <p className="text-orange-600 text-sm">El primer usuario que crees será automáticamente el DUEÑO (ADMIN) con acceso total e infinito.</p>
-                </div>
-            )}
 
             {/* GRILLA DE USUARIOS */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -166,10 +168,19 @@ export default function GestionUsuariosPage() {
                     const permisosArray = JSON.parse(u.permisos || "[]");
                     const esAdmin = u.rol === "ADMIN";
                     const esVendedor = u.rol === "VENDEDOR";
+                    const esRepartidor = u.rol === "REPARTIDOR";
+                    const esMixto = u.rol === "MIXTO";
                     const estaInactivo = !u.activo;
 
                     return (
-                        <Card key={u.id} className={`shadow-sm border-2 overflow-hidden transition-all ${estaInactivo ? 'opacity-70 grayscale-[40%] bg-slate-50' : esAdmin ? 'border-indigo-200 bg-indigo-50/10' : esVendedor ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200 bg-white'}`}>
+                        <Card key={u.id} className={`shadow-sm border-2 overflow-hidden transition-all ${
+                            estaInactivo ? 'opacity-70 grayscale-[40%] bg-slate-50' :
+                            esAdmin ? 'border-indigo-200 bg-indigo-50/10' :
+                            esVendedor ? 'border-amber-200 bg-amber-50/10' :
+                            esRepartidor ? 'border-emerald-200 bg-emerald-50/10' :
+                            esMixto ? 'border-purple-200 bg-purple-50/10' :
+                            'border-slate-200 bg-white'
+                        }`}>
                             <CardHeader className="p-5 border-b border-slate-100 flex flex-row items-center justify-between bg-slate-50/50">
                                 <div>
                                     <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -178,25 +189,43 @@ export default function GestionUsuariosPage() {
                                             <Badge variant="outline" className="text-[9px] text-red-600 border-red-200 bg-red-50 px-1 py-0 h-4 ml-1 font-black">INACTIVO</Badge>
                                         )}
                                     </CardTitle>
-                                    <CardDescription className="font-mono text-xs mt-0.5">@{u.username}</CardDescription>
+                                    <CardDescription className="font-mono text-xs mt-0.5 flex items-center gap-2">
+                                        <span>@{u.username}</span>
+                                        {u.telefono && (
+                                            <span className="text-emerald-600 font-sans font-bold flex items-center gap-1">
+                                                <Phone className="h-3 w-3" /> {u.telefono}
+                                            </span>
+                                        )}
+                                    </CardDescription>
                                 </div>
-                                <Badge className={esAdmin ? 'bg-indigo-600' : esVendedor ? 'bg-amber-600' : 'bg-slate-500'}>{u.rol}</Badge>
+                                <div>{getRolBadge(u.rol)}</div>
                             </CardHeader>
 
                             <CardContent className="p-5">
                                 <div className="space-y-3 mb-6">
-                                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Módulos Habilitados</p>
+                                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Perfil & Módulos Habilitados</p>
                                     {estaInactivo ? (
-                                        <div className="text-sm font-medium text-red-600 bg-red-50 p-2 rounded-md border border-red-100 text-center flex items-center justify-center gap-2">
+                                        <div className="text-xs font-medium text-red-600 bg-red-50 p-2 rounded-md border border-red-100 text-center flex items-center justify-center gap-2">
                                             <Ban className="h-4 w-4" /> CUENTA SUSPENDIDA
                                         </div>
                                     ) : esAdmin ? (
-                                        <div className="text-sm font-medium text-emerald-600 bg-emerald-50 p-2 rounded-md border border-emerald-100 text-center">
-                                            ⭐ Acceso Total (Dueño)
+                                        <div className="text-xs font-medium text-emerald-600 bg-emerald-50 p-2 rounded-md border border-emerald-100 text-center">
+                                            ⭐ Acceso Total (Dueño / Admin)
                                         </div>
                                     ) : esVendedor ? (
-                                        <div className="text-sm font-medium text-amber-600 bg-amber-50 p-2 rounded-md border border-amber-100 text-center">
-                                            📱 Solo PWA Vendedor
+                                        <div className="text-xs font-medium text-amber-800 bg-amber-50 p-2.5 rounded-xl border border-amber-200/60 flex items-center gap-2">
+                                            <ShoppingBag className="h-4 w-4 text-amber-600 shrink-0" />
+                                            <span>Preventista de Calle: toma pedidos, combos y cobranzas en PWA.</span>
+                                        </div>
+                                    ) : esRepartidor ? (
+                                        <div className="text-xs font-medium text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200/60 flex items-center gap-2">
+                                            <Truck className="h-4 w-4 text-emerald-600 shrink-0" />
+                                            <span>Chofer Repartidor: entrega hojas de ruta y registra cobranzas en calle.</span>
+                                        </div>
+                                    ) : esMixto ? (
+                                        <div className="text-xs font-medium text-purple-800 bg-purple-50 p-2.5 rounded-xl border border-purple-200/60 flex items-center gap-2">
+                                            <RefreshCw className="h-4 w-4 text-purple-600 shrink-0" />
+                                            <span>Mixto (Preventa + Reparto): levanta pedidos y reparte en calle.</span>
                                         </div>
                                     ) : (
                                         <div className="flex flex-wrap gap-1.5">
@@ -211,24 +240,21 @@ export default function GestionUsuariosPage() {
                                 </div>
 
                                 <div className="flex gap-2 pt-4 border-t border-slate-100">
-                                    <Button variant="outline" size="sm" onClick={() => handleAbrirModal(u)} className="flex-1 text-slate-600 font-medium h-9">
+                                    <Button variant="outline" size="sm" onClick={() => handleAbrirModal(u)} className="flex-1 text-slate-600 font-medium h-9 rounded-xl">
                                         <Edit className="h-3.5 w-3.5 mr-2" /> Editar
                                     </Button>
                                     {!esAdmin && (
                                         <>
-                                            {/* BOTÓN DE SUSPENDER / ACTIVAR */}
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => handleToggleEstado(u.id, u.activo)}
-                                                className={`px-3 h-9 font-bold ${u.activo ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
+                                                className={`px-3 h-9 font-bold rounded-xl ${u.activo ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
                                             >
                                                 {u.activo ? <Ban className="h-4 w-4 mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
                                                 {u.activo ? "Suspender" : "Reactivar"}
                                             </Button>
-
-                                            {/* BOTÓN DE BASURA ORIGINAL */}
-                                            <Button variant="ghost" size="icon" onClick={() => handleDelete(u.id)} className="text-red-400 hover:bg-red-50 hover:text-red-600 shrink-0 h-9 w-9">
+                                            <Button variant="ghost" size="icon" onClick={() => handleDelete(u.id)} className="text-red-400 hover:bg-red-50 hover:text-red-600 shrink-0 h-9 w-9 rounded-xl">
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </>
@@ -240,12 +266,10 @@ export default function GestionUsuariosPage() {
                 })}
             </div>
 
-            {/* =========================================================================
-          MODAL DE CREACIÓN / EDICIÓN DE USUARIO
-      ========================================================================= */}
+            {/* MODAL DE CREACIÓN / EDICIÓN DE USUARIO */}
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                    <Card className="w-full max-w-2xl shadow-2xl border-0 rounded-2xl flex flex-col max-h-[90vh] overflow-hidden">
+                    <Card className="w-full max-w-2xl shadow-2xl border-0 rounded-3xl flex flex-col max-h-[90vh] overflow-hidden">
 
                         <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
                             <h3 className="text-lg font-bold flex items-center gap-2">
@@ -260,52 +284,68 @@ export default function GestionUsuariosPage() {
 
                                 {/* COLUMNA IZQUIERDA: DATOS DEL USUARIO */}
                                 <div className="w-full md:w-1/2 space-y-4">
-                                    <h4 className="font-bold text-xs uppercase text-slate-400 tracking-wider mb-2">Datos de Acceso</h4>
+                                    <h4 className="font-bold text-xs uppercase text-slate-400 tracking-wider mb-2">Datos de Acceso y Contacto</h4>
 
                                     <div className="space-y-1.5">
                                         <Label className="text-xs font-semibold">Nombre del Empleado <span className="text-red-500">*</span></Label>
-                                        <Input name="nombre" defaultValue={usuarioEditando?.nombre} required className="h-10 bg-slate-50" placeholder="Ej: Marcos García" />
+                                        <Input name="nombre" defaultValue={usuarioEditando?.nombre} required className="h-10 bg-slate-50 rounded-xl" placeholder="Ej: Marcos García" />
                                     </div>
+
                                     <div className="space-y-1.5">
                                         <Label className="text-xs font-semibold">Usuario (Login) <span className="text-red-500">*</span></Label>
-                                        <Input name="username" defaultValue={usuarioEditando?.username} required className="h-10 bg-slate-50" placeholder="Ej: marcos" />
+                                        <Input name="username" defaultValue={usuarioEditando?.username} required className="h-10 bg-slate-50 rounded-xl font-mono text-xs" placeholder="Ej: marcos" />
                                     </div>
-                                    <div className="space-y-1.5 pt-2">
+
+                                    <div className="space-y-1.5">
                                         <Label className="text-xs font-semibold flex items-center gap-1">
-                                            <KeyRound className="h-3.5 w-3.5 text-slate-400" /> Contraseña {usuarioEditando && <span className="text-[10px] text-slate-400 font-normal ml-1">(Dejar vacío para no cambiar)</span>}
+                                            <Phone className="h-3.5 w-3.5 text-emerald-600" /> Teléfono / WhatsApp de Contacto
                                         </Label>
-                                        <Input name="password" type="password" required={!usuarioEditando} className="h-10 bg-slate-50" placeholder="••••••••" />
+                                        <Input name="telefono" defaultValue={usuarioEditando?.telefono} className="h-10 bg-slate-50 rounded-xl" placeholder="Ej: 1123456789 o 3329123456" />
+                                        <p className="text-[10px] text-slate-500">Permite al chofer llamar o escribir por WhatsApp al preventista si surge alguna duda en la entrega.</p>
+                                    </div>
+
+                                    <div className="space-y-1.5 pt-1">
+                                        <Label className="text-xs font-semibold flex items-center gap-1">
+                                            <KeyRound className="h-3.5 w-3.5 text-slate-400" /> Contraseña {usuarioEditando && <span className="text-[10px] text-slate-400 font-normal ml-1">(Vacío para mantener)</span>}
+                                        </Label>
+                                        <Input name="password" type="password" required={!usuarioEditando} className="h-10 bg-slate-50 rounded-xl" placeholder="••••••••" />
                                     </div>
 
                                     {/* SELECTOR DE ROL */}
                                     {usuarioEditando?.rol !== 'ADMIN' && usuarios.length > 0 && (
                                         <div className="space-y-1.5 pt-2">
-                                            <Label className="text-xs font-semibold flex items-center gap-1">Rol del Usuario</Label>
+                                            <Label className="text-xs font-semibold flex items-center gap-1">Rol Operativo del Usuario</Label>
                                             <Select value={rolSeleccionado} onValueChange={(val) => setRolSeleccionado(val || "CAJERO")}>
-                                                <SelectTrigger className="h-10 bg-slate-50">
+                                                <SelectTrigger className="h-10 bg-slate-50 rounded-xl">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="ADMIN">⭐ Administrador (Acceso Total)</SelectItem>
-                                                    <SelectItem value="CAJERO">🏪 Cajero (Acceso al ERP)</SelectItem>
-                                                    <SelectItem value="VENDEDOR">📱 Vendedor (Solo PWA)</SelectItem>
+                                                    <SelectItem value="VENDEDOR">📱 Preventista / Vendedor (PWA)</SelectItem>
+                                                    <SelectItem value="REPARTIDOR">🚚 Repartidor / Chofer (PWA)</SelectItem>
+                                                    <SelectItem value="MIXTO">🔄 Mixto (Preventa + Reparto)</SelectItem>
+                                                    <SelectItem value="CAJERO">🏪 Cajero / Facturación Mostrador (ERP)</SelectItem>
+                                                    <SelectItem value="ADMIN">⭐ Administrador General (Acceso Total)</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                             <p className="text-[10px] text-slate-500 leading-tight">
                                                 {rolSeleccionado === 'VENDEDOR'
-                                                    ? 'El vendedor solo accederá a la PWA de pedidos en calle. No verá el sistema ERP.'
-                                                    : rolSeleccionado === 'ADMIN'
-                                                        ? 'El administrador tiene acceso total e irrestricto a todos los módulos.'
-                                                        : 'El cajero accede al sistema ERP completo con los permisos que elijas.'}
+                                                    ? 'Acceso a PWA móvil para levantar pedidos en calle, combos y cobranzas.'
+                                                    : rolSeleccionado === 'REPARTIDOR'
+                                                        ? 'Acceso a PWA móvil para consultar sus hojas de ruta y confirmar entregas.'
+                                                        : rolSeleccionado === 'MIXTO'
+                                                            ? 'Acceso a PWA móvil con ambas funciones: levantar pedidos y hacer entregas en calle.'
+                                                            : rolSeleccionado === 'ADMIN'
+                                                                ? 'Acceso total e irrestricto a todo el sistema ERP.'
+                                                                : 'Acceso a terminal de mostrador y ERP con los permisos asignados.'}
                                             </p>
                                         </div>
                                     )}
 
                                     <div className="space-y-1.5 pt-2">
-                                        <Label className="text-xs font-semibold flex items-center gap-1">Sucursal Predeterminada (Punto de Venta)</Label>
+                                        <Label className="text-xs font-semibold flex items-center gap-1">Sucursal Predeterminada</Label>
                                         <Select value={sucursalSeleccionada} onValueChange={(val) => setSucursalSeleccionada(val as string)}>
-                                            <SelectTrigger className="h-10 bg-slate-50">
-                                                <SelectValue placeholder="Sin Sucursal Fija (Preguntar)" />
+                                            <SelectTrigger className="h-10 bg-slate-50 rounded-xl">
+                                                <SelectValue placeholder="Sin Sucursal Fija" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="null" className="font-semibold text-slate-400">Sin sucursal (Ninguna)</SelectItem>
@@ -314,29 +354,54 @@ export default function GestionUsuariosPage() {
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        <p className="text-[10px] text-slate-500 leading-tight">Si seleccionás una, este usuario abrirá su caja y factura siempre directamente en ese lugar.</p>
                                     </div>
-
-                                    {usuarios.length === 0 && (
-                                        <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-xs text-indigo-800 font-medium">
-                                            Este será el primer usuario del sistema. Se le asignará automáticamente el rol de ADMIN con acceso total a todo el ERP.
-                                        </div>
-                                    )}
                                 </div>
 
-                                {/* COLUMNA DERECHA: PERMISOS (Solo si no es ADMIN) */}
+                                {/* COLUMNA DERECHA: PERMISOS */}
                                 <div className="w-full md:w-1/2">
                                     <h4 className="font-bold text-xs uppercase text-slate-400 tracking-wider mb-4">Permisos y Accesos</h4>
 
                                     {usuarioEditando?.rol === "ADMIN" || usuarios.length === 0 || rolSeleccionado === "ADMIN" ? (
-                                        <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-6 text-center">
+                                        <div className="h-full flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center">
                                             <ShieldCheck className="h-12 w-12 text-slate-300 mb-2" />
-                                            <p className="font-bold text-slate-700">Modo Dueño</p>
-                                            <p className="text-xs text-slate-500 mt-1">Los administradores tienen acceso irrestricto a todos los módulos por defecto.</p>
+                                            <p className="font-bold text-slate-700">Modo Administrador</p>
+                                            <p className="text-xs text-slate-500 mt-1">Los administradores tienen acceso irrestricto a todos los módulos.</p>
+                                        </div>
+                                    ) : ['VENDEDOR', 'REPARTIDOR', 'MIXTO'].includes(rolSeleccionado) ? (
+                                        <div className="space-y-4">
+                                            <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-1">
+                                                <p className="font-bold flex items-center gap-1.5">
+                                                    <Smartphone className="h-4 w-4 text-amber-600" /> Perfil de Campo (PWA Móvil)
+                                                </p>
+                                                <p className="text-[11px] leading-relaxed">
+                                                    Este usuario ingresará desde su teléfono a <b>/vendedor</b>. No tendrá acceso a la configuración ni módulos contables de oficina.
+                                                </p>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                {MODULOS_CAMPO.map(mod => {
+                                                    const tienePermiso = permisosSeleccionados.includes(mod.id);
+                                                    return (
+                                                        <div
+                                                            key={mod.id}
+                                                            onClick={() => togglePermiso(mod.id)}
+                                                            className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${tienePermiso ? 'bg-indigo-50/50 border-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-200'}`}
+                                                        >
+                                                            <div className="mt-0.5">
+                                                                {tienePermiso ? <CheckSquare className="h-5 w-5 text-indigo-600" /> : <Square className="h-5 w-5 text-slate-300" />}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-bold text-xs text-slate-800">{mod.nombre}</p>
+                                                                <p className="text-[10px] text-slate-500 mt-0.5">{mod.desc}</p>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="space-y-2">
-                                            {(rolSeleccionado === 'VENDEDOR' ? MODULOS_VENDEDOR : MODULOS_SISTEMA).map(mod => {
+                                            {MODULOS_SISTEMA.map(mod => {
                                                 const tienePermiso = permisosSeleccionados.includes(mod.id);
                                                 return (
                                                     <div
@@ -348,26 +413,27 @@ export default function GestionUsuariosPage() {
                                                             {tienePermiso ? <CheckSquare className="h-5 w-5 text-indigo-600" /> : <Square className="h-5 w-5 text-slate-300" />}
                                                         </div>
                                                         <div>
-                                                            <p className={`font-bold text-sm ${tienePermiso ? 'text-indigo-900' : 'text-slate-700'}`}>{mod.nombre}</p>
-                                                            <p className="text-[10px] text-slate-500 leading-tight mt-0.5">{mod.desc}</p>
+                                                            <p className="font-bold text-xs text-slate-800">{mod.nombre}</p>
+                                                            <p className="text-[10px] text-slate-500 mt-0.5">{mod.desc}</p>
                                                         </div>
                                                     </div>
-                                                )
+                                                );
                                             })}
                                         </div>
                                     )}
                                 </div>
-
                             </div>
 
-                            <div className="p-5 border-t border-slate-100 bg-slate-50 mt-auto flex justify-end gap-3 shrink-0">
-                                <Button type="button" variant="outline" onClick={() => setShowModal(false)} className="bg-white">Cancelar</Button>
-                                <Button type="submit" disabled={isPending} className="bg-slate-900 hover:bg-slate-800 text-white font-medium px-8">
-                                    {isPending ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : "Guardar Accesos"}
+                            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+                                <Button type="button" variant="outline" onClick={() => setShowModal(false)} className="rounded-xl">
+                                    Cancelar
+                                </Button>
+                                <Button type="submit" disabled={isPending} className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-6 rounded-xl">
+                                    {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                    {usuarioEditando ? "Guardar Cambios" : "Crear Usuario"}
                                 </Button>
                             </div>
                         </form>
-
                     </Card>
                 </div>
             )}

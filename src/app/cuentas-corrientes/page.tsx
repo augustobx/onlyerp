@@ -13,6 +13,7 @@ import {
     registrarPagoCC,
     recalcularVentaVencida
 } from "@/app/actions/cuentas-corrientes";
+import { generarLinkWhatsAppSaldoCC } from "@/lib/whatsapp";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -284,7 +285,13 @@ export default function CuentasCorrientesPage() {
                                                 </Button>
                                                 {d.telefono && (
                                                     <a
-                                                        href={`https://wa.me/${d.telefono.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hola ${d.nombre}, te escribimos de Tendeco POS. Te detallamos que poseés un saldo pendiente actualizado en tu cuenta corriente de $${d.total_deuda.toFixed(2)}.\n\nPor favor, contactate para coordinar el pago o acercate a la sucursal. ¡Gracias por confiar en nosotros!`)}`}
+                                                        href={generarLinkWhatsAppSaldoCC({
+                                                            telefono: d.telefono,
+                                                            clienteNombre: d.nombre,
+                                                            saldoDeuda: d.total_deuda,
+                                                            facturasVencidas: d.ventas_vencidas,
+                                                            nombreEmpresa: "Sanu Distribuidora"
+                                                        })}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         title="Enviar recordatorio por WhatsApp"

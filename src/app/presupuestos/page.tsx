@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 
 import { getPresupuestos, cancelarPresupuesto, eliminarPresupuesto } from "@/app/actions/presupuestos";
+import { generarLinkWhatsAppPresupuesto } from "@/lib/whatsapp";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -174,7 +175,26 @@ export default function PresupuestosPage() {
                                             <p className="text-[10px] uppercase font-bold text-slate-400">Total</p>
                                             <p className="text-lg font-black text-emerald-600">${p.total.toFixed(2)}</p>
                                         </div>
-                                        <div className="flex gap-1">
+                                        <div className="flex gap-1 items-center">
+                                            {p.cliente?.telefono && (
+                                                <a
+                                                    href={generarLinkWhatsAppPresupuesto({
+                                                        telefono: p.cliente.telefono,
+                                                        clienteNombre: p.cliente.nombre_razon_social,
+                                                        numeroPresupuesto: p.numero,
+                                                        total: p.total,
+                                                        validezDias: p.dias_validez,
+                                                        urlPresupuesto: typeof window !== 'undefined' ? `${window.location.origin}/imprimir/presupuesto/${p.id}` : undefined
+                                                    })}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    title="Enviar por WhatsApp"
+                                                >
+                                                    <Button variant="outline" size="sm" className="h-8 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 font-bold px-2.5">
+                                                        WhatsApp
+                                                    </Button>
+                                                </a>
+                                            )}
                                             <Link href={`/presupuestos/${p.id}`}>
                                                 <Button variant="outline" size="sm" className="h-8 text-xs border-slate-200">
                                                     <Eye className="h-3 w-3 mr-1" /> Ver
