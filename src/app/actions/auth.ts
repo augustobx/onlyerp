@@ -100,7 +100,8 @@ export async function login(formData: FormData) {
     if (tenantActualizado?.estado === "SUSPENDIDO") {
       return {
         success: false,
-        error: "La suscripción de la empresa está suspendida. Contactá al soporte de NanoLabs.",
+        suspended: true,
+        error: "La suscripción de la empresa está suspendida.",
       };
     }
 

@@ -336,6 +336,47 @@ export async function getPlans() {
   });
 }
 
+
+export async function updatePlan(planId: number, data: {
+  nombre: string;
+  descripcion?: string | null;
+  precio_mensual: number;
+  limite_usuarios: number;
+  limite_sucursales: number;
+  limite_depositos: number;
+  modulos: string[];
+  activo: boolean;
+}) {
+  await requireSuperAdmin();
+
+  try {
+    await prisma.plan.update({
+      where: { id: planId },
+      data: {
+        nombre: data.nombre.trim(),
+        descripcion: data.descripcion?.trim() || null,
+        precio_mensual: data.precio_mensual,
+        limite_usuarios: data.limite_usuarios,
+        limite_sucursales: data.limite_sucursales,
+        limite_depositos: data.limite_depositos,
+        modulos: JSON.stringify(data.modulos),
+        activo: data.activo,
+      },
+    });
+
+    revalidatePath("/superadmin/planes");
+    revalidatePath("/superadmin/tenants");
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error updating plan:", error);
+    return {
+      success: false,
+      error: error.message || "Error al actualizar el plan.",
+    };
+  }
+}
+
 export async function registrarCobroSaaS(data: {
   tenantId: number;
   planId: number;

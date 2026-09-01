@@ -52,6 +52,7 @@ export async function proxy(request: NextRequest) {
         pathname.startsWith('/_next') ||
         pathname.startsWith('/api') ||
         pathname === '/login' ||
+        pathname === '/suspendido' ||
         pathname.startsWith('/superadmin') ||
         pathname.startsWith('/imprimir') ||
         pathname === '/manifest.json' ||

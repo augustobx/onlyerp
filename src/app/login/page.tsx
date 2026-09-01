@@ -28,6 +28,10 @@ export default function LoginPage() {
                 }
                 router.refresh(); // Refrescamos para que el layout lea la sesión
             } else {
+                if (res.suspended) {
+                    router.push("/suspendido");
+                    return;
+                }
                 setErrorMsg(res.error || "Error desconocido");
             }
         });
