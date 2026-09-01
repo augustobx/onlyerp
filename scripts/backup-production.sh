@@ -1,5 +1,5 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
 APP_DIR=/opt/apps/tommasi
 BACKUP_DIR=/opt/backups/tommasi/db
@@ -32,7 +32,7 @@ trap cleanup EXIT INT TERM
 
 cd "$APP_DIR"
 docker compose --env-file .env exec -T db sh -c \
-  'MYSQL_PWD="$MYSQL_PASSWORD" exec mysqldump --user="$MYSQL_USER" --single-transaction --quick --routines --triggers --events --hex-blob --default-character-set=utf8mb4 --set-gtid-purged=OFF "$MYSQL_DATABASE"' \
+  'MYSQL_PWD="$MYSQL_PASSWORD" exec mysqldump --user="$MYSQL_USER" --single-transaction --quick --routines --triggers --events --hex-blob --no-tablespaces --default-character-set=utf8mb4 --set-gtid-purged=OFF "$MYSQL_DATABASE"' \
   | gzip -9 >"$partial"
 
 test -s "$partial"
