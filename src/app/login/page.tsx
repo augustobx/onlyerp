@@ -42,8 +42,8 @@ export default function LoginPage() {
                     <div className="bg-white/20 p-4 rounded-2xl mb-4 backdrop-blur-sm">
                         <Store className="h-10 w-10 text-white" />
                     </div>
-                    <h1 className="text-2xl font-black tracking-tight">Tommasi POS</h1>
-                    <p className="text-indigo-200 text-sm mt-1 font-medium">Sistema de Gestión y Facturación</p>
+                    <h1 className="text-2xl font-black tracking-tight">OnlyERP</h1>
+                    <p className="text-indigo-200 text-sm mt-1 font-medium">Sistema de Gestión Empresarial</p>
                 </div>
 
                 {/* Formulario */}

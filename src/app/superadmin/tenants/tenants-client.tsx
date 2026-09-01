@@ -134,9 +134,9 @@ export function TenantsManagerClient({
                     <td className="py-4 px-6">
                       <div className="font-semibold text-white">{t.nombre}</div>
                       <div className="text-xs text-indigo-400 font-mono mt-0.5 flex items-center gap-1">
-                        {t.slug}.onlyerp.site
+                        {t.slug}.nanoapps.ar
                         <a
-                          href={`http://${t.slug}.localhost:3000`}
+                          href={`https://${t.slug}.nanoapps.ar`}
                           target="_blank"
                           rel="noreferrer"
                           className="text-slate-500 hover:text-slate-300"
@@ -257,7 +257,7 @@ export function TenantsManagerClient({
                       className="w-full bg-slate-950 border border-slate-800 rounded-l-xl px-3 py-2 text-sm text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
                     />
                     <span className="bg-slate-800 border border-l-0 border-slate-800 rounded-r-xl px-3 py-2 text-xs text-slate-400 font-mono">
-                      .onlyerp.site
+                      .nanoapps.ar
                     </span>
                   </div>
                 </div>

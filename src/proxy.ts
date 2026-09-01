@@ -33,12 +33,26 @@ const RUTAS_VENDEDOR_PERMITIDAS = ['/vendedor', '/login'];
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
+    // Si ya existe una sesión tenant válida, /login no debe volver a mostrarse.
+    // Esto evita renderizar AppShell + formulario de login simultáneamente.
+    const existingSessionToken = request.cookies.get('onlyerp_session')?.value;
+
+    if (pathname === '/login' && existingSessionToken) {
+        try {
+            await jwtVerify(existingSessionToken, getSessionKey());
+            return NextResponse.redirect(new URL('/', request.url));
+        } catch {
+            // Sesión inválida o vencida: permitir mostrar el login normalmente.
+        }
+    }
+
     // 1. Dejar pasar archivos del sistema, imágenes, PWA assets, y la página de login libremente.
     // También dejamos pasar la ruta /imprimir para que los tickets no pidan login al abrirse en ventana nueva.
     if (
         pathname.startsWith('/_next') ||
         pathname.startsWith('/api') ||
         pathname === '/login' ||
+        pathname.startsWith('/superadmin') ||
         pathname.startsWith('/imprimir') ||
         pathname === '/manifest.json' ||
         pathname === '/sw.js' ||
@@ -49,7 +63,7 @@ export async function proxy(request: NextRequest) {
     }
 
     // 2. Buscar si el usuario tiene el token de sesión guardado
-    const sessionToken = request.cookies.get('tendeco_session')?.value;
+    const sessionToken = existingSessionToken;
 
     // Si no tiene token, ¡afuera! Lo mandamos a loguearse.
     if (!sessionToken) {
