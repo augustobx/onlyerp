@@ -15,9 +15,31 @@ export type TenantContext = {
   modulos: string[];
 };
 
+const PLATFORM_HOST = (process.env.PLATFORM_HOST || "onlyerp.nanoapps.ar").toLowerCase();
+const BASE_DOMAIN = (process.env.TENANT_BASE_DOMAIN || "nanoapps.ar").toLowerCase();
+
+export function normalizeHostname(value: string | null | undefined) {
+  return (value || "").trim().toLowerCase().split(":")[0].replace(/\.$/, "");
+}
+
+function mapTenant(tenant: any): TenantContext {
+  return {
+    id: tenant.id,
+    slug: tenant.slug,
+    nombre: tenant.nombre,
+    estado: tenant.estado,
+    logoUrl: tenant.logo_url,
+    cuit: tenant.cuit,
+    planId: tenant.planId,
+    planCodigo: tenant.plan.codigo,
+    planNombre: tenant.plan.nombre,
+    modulos: calcularModulosEfectivos(tenant.plan.modulos, tenant.modulos_override),
+  };
+}
+
 /**
  * Calcula la lista de módulos efectivos para un tenant
- * Combinando los módulos del Plan base con los overrides del tenant.
+ * combinando los módulos del plan base con los overrides del tenant.
  */
 export function calcularModulosEfectivos(planModulosJson: string, overridesJson?: string | null): string[] {
   try {
@@ -28,144 +50,92 @@ export function calcularModulosEfectivos(planModulosJson: string, overridesJson?
     if (Array.isArray(overrides)) {
       return Array.from(new Set([...planModulos, ...overrides]));
     }
-    
-    // Si es un objeto tipo { "LOGISTICA": true, "AFIP": false }
+
     const modulosSet = new Set(planModulos);
     for (const [modulo, activo] of Object.entries(overrides)) {
-      if (activo) {
-        modulosSet.add(modulo);
-      } else {
-        modulosSet.delete(modulo);
-      }
+      if (activo) modulosSet.add(modulo);
+      else modulosSet.delete(modulo);
     }
     return Array.from(modulosSet);
-  } catch (error) {
+  } catch {
     return ["VENTAS", "CLIENTES", "PRODUCTOS"];
   }
 }
 
 /**
+ * Resolución determinística por hostname para producción y para nanoapps-router.
+ * No usa sesión ni fallback: si el host no pertenece a OnlyERP devuelve null.
+ */
+export async function resolveTenantByHostname(hostname: string): Promise<TenantContext | null> {
+  const cleanHost = normalizeHostname(hostname);
+  if (!cleanHost || cleanHost === PLATFORM_HOST) return null;
+
+  let tenant = null;
+
+  if (cleanHost.endsWith(`.${BASE_DOMAIN}`)) {
+    const slug = cleanHost.slice(0, -(BASE_DOMAIN.length + 1));
+    if (slug && !slug.includes(".")) {
+      tenant = await prisma.tenant.findUnique({
+        where: { slug },
+        include: { plan: true },
+      });
+    }
+  }
+
+  if (!tenant) {
+    tenant = await prisma.tenant.findFirst({
+      where: { dominio_personalizado: cleanHost },
+      include: { plan: true },
+    });
+  }
+
+  if (!tenant || tenant.estado === "CANCELADO") return null;
+  return mapTenant(tenant);
+}
+
+/**
  * Resuelve el Tenant actual en el servidor:
- * 1. A partir del Host header (subdominio o dominio personalizado).
- * 2. A partir de la sesión JWT del usuario autenticado.
- * 3. Fallback en desarrollo / local (tenant 'demo' o primer tenant activo).
+ * 1. Host / x-forwarded-host.
+ * 2. Sesión JWT del usuario autenticado.
+ * 3. Fallback solo en desarrollo local.
  */
 export async function getTenantContext(): Promise<TenantContext | null> {
   let host = "";
   try {
     const headerList = await headers();
-    host = headerList.get("host") || "";
+    host = headerList.get("x-forwarded-host")?.split(",")[0] || headerList.get("host") || "";
   } catch {
-    // Si se ejecuta fuera de contexto HTTP de Next.js
+    // Puede ejecutarse fuera del contexto HTTP de Next.js.
   }
 
-  // 1. Intentar resolver por subdominio / host
-  if (host && !host.startsWith("localhost") && !host.startsWith("127.0.0.1") && !host.startsWith("0.0.0.0")) {
-    const cleanHost = host.split(":")[0];
-    const parts = cleanHost.split(".");
-
-    // Caso subdominio: slug.onlyerp.site o slug.nanoapps.site (mínimo 3 partes)
-    if (parts.length >= 3) {
-      const slug = parts[0].toLowerCase();
-      // Evitar palabras reservadas de plataforma
-      if (slug !== "www" && slug !== "app" && slug !== "admin" && slug !== "proxy" && slug !== "portainer" && slug !== "superadmin") {
-        const tenant = await prisma.tenant.findUnique({
-          where: { slug },
-          include: { plan: true },
-        });
-
-        if (tenant && tenant.estado !== "CANCELADO") {
-          return {
-            id: tenant.id,
-            slug: tenant.slug,
-            nombre: tenant.nombre,
-            estado: tenant.estado,
-            logoUrl: tenant.logo_url,
-            cuit: tenant.cuit,
-            planId: tenant.planId,
-            planCodigo: tenant.plan.codigo,
-            planNombre: tenant.plan.nombre,
-            modulos: calcularModulosEfectivos(tenant.plan.modulos, tenant.modulos_override),
-          };
-        }
-      }
-    }
-
-    // Caso dominio personalizado
-    const customTenant = await prisma.tenant.findFirst({
-      where: { dominio_personalizado: cleanHost },
-      include: { plan: true },
-    });
-
-    if (customTenant && customTenant.estado !== "CANCELADO") {
-      return {
-        id: customTenant.id,
-        slug: customTenant.slug,
-        nombre: customTenant.nombre,
-        estado: customTenant.estado,
-        logoUrl: customTenant.logo_url,
-        cuit: customTenant.cuit,
-        planId: customTenant.planId,
-        planCodigo: customTenant.plan.codigo,
-        planNombre: customTenant.plan.nombre,
-        modulos: calcularModulosEfectivos(customTenant.plan.modulos, customTenant.modulos_override),
-      };
-    }
+  const hostname = normalizeHostname(host);
+  if (hostname && !["localhost", "127.0.0.1", "0.0.0.0"].includes(hostname)) {
+    const tenant = await resolveTenantByHostname(hostname);
+    if (tenant) return tenant;
   }
 
-  // 2. Intentar resolver por sesión del usuario logueado
   const session = await getSessionUser();
-  if (session && session.tenantId) {
+  if (session?.tenantId) {
     const tenant = await prisma.tenant.findUnique({
       where: { id: Number(session.tenantId) },
       include: { plan: true },
     });
 
-    if (tenant && tenant.estado !== "CANCELADO") {
-      return {
-        id: tenant.id,
-        slug: tenant.slug,
-        nombre: tenant.nombre,
-        estado: tenant.estado,
-        logoUrl: tenant.logo_url,
-        cuit: tenant.cuit,
-        planId: tenant.planId,
-        planCodigo: tenant.plan.codigo,
-        planNombre: tenant.plan.nombre,
-        modulos: calcularModulosEfectivos(tenant.plan.modulos, tenant.modulos_override),
-      };
-    }
+    if (tenant && tenant.estado !== "CANCELADO") return mapTenant(tenant);
   }
 
-  // 3. Fallback para desarrollo / primer tenant
-  const fallbackTenant = await prisma.tenant.findFirst({
-    where: { estado: "ACTIVO" },
-    include: { plan: true },
-    orderBy: { id: "asc" },
-  });
-
-  if (fallbackTenant) {
-    return {
-      id: fallbackTenant.id,
-      slug: fallbackTenant.slug,
-      nombre: fallbackTenant.nombre,
-      estado: fallbackTenant.estado,
-      logoUrl: fallbackTenant.logo_url,
-      cuit: fallbackTenant.cuit,
-      planId: fallbackTenant.planId,
-      planCodigo: fallbackTenant.plan.codigo,
-      planNombre: fallbackTenant.plan.nombre,
-      modulos: calcularModulosEfectivos(fallbackTenant.plan.modulos, fallbackTenant.modulos_override),
-    };
+  if (process.env.NODE_ENV !== "production") {
+    const fallbackTenant = await prisma.tenant.findFirst({
+      where: { estado: "ACTIVO" },
+      include: { plan: true },
+      orderBy: { id: "asc" },
+    });
+    if (fallbackTenant) return mapTenant(fallbackTenant);
   }
 
   return null;
 }
 
-/**
- * Exige que exista un tenant activo para la operación.
- * Lanza error si no se encuentra o si está suspendido.
- */
 export async function requireTenant(): Promise<TenantContext> {
   const tenant = await getTenantContext();
   if (!tenant) {
@@ -177,9 +147,6 @@ export async function requireTenant(): Promise<TenantContext> {
   return tenant;
 }
 
-/**
- * Verifica si un módulo específico está activo para el tenant actual.
- */
 export async function hasModule(moduleCode: string): Promise<boolean> {
   const tenant = await getTenantContext();
   if (!tenant) return false;
