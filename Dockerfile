@@ -29,6 +29,7 @@ ENV NODE_ENV=production
 COPY --from=deps --chown=prisma:nodejs /app/node_modules ./node_modules
 COPY --chown=prisma:nodejs package.json package-lock.json ./
 COPY --chown=prisma:nodejs prisma ./prisma
+RUN npx prisma generate
 USER prisma
 CMD ["npx", "prisma", "migrate", "deploy"]
 
