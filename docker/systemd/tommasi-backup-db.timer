@@ -1,0 +1,11 @@
+[Unit]
+Description=Backup de MySQL de Tommasi cada seis horas
+
+[Timer]
+OnCalendar=*-*-* 00/6:15:00
+RandomizedDelaySec=10m
+Persistent=true
+Unit=tommasi-backup-db.service
+
+[Install]
+WantedBy=timers.target

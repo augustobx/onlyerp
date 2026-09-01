@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
-
-const secretKey = process.env.SESSION_SECRET || 'tendeco-super-secret-key-2024';
-const key = new TextEncoder().encode(secretKey);
+import { getSessionKey } from '@/lib/session-secret';
 
 // Este diccionario conecta las rutas de la URL con los permisos que creamos en la base de datos
 const RUTAS_MODULOS: Record<string, string> = {
@@ -60,7 +58,7 @@ export async function proxy(request: NextRequest) {
 
     try {
         // 3. Desencriptar el token y leer quién es
-        const { payload } = await jwtVerify(sessionToken, key);
+        const { payload } = await jwtVerify(sessionToken, getSessionKey());
         const rol = payload.rol as string;
         const permisos = (payload.permisos as string[]) || [];
 

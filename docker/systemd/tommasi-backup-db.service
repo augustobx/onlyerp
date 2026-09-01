@@ -1,0 +1,13 @@
+[Unit]
+Description=Backup de MySQL de Tommasi
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/apps/tommasi/scripts/backup-production.sh
+User=root
+Group=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

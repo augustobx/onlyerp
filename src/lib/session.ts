@@ -1,8 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-
-const secretKey = process.env.SESSION_SECRET || 'tendeco-super-secret-key-2024';
-const key = new TextEncoder().encode(secretKey);
+import { getSessionKey } from "@/lib/session-secret";
 
 const COOKIE_NAME = 'tendeco_session';
 
@@ -62,7 +60,7 @@ export async function crearSesion(usuario: any) {
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
         .setExpirationTime(expUnix)
-        .sign(key);
+        .sign(getSessionKey());
 
     // 2. Le decimos al navegador que borre la Cookie a las 18:00
     const cookieStore = await cookies();
@@ -82,7 +80,7 @@ export async function getSessionUser() {
     if (!token) return null;
 
     try {
-        const { payload } = await jwtVerify(token, key);
+        const { payload } = await jwtVerify(token, getSessionKey());
         return payload;
     } catch (error) {
         // Si ya pasaron las 18:00, la firma falla por expiración y cae directo acá, invalidando la sesión

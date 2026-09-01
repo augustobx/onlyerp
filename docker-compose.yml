@@ -1,60 +1,105 @@
+name: tommasi
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
+  db:
+    image: mysql:8.0.43
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      TZ: ${TZ:-America/Argentina/Buenos_Aires}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=-03:00
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - internal
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u"$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" --silent
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    logging: *default-logging
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    profiles: ["tools"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      TZ: ${TZ:-America/Argentina/Buenos_Aires}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: "no"
+    logging: *default-logging
+
   web:
     build:
       context: .
       dockerfile: Dockerfile
-
-    container_name: tommasi-web
+      target: runner
+      secrets:
+        - next_server_actions_encryption_key
     restart: unless-stopped
-
-    ports:
-      - "3002:3000"
-
     environment:
       NODE_ENV: production
       PORT: 3000
-
-    env_file:
-      - .env
-
+      HOSTNAME: 0.0.0.0
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?NEXT_PUBLIC_APP_URL is required}
+      MOCK_AFIP: ${MOCK_AFIP:-false}
+      TZ: ${TZ:-America/Argentina/Buenos_Aires}
+    secrets:
+      - next_server_actions_encryption_key
     depends_on:
       db:
         condition: service_healthy
-
     networks:
-      - app_network
-
-  db:
-    image: mysql:8.0
-
-    container_name: tommasi-db
-    restart: unless-stopped
-
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: tomassidb
-      MYSQL_USER: sanuuser
-      MYSQL_PASSWORD: password_seguro
-
-    volumes:
-      - db_data:/var/lib/mysql
-
-    networks:
-      - app_network
-
+      - internal
+      - proxy
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "mysqladmin ping -h localhost -u root -prootpassword"
-        ]
-      interval: 10s
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 20s
       timeout: 5s
       retries: 5
+      start_period: 45s
+    logging: *default-logging
 
 networks:
-  app_network:
-    driver: bridge
+  internal:
+    name: tommasi_internal
+    internal: true
+  proxy:
+    external: true
+    name: proxy
 
 volumes:
-  db_data:
+  mysql_data:
+    name: tommasi_mysql_data
+
+secrets:
+  next_server_actions_encryption_key:
+    file: ./.secrets/next-server-actions.key

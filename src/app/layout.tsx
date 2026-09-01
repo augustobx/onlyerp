@@ -13,6 +13,7 @@ import { logout } from "@/app/actions/auth";
 import Link from "next/link";
 import prisma from "@/lib/prisma"; // IMPORTANTE: Agregamos Prisma para validar DB en tiempo real
 import { PedidosLink } from "@/components/pedidos-link";
+import { getSessionKey } from "@/lib/session-secret";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -47,8 +48,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   if (token) {
     try {
-      const secretKey = process.env.SESSION_SECRET || 'tendeco-super-secret-key-2024';
-      const { payload } = await jwtVerify(token, new TextEncoder().encode(secretKey));
+      const { payload } = await jwtVerify(token, getSessionKey());
 
       // =========================================================
       // NUEVO: EXPULSIÓN INMEDIATA SI ESTÁ SUSPENDIDO
