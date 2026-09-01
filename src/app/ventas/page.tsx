@@ -2,16 +2,20 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
     Search, ShoppingCart, Trash2, User, FileText, CheckCircle2, Loader2,
     Plus, X, PackageSearch, Truck, StickyNote, UserPlus, Printer,
-    CheckSquare, Square, AlertTriangle, CreditCard, MessageSquare, Eye
+    CheckSquare, Square, AlertTriangle, CreditCard, MessageSquare, Eye,
+    ClipboardList, Calendar
 } from "lucide-react";
 
 import { buscarClientes, buscarProductos, previsualizarProximoComprobante, registrarVenta, getConsumidorFinal, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
 import { getListasPrecio, getSucursales } from "@/app/actions/configuracion";
 import { crearCliente, getResumenFinancieroCliente } from "@/app/actions/clientes";
 import { getClientSession } from "@/app/actions/auth";
+import { getVendedoresActivos } from "@/app/actions/usuarios";
+import { registrarPedidoPWA } from "@/app/actions/pedidos";
 import {
     calcularPrecioConCascada, redondearPrecio,
     formatCantidad, getUnidadLabel, getStepParaMedicion,
@@ -86,6 +90,28 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
         { metodo_pago: "CONTADO", monto: "" }
     ]);
 
+    // Modo Operativo: VENTA (Directa mostrador) vs PEDIDO (Circuito preventa vendedores)
+    const [modoOperativo, setModoOperativo] = useState<'VENTA' | 'PEDIDO'>('VENTA');
+
+    // Vendedores Activos para Asignación
+    const [vendedores, setVendedores] = useState<any[]>([]);
+    const [vendedorAsignadoId, setVendedorAsignadoId] = useState<number | null>(null);
+
+    // Datos específicos de Pedido Preventa
+    const [fechaEntregaPedido, setFechaEntregaPedido] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [metodoPagoPedido, setMetodoPagoPedido] = useState<string>("CUENTA_CORRIENTE");
+    const [montoAbonadoPedido, setMontoAbonadoPedido] = useState<string>("");
+
+    // Modal Pedido Exitoso
+    const [pedidoExitoso, setPedidoExitoso] = useState<{
+        id: number;
+        numero: number;
+        vendedorNombre: string;
+        clienteNombre: string;
+        total: number;
+        fechaEntrega?: string;
+    } | null>(null);
+
     // Cuenta Corriente
     const [diasCongelamiento, setDiasCongelamiento] = useState<number>(15);
 
@@ -105,6 +131,15 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
 
             const session = await getClientSession();
             setUsuarioSesion(session);
+
+            const vends = await getVendedoresActivos();
+            setVendedores(vends);
+            const seshId = (session as any)?.id;
+            if (seshId) {
+                setVendedorAsignadoId(Number(seshId));
+            } else if (vends && vends.length > 0) {
+                setVendedorAsignadoId(vends[0].id);
+            }
 
             const sucursalesResult = await getSucursales();
             setSucursales(sucursalesResult);
@@ -514,30 +549,136 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
         });
     };
 
+    const handleProcesarPedido = () => {
+        if (!clienteSeleccionado) return toast.error("Debe seleccionar un cliente.");
+        if (carrito.length === 0) return toast.error("El carrito está vacío.");
+
+        const vendObj = vendedores.find(v => v.id === vendedorAsignadoId) || usuarioSesion;
+        const vendNombre = vendObj?.nombre || "Vendedor Asignado";
+
+        if (!confirm(`¿Confirmar PEDIDO DE VENTA por $${totalFinal.toFixed(2)} asignado a "${vendNombre}" para el circuito de despacho/reparto?`)) return;
+
+        startTransition(async () => {
+            const partesNotas: string[] = [];
+            if (detallesVenta?.trim()) partesNotas.push(`Detalles: ${detallesVenta.trim()}`);
+            if (comentarioVenta?.trim()) partesNotas.push(`Obs: ${comentarioVenta.trim()}`);
+            if (requiereEnvio && direccionEnvio?.trim()) partesNotas.push(`📍 Envío: ${direccionEnvio.trim()}`);
+
+            const payload = {
+                clienteId: clienteSeleccionado.id,
+                vendedorId: vendedorAsignadoId || usuarioSesion?.id,
+                listaPrecioId: Number(listaPrecioSeleccionada),
+                depositoId: depositoActivoId,
+                subtotal: subtotalCarrito,
+                descuento_global: montoDescuentoGlobal,
+                total: totalFinal,
+                notas: partesNotas.length > 0 ? partesNotas.join(" | ") : null,
+                fecha_entrega: fechaEntregaPedido || new Date().toISOString().split('T')[0],
+                metodoPago: metodoPagoPedido || "CUENTA_CORRIENTE",
+                montoAbonado: Number(montoAbonadoPedido) || 0,
+                carrito: carrito.map(item => ({
+                    productoId: item.productoId,
+                    nombre: item.nombre,
+                    cantidad: item.cantidad,
+                    precio_unitario: item.precio_unitario,
+                    descuento_individual: item.descuento_individual || 0,
+                    precio_final: item.precio_final,
+                    subtotal: item.subtotal,
+                    combo_nombre: item.combo_nombre || null
+                }))
+            };
+
+            const res = await registrarPedidoPWA(payload);
+
+            if (res.success && res.data) {
+                toast.success(`¡Pedido #${res.data.numero} derivado al circuito con éxito!`);
+                setPedidoExitoso({
+                    id: res.data.id,
+                    numero: res.data.numero,
+                    vendedorNombre: vendNombre,
+                    clienteNombre: clienteSeleccionado.nombre_razon_social,
+                    total: totalFinal,
+                    fechaEntrega: fechaEntregaPedido
+                });
+
+                // Reset automático
+                const cf = await getConsumidorFinal();
+                if (cf) {
+                    setClienteSeleccionado(cf);
+                    if (cf.lista_default_id) setListaPrecioSeleccionada(String(cf.lista_default_id));
+                } else {
+                    setClienteSeleccionado(null);
+                    setListaPrecioSeleccionada("");
+                }
+                setCarrito([]);
+                setDescuentoGlobal(0);
+                setRequiereEnvio(false);
+                setDireccionEnvio("");
+                setDetallesVenta("");
+                setComentarioVenta("");
+                setMontoAbonadoPedido("");
+            } else {
+                toast.error(res.error || "Error al registrar el pedido.");
+            }
+        });
+    };
+
     return (
         <div className="flex flex-col gap-4 w-full h-full min-h-[calc(100vh-6rem)] relative">
 
-            {/* HEADER MODERNO CON SELECTOR DE SUCURSAL */}
-            <div className="flex flex-col md:flex-row items-center justify-between bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-4 shadow-sm shrink-0">
-                <div className="flex items-center gap-3 w-full md:w-auto mb-4 md:mb-0">
-                    <div className="bg-indigo-50 dark:bg-indigo-500/10 p-2.5 rounded-lg shrink-0">
-                        <ShoppingCart className="h-6 w-6 text-indigo-600" />
+            {/* HEADER MODERNO CON SELECTOR DE MODO Y SUCURSAL */}
+            <div className="flex flex-col xl:flex-row items-center justify-between bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-4 shadow-sm shrink-0 gap-4">
+                <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+                    <div className={`p-2.5 rounded-lg shrink-0 transition-colors ${modoOperativo === 'PEDIDO' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600'}`}>
+                        {modoOperativo === 'PEDIDO' ? <ClipboardList className="h-6 w-6" /> : <ShoppingCart className="h-6 w-6" />}
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Terminal de Ventas</h2>
-                        <p className="text-sm text-slate-500 hidden sm:block">Facturación rápida</p>
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">
+                            {modoOperativo === 'PEDIDO' ? "Carga de Pedido de Venta" : "Terminal de Ventas"}
+                        </h2>
+                        <p className="text-xs text-slate-500 hidden sm:block">
+                            {modoOperativo === 'PEDIDO' ? "Circuito de preventa, armado y despacho" : "Facturación rápida en mostrador"}
+                        </p>
+                    </div>
+
+                    {/* SELECTOR DE MODO */}
+                    <div className="flex bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl border border-slate-200 dark:border-zinc-700 sm:ml-2">
+                        <button
+                            type="button"
+                            onClick={() => setModoOperativo('VENTA')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                modoOperativo === 'VENTA'
+                                    ? 'bg-white dark:bg-zinc-900 text-indigo-600 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                            }`}
+                        >
+                            <ShoppingCart className="h-3.5 w-3.5" />
+                            Venta Directa
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setModoOperativo('PEDIDO')}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                modoOperativo === 'PEDIDO'
+                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                            }`}
+                        >
+                            <ClipboardList className="h-3.5 w-3.5" />
+                            Pedido (Circuito)
+                        </button>
                     </div>
                 </div>
 
                 {/* SELECTOR DE SUCURSAL - SOLO PARA ADMINS O USUARIOS GLOBALES */}
                 {usuarioSesion?.rol === 'ADMIN' && (
-                    <div className="flex flex-col items-start gap-1 w-full md:w-auto mb-4 md:mb-0 md:ml-4">
+                    <div className="flex flex-col items-start gap-1 w-full sm:w-auto">
                         <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Sucursal Operativa</Label>
                         <Select
                             value={String(sucursalActivaId || "")}
                             onValueChange={(val) => setSucursalActivaId(Number(val))}
                         >
-                            <SelectTrigger className="h-9 w-full md:w-[220px] bg-slate-50 dark:bg-zinc-800/50">
+                            <SelectTrigger className="h-9 w-full sm:w-[190px] bg-slate-50 dark:bg-zinc-800/50">
                                 <SelectValue placeholder="Seleccione Sucursal..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -549,31 +690,74 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                     </div>
                 )}
 
-                <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto ml-auto">
-                    <div className="flex flex-col items-center sm:items-start gap-1">
-                        <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Fecha</Label>
-                        <Input type="date" value={fechaEmision} onChange={(e) => setFechaEmision(e.target.value)} className="h-9 text-sm font-medium bg-slate-50 dark:bg-zinc-800/50 border-slate-200 dark:border-zinc-700 w-[140px]" />
+                {modoOperativo === 'VENTA' ? (
+                    <div className="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto xl:ml-auto">
+                        <div className="flex flex-col items-center sm:items-start gap-1">
+                            <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Fecha</Label>
+                            <Input type="date" value={fechaEmision} onChange={(e) => setFechaEmision(e.target.value)} className="h-9 text-sm font-medium bg-slate-50 dark:bg-zinc-800/50 border-slate-200 dark:border-zinc-700 w-[140px]" />
+                        </div>
+                        <div className="flex flex-col items-center sm:items-start gap-1">
+                            <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Comprobante</Label>
+                            <Select value={tipoComprobante} onValueChange={(v) => setTipoComprobante(v || "")}>
+                                <SelectTrigger className="h-9 text-sm font-bold bg-slate-50 dark:bg-zinc-800/50 border-slate-200 dark:border-zinc-700 w-[190px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="COMPROBANTE_X">Ticket No Fiscal (X)</SelectItem>
+                                    <SelectItem value="FACTURA_A">Factura Fiscal A</SelectItem>
+                                    <SelectItem value="FACTURA_B">Factura Fiscal B</SelectItem>
+                                    <SelectItem value="FACTURA_C">Factura Fiscal C</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="hidden sm:block h-10 w-px bg-slate-200 dark:bg-zinc-800 mx-2"></div>
+                        <div className="text-center sm:text-right px-2">
+                            <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Nº Documento</p>
+                            <p className="text-lg font-mono font-bold text-slate-700 dark:text-slate-300">000{comprobanteNumeros.punto_venta}-{comprobanteNumeros.numero_str}</p>
+                        </div>
                     </div>
-                    <div className="flex flex-col items-center sm:items-start gap-1">
-                        <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Comprobante</Label>
-                        <Select value={tipoComprobante} onValueChange={(v) => setTipoComprobante(v || "")}>
-                            <SelectTrigger className="h-9 text-sm font-bold bg-slate-50 dark:bg-zinc-800/50 border-slate-200 dark:border-zinc-700 w-[190px]">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="COMPROBANTE_X">Ticket No Fiscal (X)</SelectItem>
-                                <SelectItem value="FACTURA_A">Factura Fiscal A</SelectItem>
-                                <SelectItem value="FACTURA_B">Factura Fiscal B</SelectItem>
-                                <SelectItem value="FACTURA_C">Factura Fiscal C</SelectItem>
-                            </SelectContent>
-                        </Select>
+                ) : (
+                    <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto xl:ml-auto">
+                        <div className="flex flex-col items-start gap-1">
+                            <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold flex items-center gap-1">
+                                <User className="h-3 w-3 text-indigo-600" /> Vendedor Asignado
+                            </Label>
+                            <Select
+                                value={String(vendedorAsignadoId || "")}
+                                onValueChange={(v) => setVendedorAsignadoId(Number(v))}
+                            >
+                                <SelectTrigger className="h-9 w-[180px] text-xs font-bold bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800 text-indigo-900 dark:text-indigo-200">
+                                    <SelectValue placeholder="Elegir vendedor..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {vendedores.map(v => (
+                                        <SelectItem key={v.id} value={String(v.id)}>
+                                            {v.nombre} {v.rol === 'ADMIN' ? '(Admin)' : ''}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex flex-col items-start gap-1">
+                            <Label className="text-[10px] uppercase tracking-widest text-slate-400 font-bold flex items-center gap-1">
+                                <Calendar className="h-3 w-3 text-indigo-600" /> Fecha Entrega
+                            </Label>
+                            <Input
+                                type="date"
+                                value={fechaEntregaPedido}
+                                onChange={(e) => setFechaEntregaPedido(e.target.value)}
+                                className="h-9 text-xs font-bold bg-slate-50 dark:bg-zinc-800/50 border-slate-200 dark:border-zinc-700 w-[140px]"
+                            />
+                        </div>
+                        <div className="hidden sm:block h-10 w-px bg-slate-200 dark:bg-zinc-800 mx-1"></div>
+                        <div className="text-right">
+                            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border-amber-300 font-bold text-xs">
+                                ⏳ Estado: PENDIENTE
+                            </Badge>
+                            <p className="text-[10px] text-slate-400 font-medium mt-0.5">Reserva stock preventivo</p>
+                        </div>
                     </div>
-                    <div className="hidden sm:block h-10 w-px bg-slate-200 dark:bg-zinc-800 mx-2"></div>
-                    <div className="text-center sm:text-right px-2">
-                        <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Nº Documento</p>
-                        <p className="text-lg font-mono font-bold text-slate-700 dark:text-slate-300">000{comprobanteNumeros.punto_venta}-{comprobanteNumeros.numero_str}</p>
-                    </div>
-                </div>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1">
@@ -775,128 +959,261 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                             </div>
 
                             <div className="mt-4 space-y-4">
-                                <div className="p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-xl border border-slate-200 dark:border-zinc-700 flex flex-col items-center justify-center text-center">
-                                    <span className="text-[10px] font-bold uppercase text-slate-500 tracking-widest mb-1">Total a Cobrar</span>
-                                    <span className="text-4xl font-black tracking-tighter text-indigo-600 dark:text-indigo-400">${totalFinal.toFixed(2)}</span>
-                                </div>
+                                {modoOperativo === 'VENTA' ? (
+                                    <>
+                                        <div className="p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-xl border border-slate-200 dark:border-zinc-700 flex flex-col items-center justify-center text-center">
+                                            <span className="text-[10px] font-bold uppercase text-slate-500 tracking-widest mb-1">Total a Cobrar</span>
+                                            <span className="text-4xl font-black tracking-tighter text-indigo-600 dark:text-indigo-400">${totalFinal.toFixed(2)}</span>
+                                        </div>
 
-                                {/* === PAGOS MÚLTIPLES === */}
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <Label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1">
-                                            <CreditCard className="h-3 w-3" /> Métodos de Pago
-                                        </Label>
-                                        <Button type="button" variant="ghost" size="sm" onClick={agregarLineaPago} className="text-indigo-600 hover:text-indigo-700 text-xs h-7">
-                                            <Plus className="h-3 w-3 mr-1" /> Agregar
-                                        </Button>
-                                    </div>
-
-                                    {pagos.map((pago, i) => (
-                                        <div key={i} className="flex flex-col gap-2 p-2 mb-2 bg-slate-50 dark:bg-zinc-800/10 rounded-lg border border-slate-100 dark:border-zinc-800/50">
-                                            <div className="flex gap-2 items-center">
-                                                <Select value={pago.metodo_pago} onValueChange={(val) => {
-                                                    actualizarPago(i, "metodo_pago", val || "");
-                                                    if (val === "SALDO_A_FAVOR" && resumenFinanciero?.saldo_a_favor > 0) {
-                                                        const sumaOtros = pagos.filter((_, idx) => idx !== i).reduce((a, b) => a + (Number(b.monto) || 0), 0);
-                                                        const maxAFavor = Math.min(resumenFinanciero.saldo_a_favor, Math.max(0, totalFinal - sumaOtros));
-                                                        actualizarPago(i, "monto", maxAFavor.toFixed(2));
-                                                    }
-                                                }}>
-                                                    <SelectTrigger className="bg-white dark:bg-zinc-900 h-9 font-semibold border-slate-200 dark:border-zinc-700 flex-1 text-xs">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="CONTADO">Efectivo</SelectItem>
-                                                        <SelectItem value="CUENTA_CORRIENTE" className="text-orange-600 font-bold">Cta. Corriente</SelectItem>
-                                                        <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
-                                                        <SelectItem value="TARJETA">Tarjeta</SelectItem>
-                                                        {resumenFinanciero && resumenFinanciero.saldo_a_favor > 0 && (
-                                                            <SelectItem value="SALDO_A_FAVOR" className="text-emerald-600 font-bold">
-                                                                Usar Saldo a Favor (Disp: ${resumenFinanciero.saldo_a_favor.toFixed(2)})
-                                                            </SelectItem>
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
-                                                <div className="relative w-28">
-                                                    <span className="absolute left-2 top-2 text-slate-400 text-xs">$</span>
-                                                    <Input type="number" step="0.01" placeholder={pagos.length === 1 ? totalFinal.toFixed(2) : "0.00"}
-                                                        value={pago.monto} onChange={(e) => actualizarPago(i, "monto", e.target.value)}
-                                                        className="h-9 pl-5 text-right font-bold bg-white dark:bg-zinc-900 border-slate-200" />
-                                                </div>
-                                                {pagos.length > 1 && (
-                                                    <Button variant="ghost" size="icon" onClick={() => eliminarLineaPago(i)} className="h-8 w-8 text-red-400 hover:text-red-600 shrink-0">
-                                                        <X className="h-3 w-3" />
-                                                    </Button>
-                                                )}
+                                        {/* === PAGOS MÚLTIPLES (VENTA DIRECTA) === */}
+                                        <div className="space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1">
+                                                    <CreditCard className="h-3 w-3" /> Métodos de Pago
+                                                </Label>
+                                                <Button type="button" variant="ghost" size="sm" onClick={agregarLineaPago} className="text-indigo-600 hover:text-indigo-700 text-xs h-7">
+                                                    <Plus className="h-3 w-3 mr-1" /> Agregar
+                                                </Button>
                                             </div>
-                                            {pago.metodo_pago === 'TARJETA' && (
-                                                <div className="flex gap-2 items-center flex-wrap pt-1 animate-in fade-in">
-                                                    <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-2 py-1 rounded-md border border-slate-200 dark:border-zinc-700">
-                                                        <Label className="text-[10px] uppercase font-bold text-slate-500">Cuotas</Label>
-                                                        <Input type="number" placeholder="1" className="h-7 w-16 text-center text-xs font-bold bg-slate-50 dark:bg-zinc-800 border-slate-200" value={pago.cuotas || ""} onChange={(e) => actualizarPago(i, "cuotas", e.target.value)} />
+
+                                            {pagos.map((pago, i) => (
+                                                <div key={i} className="flex flex-col gap-2 p-2 mb-2 bg-slate-50 dark:bg-zinc-800/10 rounded-lg border border-slate-100 dark:border-zinc-800/50">
+                                                    <div className="flex gap-2 items-center">
+                                                        <Select value={pago.metodo_pago} onValueChange={(val) => {
+                                                            actualizarPago(i, "metodo_pago", val || "");
+                                                            if (val === "SALDO_A_FAVOR" && resumenFinanciero?.saldo_a_favor > 0) {
+                                                                const sumaOtros = pagos.filter((_, idx) => idx !== i).reduce((a, b) => a + (Number(b.monto) || 0), 0);
+                                                                const maxAFavor = Math.min(resumenFinanciero.saldo_a_favor, Math.max(0, totalFinal - sumaOtros));
+                                                                actualizarPago(i, "monto", maxAFavor.toFixed(2));
+                                                            }
+                                                        }}>
+                                                            <SelectTrigger className="bg-white dark:bg-zinc-900 h-9 font-semibold border-slate-200 dark:border-zinc-700 flex-1 text-xs">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="CONTADO">Efectivo</SelectItem>
+                                                                <SelectItem value="CUENTA_CORRIENTE" className="text-orange-600 font-bold">Cta. Corriente</SelectItem>
+                                                                <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
+                                                                <SelectItem value="TARJETA">Tarjeta</SelectItem>
+                                                                {resumenFinanciero && resumenFinanciero.saldo_a_favor > 0 && (
+                                                                    <SelectItem value="SALDO_A_FAVOR" className="text-emerald-600 font-bold">
+                                                                        Usar Saldo a Favor (Disp: ${resumenFinanciero.saldo_a_favor.toFixed(2)})
+                                                                    </SelectItem>
+                                                                )}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <div className="relative w-28">
+                                                            <span className="absolute left-2 top-2 text-slate-400 text-xs">$</span>
+                                                            <Input type="number" step="0.01" placeholder={pagos.length === 1 ? totalFinal.toFixed(2) : "0.00"}
+                                                                value={pago.monto} onChange={(e) => actualizarPago(i, "monto", e.target.value)}
+                                                                className="h-9 pl-5 text-right font-bold bg-white dark:bg-zinc-900 border-slate-200" />
+                                                        </div>
+                                                        {pagos.length > 1 && (
+                                                            <Button variant="ghost" size="icon" onClick={() => eliminarLineaPago(i)} className="h-8 w-8 text-red-400 hover:text-red-600 shrink-0">
+                                                                <X className="h-3 w-3" />
+                                                            </Button>
+                                                        )}
                                                     </div>
-                                                    <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-2 py-1 rounded-md border border-indigo-200 dark:border-indigo-500/20 bg-indigo-50/30">
-                                                        <Label className="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400">% Recargo</Label>
-                                                        <Input type="number" placeholder="0" className="h-7 w-16 text-center text-xs font-bold border-indigo-200 bg-white" value={pago.recargo_porcentaje || ""} onChange={(e) => actualizarPago(i, "recargo_porcentaje", e.target.value)} />
+                                                    {pago.metodo_pago === 'TARJETA' && (
+                                                        <div className="flex gap-2 items-center flex-wrap pt-1 animate-in fade-in">
+                                                            <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-2 py-1 rounded-md border border-slate-200 dark:border-zinc-700">
+                                                                <Label className="text-[10px] uppercase font-bold text-slate-500">Cuotas</Label>
+                                                                <Input type="number" placeholder="1" className="h-7 w-16 text-center text-xs font-bold bg-slate-50 dark:bg-zinc-800 border-slate-200" value={pago.cuotas || ""} onChange={(e) => actualizarPago(i, "cuotas", e.target.value)} />
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 px-2 py-1 rounded-md border border-indigo-200 dark:border-indigo-500/20 bg-indigo-50/30">
+                                                                <Label className="text-[10px] uppercase font-bold text-indigo-600 dark:text-indigo-400">% Recargo</Label>
+                                                                <Input type="number" placeholder="0" className="h-7 w-16 text-center text-xs font-bold border-indigo-200 bg-white" value={pago.recargo_porcentaje || ""} onChange={(e) => actualizarPago(i, "recargo_porcentaje", e.target.value)} />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+
+                                            {pagos.length >= 1 && (
+                                                <div className={`mt-2 flex items-center justify-between p-3 rounded-lg border ${totalPagos > totalFinal + 0.01 ? 'bg-emerald-50 border-emerald-200' : totalPagos < totalFinal - 0.01 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
+                                                    <div>
+                                                        <p className="text-[10px] uppercase font-bold text-slate-500">Suma ingresada</p>
+                                                        <p className={`font-bold ${totalPagos > totalFinal + 0.01 ? 'text-emerald-700' : totalPagos < totalFinal - 0.01 ? 'text-red-600' : 'text-slate-700'}`}>${totalPagos.toFixed(2)}</p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        {totalPagos < totalFinal - 0.01 && (
+                                                            <>
+                                                                <Label className="text-[10px] uppercase text-red-600 font-bold tracking-wider">Falta abonar</Label>
+                                                                <p className="text-xl font-black text-red-600">${(totalFinal - totalPagos).toFixed(2)}</p>
+                                                            </>
+                                                        )}
+                                                        {totalPagos > totalFinal + 0.01 && (
+                                                            pagos.some(p => p.metodo_pago === 'CONTADO') ? (
+                                                                <>
+                                                                    <Label className="text-[10px] uppercase text-emerald-600 font-bold tracking-wider">Vuelto</Label>
+                                                                    <p className="text-xl font-black text-emerald-600">${(totalPagos - totalFinal).toFixed(2)}</p>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <Label className="text-[10px] uppercase text-red-600 font-bold tracking-wider">Excede el total!</Label>
+                                                                    <p className="text-sm font-bold text-red-600">No hay efectivo para vuelto</p>
+                                                                </>
+                                                            )
+                                                        )}
+                                                        {Math.abs(totalPagos - totalFinal) <= 0.01 && (
+                                                            <div className="flex items-center gap-1 text-emerald-600 font-bold">
+                                                                <CheckCircle2 className="h-5 w-5" /> Coincide
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}
-                                        </div>
-                                    ))}
 
-                                    {pagos.length >= 1 && (
-                                        <div className={`mt-2 flex items-center justify-between p-3 rounded-lg border ${totalPagos > totalFinal + 0.01 ? 'bg-emerald-50 border-emerald-200' : totalPagos < totalFinal - 0.01 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
-                                            <div>
-                                                <p className="text-[10px] uppercase font-bold text-slate-500">Suma ingresada</p>
-                                                <p className={`font-bold ${totalPagos > totalFinal + 0.01 ? 'text-emerald-700' : totalPagos < totalFinal - 0.01 ? 'text-red-600' : 'text-slate-700'}`}>${totalPagos.toFixed(2)}</p>
+                                            {tieneCuentaCorriente && (
+                                                <div className="p-3 bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 rounded-lg mt-2 animate-in fade-in">
+                                                    <Label className="text-[10px] uppercase text-orange-600 dark:text-orange-400 font-bold tracking-wider block mb-1">Plazo Congelado (Días)</Label>
+                                                    <Input type="number" value={diasCongelamiento} onChange={(e) => setDiasCongelamiento(Number(e.target.value))} className="w-20 h-8 font-mono font-medium bg-white dark:bg-zinc-900 border-orange-200 dark:border-orange-500/30 text-center" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex gap-2 mt-4">
+                                            <Button variant="outline" size="lg" onClick={() => { if(!confirm('¿Cancelar y vaciar pestaña?')) return; setClienteSeleccionado(null); setCarrito([]); setDescuentoGlobal(0); setPagos([{metodo_pago:'CONTADO', monto:''}]); setShowClienteModal(false); }} className="w-1/3 h-12 text-red-500 border-red-200 hover:bg-red-50 font-bold">
+                                                Cancelar
+                                            </Button>
+                                            <Button size="lg" onClick={handleProcesarVenta} disabled={isPending || carrito.length === 0 || !clienteSeleccionado}
+                                                className="w-2/3 h-12 text-base font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all">
+                                                {isPending ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <CheckCircle2 className="h-5 w-5 mr-2" />}
+                                                Confirmar Venta
+                                            </Button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* === CONFIGURACIÓN DE PEDIDO (CIRCUITO VENDEDORES) === */}
+                                        <div className="p-4 bg-indigo-50/70 dark:bg-indigo-950/30 rounded-xl border border-indigo-200 dark:border-indigo-800/60 flex flex-col items-center justify-center text-center">
+                                            <span className="text-[10px] font-bold uppercase text-indigo-700 dark:text-indigo-300 tracking-widest mb-1">
+                                                Total del Pedido
+                                            </span>
+                                            <span className="text-4xl font-black tracking-tighter text-indigo-600 dark:text-indigo-400">
+                                                ${totalFinal.toFixed(2)}
+                                            </span>
+                                        </div>
+
+                                        <div className="space-y-3 bg-slate-50 dark:bg-zinc-800/40 p-3.5 rounded-xl border border-slate-200 dark:border-zinc-700">
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1">
+                                                    <User className="h-3 w-3 text-indigo-600" /> Vendedor Asignado al Pedido
+                                                </Label>
+                                                <Select
+                                                    value={String(vendedorAsignadoId || "")}
+                                                    onValueChange={(val) => setVendedorAsignadoId(Number(val))}
+                                                >
+                                                    <SelectTrigger className="bg-white dark:bg-zinc-900 h-9 font-bold border-slate-200 dark:border-zinc-700 text-xs">
+                                                        <SelectValue placeholder="Seleccione vendedor..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {vendedores.map((v: any) => (
+                                                            <SelectItem key={v.id} value={String(v.id)}>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-bold">{v.nombre}</span>
+                                                                    <span className="text-[10px] text-slate-400">({v.rol})</span>
+                                                                </div>
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
-                                            <div className="text-right">
-                                                {totalPagos < totalFinal - 0.01 && (
-                                                    <>
-                                                        <Label className="text-[10px] uppercase text-red-600 font-bold tracking-wider">Falta abonar</Label>
-                                                        <p className="text-xl font-black text-red-600">${(totalFinal - totalPagos).toFixed(2)}</p>
-                                                    </>
-                                                )}
-                                                {totalPagos > totalFinal + 0.01 && (
-                                                    pagos.some(p => p.metodo_pago === 'CONTADO') ? (
-                                                        <>
-                                                            <Label className="text-[10px] uppercase text-emerald-600 font-bold tracking-wider">Vuelto</Label>
-                                                            <p className="text-xl font-black text-emerald-600">${(totalPagos - totalFinal).toFixed(2)}</p>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Label className="text-[10px] uppercase text-red-600 font-bold tracking-wider">Excede el total!</Label>
-                                                            <p className="text-sm font-bold text-red-600">No hay efectivo para vuelto</p>
-                                                        </>
-                                                    )
-                                                )}
-                                                {Math.abs(totalPagos - totalFinal) <= 0.01 && (
-                                                    <div className="flex items-center gap-1 text-emerald-600 font-bold">
-                                                        <CheckCircle2 className="h-5 w-5" /> Coincide
-                                                    </div>
-                                                )}
+
+                                            {/* Fecha de Entrega */}
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1">
+                                                    <Calendar className="h-3 w-3 text-indigo-600" /> Fecha Programada de Entrega
+                                                </Label>
+                                                <div className="flex gap-1.5 items-center">
+                                                    <Input
+                                                        type="date"
+                                                        value={fechaEntregaPedido}
+                                                        onChange={(e) => setFechaEntregaPedido(e.target.value)}
+                                                        className="h-9 bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-700 text-xs font-bold flex-1"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setFechaEntregaPedido(new Date().toISOString().split('T')[0])}
+                                                        className="h-9 px-2.5 text-xs font-bold bg-white dark:bg-zinc-800 text-indigo-600 border-slate-200 shrink-0"
+                                                    >
+                                                        Hoy
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const m = new Date();
+                                                            m.setDate(m.getDate() + 1);
+                                                            setFechaEntregaPedido(m.toISOString().split('T')[0]);
+                                                        }}
+                                                        className="h-9 px-2.5 text-xs font-bold bg-white dark:bg-zinc-800 text-indigo-600 border-slate-200 shrink-0"
+                                                    >
+                                                        Mañana
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            {/* Condición / Cobro previsto */}
+                                            <div className="space-y-1">
+                                                <Label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider flex items-center gap-1">
+                                                    <CreditCard className="h-3 w-3 text-indigo-600" /> Condición de Cobro Prevista
+                                                </Label>
+                                                <Select value={metodoPagoPedido} onValueChange={(v) => setMetodoPagoPedido(v || "CUENTA_CORRIENTE")}>
+                                                    <SelectTrigger className="bg-white dark:bg-zinc-900 h-9 font-semibold border-slate-200 dark:border-zinc-700 text-xs">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="CUENTA_CORRIENTE">Cuenta Corriente (A saldo en el ERP)</SelectItem>
+                                                        <SelectItem value="EFECTIVO">Efectivo contra entrega</SelectItem>
+                                                        <SelectItem value="TRANSFERENCIA">Transferencia Bancaria</SelectItem>
+                                                        <SelectItem value="TARJETA">Tarjeta / Débito</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            {/* Monto de seña opcional */}
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-center">
+                                                    <Label className="text-[10px] uppercase text-slate-500 font-bold">Seña / Anticipo (Opcional)</Label>
+                                                    <span className="text-[10px] text-slate-400">$0 si no abonó</span>
+                                                </div>
+                                                <div className="relative">
+                                                    <span className="absolute left-2.5 top-2 text-slate-400 text-xs font-bold">$</span>
+                                                    <Input
+                                                        type="number"
+                                                        step="0.01"
+                                                        placeholder="0.00"
+                                                        value={montoAbonadoPedido}
+                                                        onChange={(e) => setMontoAbonadoPedido(e.target.value)}
+                                                        className="h-9 pl-6 bg-white dark:bg-zinc-900 border-slate-200 text-xs font-bold text-right"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-amber-50 dark:bg-amber-950/30 p-2.5 rounded-lg border border-amber-200/80 dark:border-amber-800/50 text-[11px] text-amber-900 dark:text-amber-300">
+                                                <p className="leading-snug font-medium">
+                                                    📦 Entrará como <strong>Pedido Pendiente</strong>, descontará stock preventivo y se derivará a <strong>Despacho</strong> para su armado y entrega.
+                                                </p>
                                             </div>
                                         </div>
-                                    )}
 
-                                    {tieneCuentaCorriente && (
-                                        <div className="p-3 bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 rounded-lg mt-2 animate-in fade-in">
-                                            <Label className="text-[10px] uppercase text-orange-600 dark:text-orange-400 font-bold tracking-wider block mb-1">Plazo Congelado (Días)</Label>
-                                            <Input type="number" value={diasCongelamiento} onChange={(e) => setDiasCongelamiento(Number(e.target.value))} className="w-20 h-8 font-mono font-medium bg-white dark:bg-zinc-900 border-orange-200 dark:border-orange-500/30 text-center" />
+                                        <div className="flex gap-2 mt-4">
+                                            <Button variant="outline" size="lg" onClick={() => { if(!confirm('¿Cancelar y vaciar pestaña?')) return; setClienteSeleccionado(null); setCarrito([]); setDescuentoGlobal(0); setMontoAbonadoPedido(""); setShowClienteModal(false); }} className="w-1/3 h-12 text-red-500 border-red-200 hover:bg-red-50 font-bold">
+                                                Cancelar
+                                            </Button>
+                                            <Button size="lg" onClick={handleProcesarPedido} disabled={isPending || carrito.length === 0 || !clienteSeleccionado}
+                                                className="w-2/3 h-12 text-sm md:text-base font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all">
+                                                {isPending ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <ClipboardList className="h-5 w-5 mr-2" />}
+                                                Cargar Pedido en Circuito
+                                            </Button>
                                         </div>
-                                    )}
-                                </div>
-
-                                <div className="flex gap-2 mt-4">
-                                    <Button variant="outline" size="lg" onClick={() => { if(!confirm('¿Cancelar y vaciar pestaña?')) return; setClienteSeleccionado(null); setCarrito([]); setDescuentoGlobal(0); setPagos([{metodo_pago:'CONTADO', monto:''}]); setShowClienteModal(false); }} className="w-1/3 h-12 text-red-500 border-red-200 hover:bg-red-50 font-bold">
-                                        Cancelar
-                                    </Button>
-                                    <Button size="lg" onClick={handleProcesarVenta} disabled={isPending || carrito.length === 0 || !clienteSeleccionado}
-                                        className="w-2/3 h-12 text-base font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all">
-                                        {isPending ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <CheckCircle2 className="h-5 w-5 mr-2" />}
-                                        Confirmar Venta
-                                    </Button>
-                                </div>
+                                    </>
+                                )}
                             </div>
 
                         </CardContent>
@@ -928,6 +1245,64 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                             <div className="pt-4 mt-2 border-t border-slate-100 dark:border-zinc-800">
                                 <Button variant="ghost" onClick={() => setVentaExitosa(null)} className="w-full h-12 text-slate-500 hover:text-slate-900 dark:hover:text-white font-bold">
                                     Cerrar y Vender
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* ========= MODAL PEDIDO EXITOSO ========= */}
+            {pedidoExitoso && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in-95 duration-200">
+                    <Card className="w-full max-w-sm shadow-2xl border border-slate-200 dark:border-zinc-800 rounded-[2rem] flex flex-col overflow-hidden">
+                        <div className="bg-indigo-600 p-8 flex flex-col items-center justify-center text-white text-center">
+                            <div className="bg-white/20 p-4 rounded-full mb-4 shadow-sm">
+                                <ClipboardList className="h-10 w-10 text-white" />
+                            </div>
+                            <h3 className="text-2xl font-black tracking-tight">¡Pedido en Circuito!</h3>
+                            <p className="text-indigo-100 text-sm mt-1 font-medium bg-black/10 px-3 py-1 rounded-full">
+                                Pedido Nº #{pedidoExitoso.numero}
+                            </p>
+                        </div>
+                        <CardContent className="p-6 space-y-4 bg-white dark:bg-zinc-900">
+                            <div className="bg-slate-50 dark:bg-zinc-800/50 p-4 rounded-2xl border border-slate-100 dark:border-zinc-800 space-y-2 text-xs">
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400 font-bold uppercase text-[10px]">Cliente:</span>
+                                    <span className="font-bold text-slate-800 dark:text-slate-200 truncate max-w-[60%]">{pedidoExitoso.clienteNombre}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-400 font-bold uppercase text-[10px]">Vendedor Asignado:</span>
+                                    <span className="font-extrabold text-indigo-600 dark:text-indigo-400">{pedidoExitoso.vendedorNombre}</span>
+                                </div>
+                                {pedidoExitoso.fechaEntrega && (
+                                    <div className="flex justify-between">
+                                        <span className="text-slate-400 font-bold uppercase text-[10px]">Fecha de Entrega:</span>
+                                        <span className="font-bold text-slate-700 dark:text-slate-300">{pedidoExitoso.fechaEntrega}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between pt-1 border-t border-slate-200 dark:border-zinc-700">
+                                    <span className="text-slate-500 font-bold">Total:</span>
+                                    <span className="font-black text-sm text-slate-900 dark:text-white">${pedidoExitoso.total.toFixed(2)}</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 pt-1">
+                                <Link href="/pedidos" className="block w-full">
+                                    <Button className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-sm">
+                                        <ClipboardList className="h-4 w-4 mr-2" /> Ir a Gestión de Pedidos
+                                    </Button>
+                                </Link>
+                                <Link href="/pedidos/armados" className="block w-full">
+                                    <Button variant="outline" className="w-full h-11 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-sm">
+                                        <Truck className="h-4 w-4 mr-2" /> Ir a Despacho y Repartos
+                                    </Button>
+                                </Link>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-100 dark:border-zinc-800">
+                                <Button variant="ghost" onClick={() => setPedidoExitoso(null)} className="w-full h-11 text-slate-500 hover:text-slate-900 dark:hover:text-white font-bold text-xs">
+                                    Cerrar y Seguir Operando
                                 </Button>
                             </div>
                         </CardContent>

@@ -52,7 +52,17 @@ export async function registrarPedidoPWA(data: any) {
 
             if (!usuarioId) throw new Error("No estás autenticado.");
 
-            const baseDepositoId = await resolverDepositoId(tx, usuarioId, data.depositoId ? Number(data.depositoId) : null);
+            // Si se especifica un vendedor asignado (ej: desde Punto de Venta por Admin o con permiso de ventas)
+            let finalUsuarioId = usuarioId;
+            if (data.vendedorId && Number(data.vendedorId) > 0) {
+                const esAdmin = (session as any)?.rol === 'ADMIN';
+                const permisos = ((session as any)?.permisos as string[]) || [];
+                if (esAdmin || permisos.includes('VENTAS') || permisos.includes('PEDIDOS')) {
+                    finalUsuarioId = Number(data.vendedorId);
+                }
+            }
+
+            const baseDepositoId = await resolverDepositoId(tx, finalUsuarioId, data.depositoId ? Number(data.depositoId) : null);
 
             // A. VERIFICACIÓN INTELIGENTE DE STOCK
             const itemsConDeposito: { item: any; targetDepositoId: number }[] = [];
@@ -103,7 +113,7 @@ export async function registrarPedidoPWA(data: any) {
                 data: {
                     numero: nuevoNumero,
                     clienteId: data.clienteId,
-                    usuarioId: usuarioId,
+                    usuarioId: finalUsuarioId,
                     listaPrecioId: data.listaPrecioId,
                     subtotal: data.subtotal,
                     descuento_global: data.descuento_global || 0,
@@ -130,6 +140,10 @@ export async function registrarPedidoPWA(data: any) {
                             };
                         })
                     }
+                },
+                include: {
+                    usuario: { select: { id: true, nombre: true } },
+                    cliente: { select: { id: true, nombre_razon_social: true } }
                 }
             });
 
@@ -146,6 +160,9 @@ export async function registrarPedidoPWA(data: any) {
         });
 
         revalidatePath("/vendedor");
+        revalidatePath("/pedidos");
+        revalidatePath("/pedidos/armados");
+        revalidatePath("/ventas");
         return { success: true, data: resultado };
 
     } catch (error: any) {

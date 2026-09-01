@@ -13,6 +13,18 @@ export async function getUsuarios() {
     }
 }
 
+export async function getVendedoresActivos() {
+    try {
+        return await prisma.usuario.findMany({
+            where: { activo: true },
+            select: { id: true, nombre: true, rol: true, username: true },
+            orderBy: { nombre: 'asc' }
+        });
+    } catch (error) {
+        return [];
+    }
+}
+
 export async function guardarUsuario(formData: FormData, permisosJSON: string) {
     try {
         const id = formData.get("id") ? Number(formData.get("id")) : null;
