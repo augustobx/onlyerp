@@ -34,7 +34,7 @@ CMD ["npx", "prisma", "migrate", "deploy"]
 
 FROM node:20-alpine AS runner
 
-RUN apk add --no-cache openssl \
+RUN apk add --no-cache openssl su-exec \
     && addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs
 WORKDIR /app
@@ -45,6 +45,5 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-USER nextjs
 EXPOSE 3000
-CMD ["sh", "-c", "export NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=\"$(cat /run/secrets/next_server_actions_encryption_key)\"; exec node server.js"]
+CMD ["sh", "-c", "export NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=\"$(cat /run/secrets/next_server_actions_encryption_key)\"; exec su-exec nextjs:nodejs node server.js"]
