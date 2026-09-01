@@ -1,14 +1,14 @@
 -- DropForeignKey
-ALTER TABLE `listaprecio` DROP FOREIGN KEY `ListaPrecio_productoId_fkey`;
+ALTER TABLE `ListaPrecio` DROP FOREIGN KEY `ListaPrecio_productoId_fkey`;
 
 -- DropIndex
-DROP INDEX `ListaPrecio_productoId_fkey` ON `listaprecio`;
+DROP INDEX `ListaPrecio_productoId_fkey` ON `ListaPrecio`;
 
 -- DropIndex
-DROP INDEX `Producto_codigo_barras_key` ON `producto`;
+DROP INDEX `Producto_codigo_barras_key` ON `Producto`;
 
 -- AlterTable
-ALTER TABLE `listaprecio` DROP COLUMN `nombre_lista`,
+ALTER TABLE `ListaPrecio` DROP COLUMN `nombre_lista`,
     DROP COLUMN `porcentaje_marcacion`,
     DROP COLUMN `precio_final`,
     DROP COLUMN `productoId`,
@@ -18,7 +18,7 @@ ALTER TABLE `listaprecio` DROP COLUMN `nombre_lista`,
     ADD COLUMN `updatedAt` DATETIME(3) NOT NULL;
 
 -- AlterTable
-ALTER TABLE `producto` DROP COLUMN `stock_actual`,
+ALTER TABLE `Producto` DROP COLUMN `stock_actual`,
     ADD COLUMN `categoriaId` INTEGER NULL,
     ADD COLUMN `imagen_url` TEXT NULL,
     ADD COLUMN `marcaId` INTEGER NULL,
@@ -28,7 +28,7 @@ ALTER TABLE `producto` DROP COLUMN `stock_actual`,
     MODIFY `tipo_medicion` ENUM('UNIDAD', 'KILO', 'LITRO', 'METROS', 'CAJA', 'PACK') NOT NULL DEFAULT 'UNIDAD';
 
 -- AlterTable
-ALTER TABLE `proveedor` DROP COLUMN `createdAt`,
+ALTER TABLE `Proveedor` DROP COLUMN `createdAt`,
     DROP COLUMN `updatedAt`,
     ADD COLUMN `activo` BOOLEAN NOT NULL DEFAULT true,
     ADD COLUMN `aumento_porcentaje` DOUBLE NOT NULL DEFAULT 0,
