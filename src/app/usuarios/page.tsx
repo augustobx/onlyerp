@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { toast } from "sonner";
 import {
     Users, ShieldCheck, UserPlus, KeyRound, Loader2, X, CheckSquare, Square, Trash2, Edit, Ban, CheckCircle,
-    Phone, Truck, ShoppingBag, RefreshCw, Smartphone
+    Phone, Truck, ShoppingBag, RefreshCw, Smartphone, Tag
 } from "lucide-react";
 import { getUsuarios, guardarUsuario, eliminarUsuario, toggleActivoUsuario } from "@/app/actions/usuarios";
 import { getSucursales, getListasPrecio } from "@/app/actions/configuracion";
@@ -45,7 +45,8 @@ export default function GestionUsuariosPage() {
     const [usuarioEditando, setUsuarioEditando] = useState<any | null>(null);
     const [permisosSeleccionados, setPermisosSeleccionados] = useState<string[]>([]);
     const [sucursalSeleccionada, setSucursalSeleccionada] = useState<string>("");
-    const [listaPrecioSeleccionada, setListaPrecioSeleccionada] = useState<string>("null");
+    const [todasLasListas, setTodasLasListas] = useState<boolean>(true);
+    const [listasPermitidasSeleccionadas, setListasPermitidasSeleccionadas] = useState<number[]>([]);
     const [rolSeleccionado, setRolSeleccionado] = useState<string>("CAJERO");
 
     const cargarUsuarios = () => {
@@ -71,15 +72,41 @@ export default function GestionUsuariosPage() {
         if (user) {
             setPermisosSeleccionados(JSON.parse(user.permisos || "[]"));
             setSucursalSeleccionada(user.sucursalId ? String(user.sucursalId) : "null");
-            setListaPrecioSeleccionada(user.listaPrecioId ? String(user.listaPrecioId) : "null");
             setRolSeleccionado(user.rol || "CAJERO");
+
+            let ids: number[] = [];
+            if (user.listas_permitidas) {
+                try {
+                    const parsed = JSON.parse(user.listas_permitidas);
+                    if (Array.isArray(parsed) && parsed.length > 0) ids = parsed.map(Number).filter(Boolean);
+                } catch {}
+            } else if (user.listaPrecioId) {
+                ids = [Number(user.listaPrecioId)];
+            }
+
+            if (ids.length > 0) {
+                setTodasLasListas(false);
+                setListasPermitidasSeleccionadas(ids);
+            } else {
+                setTodasLasListas(true);
+                setListasPermitidasSeleccionadas([]);
+            }
         } else {
             setPermisosSeleccionados(["VENTAS", "CLIENTES"]);
             setSucursalSeleccionada("null");
-            setListaPrecioSeleccionada("null");
             setRolSeleccionado("VENDEDOR");
+            setTodasLasListas(true);
+            setListasPermitidasSeleccionadas([]);
         }
         setShowModal(true);
+    };
+
+    const toggleListaPermitida = (id: number) => {
+        if (listasPermitidasSeleccionadas.includes(id)) {
+            setListasPermitidasSeleccionadas(listasPermitidasSeleccionadas.filter(item => item !== id));
+        } else {
+            setListasPermitidasSeleccionadas([...listasPermitidasSeleccionadas, id]);
+        }
     };
 
     const togglePermiso = (moduloId: string) => {
@@ -95,7 +122,13 @@ export default function GestionUsuariosPage() {
         const formData = new FormData(e.currentTarget);
         if (usuarioEditando) formData.append("id", String(usuarioEditando.id));
         if (sucursalSeleccionada !== "null") formData.append("sucursalId", sucursalSeleccionada);
-        formData.append("listaPrecioId", listaPrecioSeleccionada);
+        if (!todasLasListas && listasPermitidasSeleccionadas.length > 0) {
+            formData.append("listas_permitidas", JSON.stringify(listasPermitidasSeleccionadas));
+            formData.append("listaPrecioId", String(listasPermitidasSeleccionadas[0]));
+        } else {
+            formData.append("listas_permitidas", "");
+            formData.append("listaPrecioId", "null");
+        }
         formData.append("rol", rolSeleccionado);
 
         const permisosFinales = permisosSeleccionados;
@@ -248,16 +281,44 @@ export default function GestionUsuariosPage() {
                                     )}
 
                                     <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-100/80">
-                                        <span className="text-[11px] font-medium text-slate-400">Lista Precios:</span>
-                                        {u.lista_precio ? (
-                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-md">
-                                                🏷️ {u.lista_precio.nombre}
-                                            </span>
-                                        ) : (
-                                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                                                🌐 Todas las listas
-                                            </span>
-                                        )}
+                                        <span className="text-[11px] font-medium text-slate-400">Listas Precios:</span>
+                                        {(() => {
+                                            let ids: number[] = [];
+                                            if (u.listas_permitidas) {
+                                                try {
+                                                    const parsed = JSON.parse(u.listas_permitidas);
+                                                    if (Array.isArray(parsed) && parsed.length > 0) ids = parsed.map(Number).filter(Boolean);
+                                                } catch {}
+                                            } else if (u.listaPrecioId) {
+                                                ids = [u.listaPrecioId];
+                                            }
+
+                                            if (ids.length === 0) {
+                                                return (
+                                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-lg">
+                                                        🌐 Todas ({listasPrecio.length})
+                                                    </span>
+                                                );
+                                            }
+
+                                            if (ids.length === 1) {
+                                                const lp = listasPrecio.find(l => l.id === ids[0]) || u.lista_precio;
+                                                return (
+                                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2.5 py-0.5 rounded-lg">
+                                                        🏷️ {lp?.nombre || `Lista #${ids[0]}`}
+                                                    </span>
+                                                );
+                                            }
+
+                                            return (
+                                                <span
+                                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-200/60 px-2.5 py-0.5 rounded-lg cursor-help"
+                                                    title={listasPrecio.filter(l => ids.includes(l.id)).map(l => l.nombre).join(", ")}
+                                                >
+                                                    🏷️ {ids.length} listas permitidas
+                                                </span>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
 
@@ -378,28 +439,123 @@ export default function GestionUsuariosPage() {
                                         </Select>
                                     </div>
 
-                                    <div className="space-y-1.5 pt-2">
-                                        <Label className="text-xs font-semibold flex items-center justify-between">
-                                            <span>Lista de Precios Asignada</span>
-                                            {listaPrecioSeleccionada !== "null" && (
-                                                <span className="text-[10px] text-indigo-600 font-bold">Restringido a esta lista</span>
-                                            )}
-                                        </Label>
-                                        <Select value={listaPrecioSeleccionada} onValueChange={(val) => setListaPrecioSeleccionada(val as string)}>
-                                            <SelectTrigger className="h-10 bg-slate-50 rounded-xl">
-                                                <SelectValue placeholder="Todas las Listas (Sin restricción)" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="null" className="font-semibold text-slate-500">🌐 Todas las Listas (Sin restricción)</SelectItem>
-                                                {listasPrecio.map(lp => (
-                                                    <SelectItem key={lp.id} value={String(lp.id)}>
-                                                        🏷️ {lp.nombre} ({lp.margen_defecto}% margen)
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                    <div className="space-y-2 pt-3 border-t border-slate-100">
+                                        <div className="flex items-center justify-between">
+                                            <Label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                                <Tag className="h-3.5 w-3.5 text-indigo-600" />
+                                                Listas de Precios Habilitadas
+                                            </Label>
+                                            <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                                                {todasLasListas
+                                                    ? "Todas las listas"
+                                                    : `${listasPermitidasSeleccionadas.length} seleccionada${listasPermitidasSeleccionadas.length === 1 ? '' : 's'}`}
+                                            </span>
+                                        </div>
+
+                                        {/* Opción 1: Todas las listas */}
+                                        <div
+                                            onClick={() => {
+                                                setTodasLasListas(true);
+                                                setListasPermitidasSeleccionadas([]);
+                                            }}
+                                            className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                                                todasLasListas
+                                                    ? "bg-indigo-50/80 border-indigo-300 text-indigo-950 font-bold shadow-sm"
+                                                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                {todasLasListas ? (
+                                                    <CheckSquare className="h-4 w-4 text-indigo-600 shrink-0" />
+                                                ) : (
+                                                    <Square className="h-4 w-4 text-slate-400 shrink-0" />
+                                                )}
+                                                <span className="text-xs">🌐 Habilitar Todas las Listas</span>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 font-normal">Sin restricciones</span>
+                                        </div>
+
+                                        {/* Opción 2: Listas específicas */}
+                                        <div
+                                            onClick={() => {
+                                                if (todasLasListas) {
+                                                    setTodasLasListas(false);
+                                                    if (listasPermitidasSeleccionadas.length === 0 && listasPrecio.length > 0) {
+                                                        setListasPermitidasSeleccionadas([listasPrecio[0].id]);
+                                                    }
+                                                }
+                                            }}
+                                            className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                                                !todasLasListas
+                                                    ? "bg-indigo-50/80 border-indigo-300 text-indigo-950 font-bold shadow-sm"
+                                                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                {!todasLasListas ? (
+                                                    <CheckSquare className="h-4 w-4 text-indigo-600 shrink-0" />
+                                                ) : (
+                                                    <Square className="h-4 w-4 text-slate-400 shrink-0" />
+                                                )}
+                                                <span className="text-xs">🎯 Elegir Listas Específicas</span>
+                                            </div>
+                                            <span className="text-[10px] text-indigo-600 font-bold">Personalizado</span>
+                                        </div>
+
+                                        {/* Grilla de listas para elegir las que tienen disponibles */}
+                                        {!todasLasListas && (
+                                            <div className="mt-2 space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                                <div className="flex justify-between items-center px-1 mb-1 text-[11px]">
+                                                    <span className="text-slate-400 font-medium">Marcá las que puede usar:</span>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setListasPermitidasSeleccionadas(listasPrecio.map(l => l.id))}
+                                                            className="text-indigo-600 hover:underline font-bold text-[10px]"
+                                                        >
+                                                            Todas
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setListasPermitidasSeleccionadas([])}
+                                                            className="text-slate-400 hover:underline text-[10px]"
+                                                        >
+                                                            Ninguna
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {listasPrecio.map(lp => {
+                                                    const seleccionada = listasPermitidasSeleccionadas.includes(lp.id);
+                                                    return (
+                                                        <div
+                                                            key={lp.id}
+                                                            onClick={() => toggleListaPermitida(lp.id)}
+                                                            className={`p-2 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                                                                seleccionada
+                                                                    ? "bg-white border-indigo-400 shadow-sm ring-1 ring-indigo-300/50"
+                                                                    : "bg-slate-50/70 border-slate-200 opacity-60 hover:opacity-100"
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                {seleccionada ? (
+                                                                    <CheckSquare className="h-4 w-4 text-indigo-600 shrink-0" />
+                                                                ) : (
+                                                                    <Square className="h-4 w-4 text-slate-400 shrink-0" />
+                                                                )}
+                                                                <span className="text-xs font-semibold text-slate-800">
+                                                                    🏷️ {lp.nombre}
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                                                +{lp.margen_defecto}%
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                         <p className="text-[10px] text-slate-500">
-                                            Define a qué lista de precios puede acceder para ver productos y cotizar/vender en la aplicación.
+                                            El usuario solo podrá ver productos y emitir ventas con las listas marcadas aquí. Las listas no seleccionadas quedarán inaccesibles.
                                         </p>
                                     </div>
                                 </div>

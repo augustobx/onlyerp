@@ -71,9 +71,23 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
     const sucursalIdStr =
       sucursalIdRaw && sucursalIdRaw !== "null" && sucursalIdRaw !== "" ? Number(sucursalIdRaw) : null;
     const listaPrecioIdRaw = formData.get("listaPrecioId");
-    const listaPrecioId =
-      listaPrecioIdRaw && listaPrecioIdRaw !== "null" && listaPrecioIdRaw !== "" ? Number(listaPrecioIdRaw) : null;
     const listasPermitidasRaw = (formData.get("listas_permitidas") as string)?.trim() || null;
+
+    let finalListaPrecioId: number | null =
+      listaPrecioIdRaw && listaPrecioIdRaw !== "null" && listaPrecioIdRaw !== "" ? Number(listaPrecioIdRaw) : null;
+    let finalListasPermitidas: string | null = null;
+
+    if (listasPermitidasRaw && listasPermitidasRaw !== "" && listasPermitidasRaw !== "null" && listasPermitidasRaw !== "[]") {
+      try {
+        const parsed = JSON.parse(listasPermitidasRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          finalListasPermitidas = JSON.stringify(parsed.map(Number).filter(Boolean));
+          if (!finalListaPrecioId || !parsed.includes(finalListaPrecioId)) {
+            finalListaPrecioId = Number(parsed[0]);
+          }
+        }
+      } catch {}
+    }
 
     const totalUsuarios = await prisma.usuario.count({
       where: { tenantId: tenant.id },
@@ -88,8 +102,8 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
         telefono,
         permisos: permisosJSON,
         sucursalId: sucursalIdStr,
-        listaPrecioId,
-        listas_permitidas: listasPermitidasRaw,
+        listaPrecioId: finalListaPrecioId,
+        listas_permitidas: finalListasPermitidas,
       };
       if (rolForm) {
         dataUpdate.rol = rolForm;
@@ -115,8 +129,8 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
           rol,
           permisos: permisosJSON,
           sucursalId: sucursalIdStr,
-          listaPrecioId,
-          listas_permitidas: listasPermitidasRaw,
+          listaPrecioId: finalListaPrecioId,
+          listas_permitidas: finalListasPermitidas,
           activo: true,
         },
       });
