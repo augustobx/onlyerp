@@ -21,7 +21,7 @@ export default function LoginPage() {
         startTransition(async () => {
             const res = await login(formData);
             if (res.success) {
-                if (res.rol === 'VENDEDOR') {
+                if (['VENDEDOR', 'REPARTIDOR', 'MIXTO'].includes(res.rol || '')) {
                     router.push("/vendedor");
                 } else {
                     router.push("/");

@@ -13,6 +13,8 @@ export type UserSessionPayload = {
   rol: string;
   permisos: string[];
   sucursalId?: number | null;
+  listaPrecioId?: number | null;
+  listas_permitidas?: string | null;
   [key: string]: any;
 };
 
@@ -62,6 +64,8 @@ export async function crearSesion(usuario: any, tenantId?: number) {
     rol: usuario.rol,
     permisos: typeof usuario.permisos === 'string' ? JSON.parse(usuario.permisos || "[]") : (usuario.permisos || []),
     sucursalId: usuario.sucursalId,
+    listaPrecioId: usuario.listaPrecioId ?? null,
+    listas_permitidas: usuario.listas_permitidas ?? null,
   };
 
   const sessionToken = await new SignJWT(payload)

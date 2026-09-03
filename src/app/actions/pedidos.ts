@@ -72,6 +72,34 @@ export async function registrarPedidoPWA(data: any) {
 
       if (!usuarioId) throw new Error("No estás autenticado.");
 
+      if ((session as any)?.rol === "REPARTIDOR") {
+        throw new Error("Los usuarios con rol Repartidor no tienen autorización para emitir pedidos.");
+      }
+
+      if ((session as any)?.rol !== "ADMIN") {
+        const usuarioDb = await tx.usuario.findUnique({
+          where: { id: usuarioId },
+          select: { listaPrecioId: true, listas_permitidas: true },
+        });
+        if (usuarioDb) {
+          let idsPermitidos: number[] = [];
+          if (usuarioDb.listas_permitidas) {
+            try {
+              const parsed = JSON.parse(usuarioDb.listas_permitidas);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                idsPermitidos = parsed.map(Number).filter(Boolean);
+              }
+            } catch {}
+          }
+          if (idsPermitidos.length === 0 && usuarioDb.listaPrecioId) {
+            idsPermitidos = [usuarioDb.listaPrecioId];
+          }
+          if (idsPermitidos.length > 0 && data.listaPrecioId && !idsPermitidos.includes(Number(data.listaPrecioId))) {
+            throw new Error("No tenés autorización para emitir pedidos con esta lista de precios.");
+          }
+        }
+      }
+
       let finalUsuarioId = usuarioId;
       if (data.vendedorId && Number(data.vendedorId) > 0) {
         const esAdmin = (session as any)?.rol === "ADMIN";

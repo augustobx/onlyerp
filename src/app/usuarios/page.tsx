@@ -7,7 +7,7 @@ import {
     Phone, Truck, ShoppingBag, RefreshCw, Smartphone
 } from "lucide-react";
 import { getUsuarios, guardarUsuario, eliminarUsuario, toggleActivoUsuario } from "@/app/actions/usuarios";
-import { getSucursales } from "@/app/actions/configuracion";
+import { getSucursales, getListasPrecio } from "@/app/actions/configuracion";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,20 +38,26 @@ export default function GestionUsuariosPage() {
     const [usuarios, setUsuarios] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [sucursales, setSucursales] = useState<any[]>([]);
+    const [listasPrecio, setListasPrecio] = useState<any[]>([]);
 
     // Modal
     const [showModal, setShowModal] = useState(false);
     const [usuarioEditando, setUsuarioEditando] = useState<any | null>(null);
     const [permisosSeleccionados, setPermisosSeleccionados] = useState<string[]>([]);
     const [sucursalSeleccionada, setSucursalSeleccionada] = useState<string>("");
+    const [listaPrecioSeleccionada, setListaPrecioSeleccionada] = useState<string>("null");
     const [rolSeleccionado, setRolSeleccionado] = useState<string>("CAJERO");
 
     const cargarUsuarios = () => {
         startTransition(async () => {
-            const data = await getUsuarios();
-            const sucs = await getSucursales();
+            const [data, sucs, listas] = await Promise.all([
+                getUsuarios(),
+                getSucursales(),
+                getListasPrecio()
+            ]);
             setUsuarios(data);
             setSucursales(sucs);
+            setListasPrecio(listas);
             setLoading(false);
         });
     };
@@ -65,10 +71,12 @@ export default function GestionUsuariosPage() {
         if (user) {
             setPermisosSeleccionados(JSON.parse(user.permisos || "[]"));
             setSucursalSeleccionada(user.sucursalId ? String(user.sucursalId) : "null");
+            setListaPrecioSeleccionada(user.listaPrecioId ? String(user.listaPrecioId) : "null");
             setRolSeleccionado(user.rol || "CAJERO");
         } else {
             setPermisosSeleccionados(["VENTAS", "CLIENTES"]);
             setSucursalSeleccionada("null");
+            setListaPrecioSeleccionada("null");
             setRolSeleccionado("VENDEDOR");
         }
         setShowModal(true);
@@ -87,6 +95,7 @@ export default function GestionUsuariosPage() {
         const formData = new FormData(e.currentTarget);
         if (usuarioEditando) formData.append("id", String(usuarioEditando.id));
         if (sucursalSeleccionada !== "null") formData.append("sucursalId", sucursalSeleccionada);
+        formData.append("listaPrecioId", listaPrecioSeleccionada);
         formData.append("rol", rolSeleccionado);
 
         const permisosFinales = permisosSeleccionados;
@@ -237,6 +246,19 @@ export default function GestionUsuariosPage() {
                                             ))}
                                         </div>
                                     )}
+
+                                    <div className="pt-2 flex items-center justify-between text-xs border-t border-slate-100/80">
+                                        <span className="text-[11px] font-medium text-slate-400">Lista Precios:</span>
+                                        {u.lista_precio ? (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-md">
+                                                🏷️ {u.lista_precio.nombre}
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                                                🌐 Todas las listas
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="flex gap-2 pt-4 border-t border-slate-100">
@@ -354,6 +376,31 @@ export default function GestionUsuariosPage() {
                                                 ))}
                                             </SelectContent>
                                         </Select>
+                                    </div>
+
+                                    <div className="space-y-1.5 pt-2">
+                                        <Label className="text-xs font-semibold flex items-center justify-between">
+                                            <span>Lista de Precios Asignada</span>
+                                            {listaPrecioSeleccionada !== "null" && (
+                                                <span className="text-[10px] text-indigo-600 font-bold">Restringido a esta lista</span>
+                                            )}
+                                        </Label>
+                                        <Select value={listaPrecioSeleccionada} onValueChange={(val) => setListaPrecioSeleccionada(val as string)}>
+                                            <SelectTrigger className="h-10 bg-slate-50 rounded-xl">
+                                                <SelectValue placeholder="Todas las Listas (Sin restricción)" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="null" className="font-semibold text-slate-500">🌐 Todas las Listas (Sin restricción)</SelectItem>
+                                                {listasPrecio.map(lp => (
+                                                    <SelectItem key={lp.id} value={String(lp.id)}>
+                                                        🏷️ {lp.nombre} ({lp.margen_defecto}% margen)
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-[10px] text-slate-500">
+                                            Define a qué lista de precios puede acceder para ver productos y cotizar/vender en la aplicación.
+                                        </p>
                                     </div>
                                 </div>
 

@@ -202,6 +202,10 @@ model Usuario {
   sucursalId        Int?
   sucursal          Sucursal?                   @relation(fields: [sucursalId], references: [id])
   
+  listaPrecioId     Int?
+  lista_precio      ListaPrecio?                @relation("UsuarioListaPrecio", fields: [listaPrecioId], references: [id], onDelete: SetNull)
+  listas_permitidas String?                     @db.Text
+  
   movimientos_stock MovimientoStock[]
   historial_inv     HistorialInventario[]
   ventas_creadas    Venta[]
@@ -414,6 +418,7 @@ model ListaPrecio {
   presupuestos       Presupuesto[]
   escalas_precio     ProductoEscalaPrecio[]
   pedidos            Pedido[]
+  usuarios           Usuario[]              @relation("UsuarioListaPrecio")
 
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt

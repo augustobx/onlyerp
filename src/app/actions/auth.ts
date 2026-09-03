@@ -29,6 +29,8 @@ export async function getClientSession() {
         tenantNombre: userFresh.tenant.nombre,
         tenantSlug: userFresh.tenant.slug,
         sucursalId: userFresh.sucursalId,
+        listaPrecioId: userFresh.listaPrecioId,
+        listas_permitidas: userFresh.listas_permitidas,
         permisos: typeof userFresh.permisos === "string" ? JSON.parse(userFresh.permisos || "[]") : userFresh.permisos,
         rol: userFresh.rol,
       };

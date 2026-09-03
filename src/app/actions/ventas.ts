@@ -38,8 +38,40 @@ export async function obtenerListasPrecio() {
   const tenant = await getTenantContext();
   if (!tenant) return [];
 
+  const session = await getClientSession();
+  const where: any = { tenantId: tenant.id };
+
+  if (session && session.rol !== 'ADMIN') {
+    const usuarioId = Number((session as any).id);
+    if (usuarioId) {
+      const usuarioDb = await prisma.usuario.findUnique({
+        where: { id: usuarioId },
+        select: { listaPrecioId: true, listas_permitidas: true },
+      });
+
+      if (usuarioDb) {
+        let idsPermitidos: number[] = [];
+        if (usuarioDb.listas_permitidas) {
+          try {
+            const parsed = JSON.parse(usuarioDb.listas_permitidas);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              idsPermitidos = parsed.map(Number).filter(Boolean);
+            }
+          } catch {}
+        }
+        if (idsPermitidos.length === 0 && usuarioDb.listaPrecioId) {
+          idsPermitidos = [usuarioDb.listaPrecioId];
+        }
+
+        if (idsPermitidos.length > 0) {
+          where.id = { in: idsPermitidos };
+        }
+      }
+    }
+  }
+
   return await prisma.listaPrecio.findMany({
-    where: { tenantId: tenant.id },
+    where,
     select: { id: true, nombre: true, margen_defecto: true },
     orderBy: { nombre: "asc" },
   });

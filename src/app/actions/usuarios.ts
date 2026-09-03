@@ -12,7 +12,7 @@ export async function getUsuarios() {
 
     return await prisma.usuario.findMany({
       where: { tenantId: tenant.id },
-      include: { sucursal: true },
+      include: { sucursal: true, lista_precio: true },
       orderBy: { id: "asc" },
     });
   } catch {
@@ -70,6 +70,10 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
     const sucursalIdRaw = formData.get("sucursalId");
     const sucursalIdStr =
       sucursalIdRaw && sucursalIdRaw !== "null" && sucursalIdRaw !== "" ? Number(sucursalIdRaw) : null;
+    const listaPrecioIdRaw = formData.get("listaPrecioId");
+    const listaPrecioId =
+      listaPrecioIdRaw && listaPrecioIdRaw !== "null" && listaPrecioIdRaw !== "" ? Number(listaPrecioIdRaw) : null;
+    const listasPermitidasRaw = (formData.get("listas_permitidas") as string)?.trim() || null;
 
     const totalUsuarios = await prisma.usuario.count({
       where: { tenantId: tenant.id },
@@ -84,6 +88,8 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
         telefono,
         permisos: permisosJSON,
         sucursalId: sucursalIdStr,
+        listaPrecioId,
+        listas_permitidas: listasPermitidasRaw,
       };
       if (rolForm) {
         dataUpdate.rol = rolForm;
@@ -109,6 +115,8 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
           rol,
           permisos: permisosJSON,
           sucursalId: sucursalIdStr,
+          listaPrecioId,
+          listas_permitidas: listasPermitidasRaw,
           activo: true,
         },
       });

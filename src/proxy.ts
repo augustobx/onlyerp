@@ -27,11 +27,19 @@ const RUTAS_MODULOS: Record<string, string> = {
 // Rutas exclusivas de ADMIN — ningún otro rol puede acceder
 const RUTAS_SOLO_ADMIN = ['/usuarios', '/importar', '/configuracion/sucursales'];
 
-// Rutas que un VENDEDOR puede acceder (todo lo demás está bloqueado)
-const RUTAS_VENDEDOR_PERMITIDAS = ['/vendedor', '/login'];
+// Roles de app móvil PWA
+const ROLES_PWA = ['VENDEDOR', 'REPARTIDOR', 'MIXTO'];
+
+// Rutas que usuarios PWA pueden acceder (todo lo demás está bloqueado)
+const RUTAS_PWA_PERMITIDAS = ['/vendedor', '/vendedores', '/login'];
 
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
+
+    // Si cualquier usuario entra a /vendedores, redirigir a /vendedor
+    if (pathname === '/vendedores') {
+        return NextResponse.redirect(new URL('/vendedor', request.url));
+    }
 
     // Si ya existe una sesión tenant válida, /login no debe volver a mostrarse.
     // Esto evita renderizar AppShell + formulario de login simultáneamente.
@@ -39,7 +47,10 @@ export async function proxy(request: NextRequest) {
 
     if (pathname === '/login' && existingSessionToken) {
         try {
-            await jwtVerify(existingSessionToken, getSessionKey());
+            const { payload } = await jwtVerify(existingSessionToken, getSessionKey());
+            if (ROLES_PWA.includes(payload.rol as string)) {
+                return NextResponse.redirect(new URL('/vendedor', request.url));
+            }
             return NextResponse.redirect(new URL('/', request.url));
         } catch {
             // Sesión inválida o vencida: permitir mostrar el login normalmente.
@@ -78,12 +89,12 @@ export async function proxy(request: NextRequest) {
         const permisos = (payload.permisos as string[]) || [];
 
         // ============================================================
-        // REGLA #1: VENDEDORES — Solo pueden acceder a /vendedor
+        // REGLA #1: ROLES PWA (VENDEDOR, REPARTIDOR, MIXTO) — Solo pueden acceder a /vendedor
         // ============================================================
-        if (rol === 'VENDEDOR') {
-            const permitido = RUTAS_VENDEDOR_PERMITIDAS.some(ruta => pathname.startsWith(ruta));
+        if (ROLES_PWA.includes(rol)) {
+            const permitido = RUTAS_PWA_PERMITIDAS.some(ruta => pathname.startsWith(ruta));
             if (!permitido) {
-                // Si intenta ir a cualquier otra ruta, lo mandamos a /vendedor
+                // Si intenta ir a cualquier otra ruta del ERP, lo mandamos a /vendedor
                 return NextResponse.redirect(new URL('/vendedor', request.url));
             }
             return NextResponse.next();

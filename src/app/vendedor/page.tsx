@@ -57,6 +57,7 @@ export default function PwaVendedor() {
     const [fotoZoom, setFotoZoom] = useState<{ url: string; nombre: string } | null>(null);
 
     const [tabActiva, setTabActiva] = useState<'NUEVO' | 'COMBOS' | 'REPARTOS' | 'HISTORIAL' | 'COBRANZAS'>('NUEVO');
+    const [rolUsuario, setRolUsuario] = useState<string>('VENDEDOR');
     const [vistaRemito, setVistaRemito] = useState(false);
     const [catalogoAbierto, setCatalogoAbierto] = useState(false);
     const [modalCliente, setModalCliente] = useState(false);
@@ -105,7 +106,12 @@ export default function PwaVendedor() {
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
 
-        obtenerListasPrecio().then(setListas);
+        obtenerListasPrecio().then(listasData => {
+            if (listasData && listasData.length > 0) {
+                setListas(listasData);
+                setSelectedListaId(listasData[0].id);
+            }
+        });
         obtenerMarcas().then(setMarcas);
         obtenerCategorias().then(setCategorias);
         obtenerConfiguracionGlobal().then(setConfiguracionGlobal);
@@ -122,9 +128,13 @@ export default function PwaVendedor() {
         });
         
         getClientSession().then((s: any) => {
+            const rol = s?.rol || 'VENDEDOR';
+            setRolUsuario(rol);
             if (s && s.permisos && s.permisos.includes("COBRAR_CC")) setPuedeCobrar(true);
-            if (s?.rol === 'REPARTIDOR') {
+            if (rol === 'REPARTIDOR') {
                 setTabActiva('REPARTOS');
+            } else {
+                setTabActiva('NUEVO');
             }
             if (s?.sucursalId) {
                 getDepositos(Number(s.sucursalId)).then(deps => {
@@ -141,6 +151,16 @@ export default function PwaVendedor() {
             window.removeEventListener('offline', handleOffline);
         };
     }, []);
+
+    // Asegurar que ningún rol quede en una pestaña para la que no tiene permisos
+    useEffect(() => {
+        if (rolUsuario === 'REPARTIDOR' && (tabActiva === 'NUEVO' || tabActiva === 'COMBOS' || tabActiva === 'HISTORIAL')) {
+            setTabActiva('REPARTOS');
+        }
+        if (rolUsuario === 'VENDEDOR' && tabActiva === 'REPARTOS') {
+            setTabActiva('NUEVO');
+        }
+    }, [tabActiva, rolUsuario]);
 
     const cargarHistorial = () => obtenerPedidosVendedor().then(setPedidosHistorial);
     const cargarCombos = () => getCombosActivos().then(setCombos);
@@ -332,7 +352,8 @@ export default function PwaVendedor() {
 
     const handleClienteSelect = (c: any) => {
         setCliente(c);
-        const listaId = c.lista_default_id || (listas[0]?.id || 1);
+        const tieneLista = listas.some(l => l.id === c.lista_default_id);
+        const listaId = tieneLista ? c.lista_default_id : (listas[0]?.id || selectedListaId || 1);
         handleCambiarListaPrecio(listaId);
         setClientesRes([]);
         setQueryCliente("");
@@ -890,6 +911,30 @@ export default function PwaVendedor() {
                     {/* VISTA 3: REPARTOS / DESPACHOS */}
                     {tabActiva === 'REPARTOS' && (
                         <div className="animate-in fade-in duration-300 pb-24 space-y-4">
+                            {/* BANNER DE REPARTIDOR Y CONSULTA DE PRECIOS */}
+                            <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-600 to-teal-700 text-white p-3.5 rounded-3xl shadow-md">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="bg-white/20 p-2 rounded-2xl">
+                                        <Truck className="w-5 h-5 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-black uppercase tracking-wide">Panel de Entregas</p>
+                                        <p className="text-[10px] text-emerald-100">
+                                            {listas[0] ? `Lista Precios: ${listas[0].nombre}` : "Repartos asignados"}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={() => setCatalogoAbierto(true)}
+                                    className="h-9 px-3 bg-white text-emerald-800 hover:bg-emerald-50 font-black text-xs rounded-2xl shadow-sm border-0 flex items-center gap-1.5 shrink-0"
+                                >
+                                    <PackageSearch className="w-4 h-4 text-emerald-700" />
+                                    <span>Ver Precios</span>
+                                </Button>
+                            </div>
+
                             {/* FILTROS DE FECHA */}
                             <div className="flex gap-1.5 overflow-x-auto pb-1 hide-scrollbar">
                                 {[
@@ -1255,50 +1300,65 @@ export default function PwaVendedor() {
             {!vistaRemito && !catalogoAbierto && (
                 <div className="fixed bottom-0 left-0 right-0 z-40 p-3 pb-safe pointer-events-none">
                     <nav className="max-w-md mx-auto bg-slate-900/95 text-white backdrop-blur-lg border border-slate-800/80 rounded-2xl shadow-2xl p-1.5 flex items-center justify-between pointer-events-auto">
-                        <button
-                            onClick={() => setTabActiva('NUEVO')}
-                            className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
-                                tabActiva === 'NUEVO'
-                                    ? 'bg-indigo-600 text-white font-black shadow-md shadow-indigo-600/30'
-                                    : 'text-slate-400 hover:text-white'
-                            }`}
-                        >
-                            <Plus className="w-4 h-4 mb-0.5" />
-                            <span className="text-[9px] uppercase tracking-wider font-bold">Nuevo</span>
-                        </button>
-                        <button
-                            onClick={() => setTabActiva('COMBOS')}
-                            className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
-                                tabActiva === 'COMBOS'
-                                    ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
-                                    : 'text-slate-400 hover:text-white'
-                            }`}
-                        >
-                            <Sparkles className="w-4 h-4 mb-0.5" />
-                            <span className="text-[9px] uppercase tracking-wider font-bold">Combos</span>
-                        </button>
-                        <button
-                            onClick={() => setTabActiva('REPARTOS')}
-                            className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
-                                tabActiva === 'REPARTOS'
-                                    ? 'bg-emerald-600 text-white font-black shadow-md shadow-emerald-600/30'
-                                    : 'text-slate-400 hover:text-white'
-                            }`}
-                        >
-                            <Truck className="w-4 h-4 mb-0.5" />
-                            <span className="text-[9px] uppercase tracking-wider font-bold">Repartos</span>
-                        </button>
-                        <button
-                            onClick={() => setTabActiva('HISTORIAL')}
-                            className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
-                                tabActiva === 'HISTORIAL'
-                                    ? 'bg-blue-600 text-white font-black shadow-md shadow-blue-600/30'
-                                    : 'text-slate-400 hover:text-white'
-                            }`}
-                        >
-                            <History className="w-4 h-4 mb-0.5" />
-                            <span className="text-[9px] uppercase tracking-wider font-bold">Pedidos</span>
-                        </button>
+                        {/* Funciones de Venta: Solo VENDEDOR, MIXTO o ADMIN */}
+                        {rolUsuario !== 'REPARTIDOR' && (
+                            <>
+                                <button
+                                    onClick={() => setTabActiva('NUEVO')}
+                                    className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
+                                        tabActiva === 'NUEVO'
+                                            ? 'bg-indigo-600 text-white font-black shadow-md shadow-indigo-600/30'
+                                            : 'text-slate-400 hover:text-white'
+                                    }`}
+                                >
+                                    <Plus className="w-4 h-4 mb-0.5" />
+                                    <span className="text-[9px] uppercase tracking-wider font-bold">Nuevo</span>
+                                </button>
+                                <button
+                                    onClick={() => setTabActiva('COMBOS')}
+                                    className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
+                                        tabActiva === 'COMBOS'
+                                            ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
+                                            : 'text-slate-400 hover:text-white'
+                                    }`}
+                                >
+                                    <Sparkles className="w-4 h-4 mb-0.5" />
+                                    <span className="text-[9px] uppercase tracking-wider font-bold">Combos</span>
+                                </button>
+                            </>
+                        )}
+
+                        {/* Funciones de Entregas: Solo REPARTIDOR, MIXTO o ADMIN (oculto para VENDEDOR) */}
+                        {rolUsuario !== 'VENDEDOR' && (
+                            <button
+                                onClick={() => setTabActiva('REPARTOS')}
+                                className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
+                                    tabActiva === 'REPARTOS'
+                                        ? 'bg-emerald-600 text-white font-black shadow-md shadow-emerald-600/30'
+                                        : 'text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                <Truck className="w-4 h-4 mb-0.5" />
+                                <span className="text-[9px] uppercase tracking-wider font-bold">Repartos</span>
+                            </button>
+                        )}
+
+                        {/* Historial de Pedidos: Solo VENDEDOR, MIXTO o ADMIN */}
+                        {rolUsuario !== 'REPARTIDOR' && (
+                            <button
+                                onClick={() => setTabActiva('HISTORIAL')}
+                                className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all ${
+                                    tabActiva === 'HISTORIAL'
+                                        ? 'bg-blue-600 text-white font-black shadow-md shadow-blue-600/30'
+                                        : 'text-slate-400 hover:text-white'
+                                }`}
+                            >
+                                <History className="w-4 h-4 mb-0.5" />
+                                <span className="text-[9px] uppercase tracking-wider font-bold">Pedidos</span>
+                            </button>
+                        )}
+
+                        {/* Cobranzas: Si tiene permiso habilitado */}
                         {puedeCobrar && (
                             <button
                                 onClick={() => setTabActiva('COBRANZAS')}
@@ -1409,17 +1469,26 @@ export default function PwaVendedor() {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-5 gap-2 items-center pt-1 border-t border-slate-100">
-                                            <div className="col-span-3 flex items-center justify-between bg-zinc-100 rounded-2xl p-1 h-11">
-                                                <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400" disabled={!tieneStock} onClick={() => ajustarCantidadProducto(p, -1)}><Minus className="h-4 w-4" /></Button>
-                                                <span className="font-black text-zinc-900 text-base">{itemEnCarrito?.cantidad || 0}</span>
-                                                <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400" disabled={!tieneStock} onClick={() => ajustarCantidadProducto(p, 1)}><Plus className="h-4 w-4" /></Button>
+                                        {rolUsuario !== 'REPARTIDOR' ? (
+                                            <div className="grid grid-cols-5 gap-2 items-center pt-1 border-t border-slate-100">
+                                                <div className="col-span-3 flex items-center justify-between bg-zinc-100 rounded-2xl p-1 h-11">
+                                                    <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400" disabled={!tieneStock} onClick={() => ajustarCantidadProducto(p, -1)}><Minus className="h-4 w-4" /></Button>
+                                                    <span className="font-black text-zinc-900 text-base">{itemEnCarrito?.cantidad || 0}</span>
+                                                    <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400" disabled={!tieneStock} onClick={() => ajustarCantidadProducto(p, 1)}><Plus className="h-4 w-4" /></Button>
+                                                </div>
+                                                <div className="col-span-2 relative">
+                                                    <Percent className="absolute left-2 top-3.5 h-3 w-3 text-indigo-300" />
+                                                    <Input type="number" placeholder="Dto %" className="pl-6 h-11 bg-white border-zinc-100 rounded-2xl font-bold text-indigo-600 text-xs text-center" value={itemEnCarrito?.descuento_individual || ""} onChange={(e) => cambiarDescuento(p.id, Number(e.target.value))} disabled={!itemEnCarrito} />
+                                                </div>
                                             </div>
-                                            <div className="col-span-2 relative">
-                                                <Percent className="absolute left-2 top-3.5 h-3 w-3 text-indigo-300" />
-                                                <Input type="number" placeholder="Dto %" className="pl-6 h-11 bg-white border-zinc-100 rounded-2xl font-bold text-indigo-600 text-xs text-center" value={itemEnCarrito?.descuento_individual || ""} onChange={(e) => cambiarDescuento(p.id, Number(e.target.value))} disabled={!itemEnCarrito} />
+                                        ) : (
+                                            <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
+                                                <span className="font-semibold text-zinc-400">Stock: {p.stock_actual} un.</span>
+                                                <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200/60">
+                                                    Consulta de Precio
+                                                </span>
                                             </div>
-                                        </div>
+                                        )}
                                     </CardContent>
                                 </Card>
                             );
@@ -1427,7 +1496,7 @@ export default function PwaVendedor() {
                     </div>
                     <div className="p-4 border-t bg-white pb-safe">
                         <Button onClick={() => setCatalogoAbierto(false)} className="w-full h-14 bg-zinc-900 text-white font-black rounded-2xl text-base shadow-xl">
-                            CERRAR CATÁLOGO ({carrito.reduce((acc, i) => acc + i.cantidad, 0)} items)
+                            {rolUsuario === 'REPARTIDOR' ? 'CERRAR CATÁLOGO' : `CERRAR CATÁLOGO (${carrito.reduce((acc, i) => acc + i.cantidad, 0)} items)`}
                         </Button>
                     </div>
                 </div>

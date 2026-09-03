@@ -48,7 +48,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const tenant = await getTenantContext();
 
   let esAdmin = false;
-  let esVendedor = false;
+  let esUsuarioPWA = false;
   let permisos: string[] = [];
   let isLogueado = false;
   let nombreUsuario = "";
@@ -66,7 +66,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         isLogueado = false;
       } else {
         esAdmin = payload.rol === "ADMIN";
-        esVendedor = payload.rol === "VENDEDOR";
+        esUsuarioPWA = ["VENDEDOR", "REPARTIDOR", "MIXTO"].includes(payload.rol as string);
         rolUsuario = payload.rol as string;
         permisos = (payload.permisos as string[]) || [];
         nombreUsuario = payload.nombre as string;
@@ -82,7 +82,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body className={`${inter.className} bg-slate-100 dark:bg-zinc-950 text-slate-900 dark:text-slate-50 antialiased`}>
         {!isLogueado ? (
           <main className="w-full min-h-screen">{children}</main>
-        ) : esVendedor ? (
+        ) : esUsuarioPWA ? (
           <main className="w-full min-h-screen relative bg-slate-100 dark:bg-zinc-950">
             {children}
           </main>
