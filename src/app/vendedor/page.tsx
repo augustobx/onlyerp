@@ -887,7 +887,7 @@ export default function PwaVendedor() {
                                                 <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Incluye:</p>
                                                 {c.items?.map((it: any) => (
                                                     <div key={it.id} className="flex justify-between items-center text-xs text-slate-700">
-                                                        <span className="font-medium truncate pr-2">• {it.producto?.nombre_producto}</span>
+                                                        <span className="font-medium break-words pr-2">• {it.producto?.nombre_producto}</span>
                                                         <Badge variant="outline" className="font-bold bg-white text-slate-600 text-[10px] shrink-0">
                                                             x{it.cantidad}
                                                         </Badge>
@@ -1456,9 +1456,9 @@ export default function PwaVendedor() {
                                             )}
 
                                             <div className="flex-1 min-w-0">
-                                                <p className="font-black text-sm text-zinc-900 leading-tight mb-1 truncate">{p.nombre_producto}</p>
+                                                <p className="font-black text-sm text-zinc-900 leading-snug mb-1 break-words">{p.nombre_producto}</p>
                                                 <p className="text-[10px] text-zinc-400 font-mono">{p.codigo_articulo}</p>
-                                                <div className="flex gap-1.5 mt-1">
+                                                <div className="flex gap-1.5 mt-1 flex-wrap">
                                                     <span className="text-[9px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-lg">{p.marca?.nombre || 'S/M'}</span>
                                                     <span className={`text-[9px] font-bold px-2 py-0.5 rounded-lg ${tieneStock ? 'text-emerald-600 bg-emerald-50' : 'text-red-500 bg-red-50'}`}>STOCK: {p.stock_actual}</span>
                                                 </div>
@@ -1507,7 +1507,7 @@ export default function PwaVendedor() {
                 <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
                     <div className="relative bg-white rounded-3xl overflow-hidden shadow-2xl max-w-sm w-full">
                         <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                            <p className="font-bold text-sm text-slate-800 truncate pr-4">{fotoZoom.nombre}</p>
+                            <p className="font-bold text-sm text-slate-800 break-words pr-4">{fotoZoom.nombre}</p>
                             <Button variant="ghost" size="icon" onClick={() => setFotoZoom(null)} className="h-8 w-8 rounded-full">
                                 <X className="h-4 w-4" />
                             </Button>
