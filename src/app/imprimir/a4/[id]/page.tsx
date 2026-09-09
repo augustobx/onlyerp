@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { use } from "react";
 import { useSearchParams } from "next/navigation";
 import { getDatosEmpresa, getVentaParaTicket } from "@/app/actions/configuracion-empresa";
-import { Store, Loader2, Printer, ArrowLeft, Scissors, FileText, LayoutTemplate, Check } from "lucide-react";
+import { Store, Loader2, Printer, ArrowLeft, Scissors, FileText, LayoutTemplate, Check, MessageSquare } from "lucide-react";
+import { generarLinkWhatsAppComprobante } from "@/lib/whatsapp";
 import { QRCodeSVG } from "qrcode.react";
 import { generarQRBase64 } from "@/lib/afipQrAlgorithm";
 
@@ -332,8 +333,26 @@ export default function FacturaA4PrintPage({ params }: { params: Promise<{ id: s
 
                     {/* BOTÓN IMPRIMIR */}
                     <button
+                        onClick={() => {
+                            const link = generarLinkWhatsAppComprobante({
+                                telefono: venta?.cliente?.telefono,
+                                clienteNombre: venta?.cliente?.nombre_razon_social || "Cliente",
+                                tipoComprobante: venta?.tipo_comprobante || "COMPROBANTE_X",
+                                puntoVenta: venta?.punto_venta || 1,
+                                numeroComprobante: venta?.numero_comprobante || 1,
+                                total: venta?.total || 0,
+                                urlComprobante: typeof window !== "undefined" ? window.location.href : undefined,
+                            });
+                            window.open(link, "_blank");
+                        }}
+                        className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-600 text-white font-black px-4 py-2 rounded-xl shadow-lg text-xs transition-all cursor-pointer"
+                    >
+                        <MessageSquare className="h-4 w-4" /> ENVIAR WHATSAPP
+                    </button>
+
+                    <button
                         onClick={() => window.print()}
-                        className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black px-5 py-2 rounded-xl shadow-lg shadow-emerald-600/30 text-xs transition-all"
+                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-black px-5 py-2 rounded-xl shadow-lg shadow-indigo-600/30 text-xs transition-all cursor-pointer"
                     >
                         <Printer className="h-4 w-4" /> IMPRIMIR AHORA
                     </button>

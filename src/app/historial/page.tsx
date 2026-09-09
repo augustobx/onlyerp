@@ -5,11 +5,12 @@ import { toast } from "sonner";
 import {
     History, Search, Receipt, Printer, FileText,
     Loader2, X, CalendarDays, User, ArrowRight, ArrowLeftRight, CheckCircle2,
-    CheckSquare, Square
+    CheckSquare, Square, MessageSquare, Send, Phone
 } from "lucide-react";
 
 import { getHistorialVentas } from "@/app/actions/historial";
 import { procesarDevolucion } from "@/app/actions/ventas";
+import { generarLinkWhatsAppComprobante } from "@/lib/whatsapp";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +40,28 @@ export default function HistorialVentasPage() {
     const [cantidadesDevolver, setCantidadesDevolver] = useState<Record<number, number>>({});
     const [metodoReembolso, setMetodoReembolso] = useState<"CAJA" | "CUENTA_CORRIENTE">("CAJA");
     const [imprimirConDescuentos, setImprimirConDescuentos] = useState(true);
+    const [telefonoWhatsApp, setTelefonoWhatsApp] = useState("");
+    const [mostrandoInputWhatsApp, setMostrandoInputWhatsApp] = useState(false);
+
+    const enviarPorWhatsApp = (formato: "A4" | "TICKET" = "A4") => {
+        if (!ventaSeleccionada) return;
+        const urlComprobante = typeof window !== "undefined"
+            ? `${window.location.origin}/imprimir/${formato === "A4" ? "a4" : "ticket"}/${ventaSeleccionada.id}?descuentos=${imprimirConDescuentos}`
+            : undefined;
+
+        const tel = telefonoWhatsApp || ventaSeleccionada.cliente?.telefono;
+        const link = generarLinkWhatsAppComprobante({
+            telefono: tel,
+            clienteNombre: ventaSeleccionada.cliente?.nombre_razon_social || "Cliente",
+            tipoComprobante: ventaSeleccionada.tipo_comprobante || "COMPROBANTE_X",
+            puntoVenta: ventaSeleccionada.punto_venta || 1,
+            numeroComprobante: ventaSeleccionada.numero_comprobante || 1,
+            total: ventaSeleccionada.total || 0,
+            urlComprobante,
+        });
+
+        window.open(link, "_blank");
+    };
 
     const cargarHistorial = () => {
         setLoading(true);
@@ -73,6 +96,8 @@ export default function HistorialVentasPage() {
                 const ventaEncontrada = ventas.find(v => String(v.numero_comprobante) === buscar);
                 if (ventaEncontrada) {
                     setVentaSeleccionada(ventaEncontrada);
+                    setTelefonoWhatsApp(ventaEncontrada.cliente?.telefono || "");
+                    setMostrandoInputWhatsApp(false);
                     window.history.replaceState({}, '', '/historial');
                 }
             }
@@ -254,7 +279,7 @@ export default function HistorialVentasPage() {
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <Button
-                                                    onClick={() => { setVentaSeleccionada(v); setModoDevolucion(false); setCantidadesDevolver({}); }}
+                                                    onClick={() => { setVentaSeleccionada(v); setTelefonoWhatsApp(v?.cliente?.telefono || ""); setMostrandoInputWhatsApp(false); setModoDevolucion(false); setCantidadesDevolver({}); }}
                                                     variant="ghost" className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-semibold text-xs"
                                                 >
                                                     Ver Detalles <ArrowRight className="h-4 w-4 ml-1" />
@@ -370,16 +395,55 @@ export default function HistorialVentasPage() {
                                             </div>
 
                                             <div className="flex gap-2 mb-2">
-                                                <a href={`/imprimir/ticket/${ventaSeleccionada.id}?descuentos=${imprimirConDescuentos}`} className="flex-1">
+                                                <a href={`/imprimir/ticket/${ventaSeleccionada.id}?descuentos=${imprimirConDescuentos}`} target="_blank" rel="noreferrer" className="flex-1">
                                                     <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium px-2">
                                                         <Printer className="h-4 w-4 mr-2" /> 80mm
                                                     </Button>
                                                 </a>
-                                                <a href={`/imprimir/a4/${ventaSeleccionada.id}?descuentos=${imprimirConDescuentos}`} className="flex-1">
+                                                <a href={`/imprimir/a4/${ventaSeleccionada.id}?descuentos=${imprimirConDescuentos}`} target="_blank" rel="noreferrer" className="flex-1">
                                                     <Button variant="outline" className="w-full bg-white border-slate-200 text-slate-700 font-medium hover:bg-slate-50 px-2">
-                                                        <FileText className="h-4 w-4 mr-2" /> A4
+                                                        <FileText className="h-4 w-4 mr-2" /> A4 (PDF)
                                                     </Button>
                                                 </a>
+                                            </div>
+
+                                            {/* ENVIAR FACTURA / RECIBO POR WHATSAPP (PDF) */}
+                                            <div className="pt-2 border-t border-slate-200 dark:border-zinc-800 space-y-2">
+                                                <div className="bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 space-y-2.5">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                                                            <MessageSquare className="h-4 w-4 text-emerald-600" /> WhatsApp (Factura PDF)
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setMostrandoInputWhatsApp(!mostrandoInputWhatsApp)}
+                                                            className="text-[11px] text-emerald-700 dark:text-emerald-400 hover:underline font-medium flex items-center gap-1 cursor-pointer"
+                                                        >
+                                                            <Phone className="h-3 w-3" />
+                                                            {mostrandoInputWhatsApp ? "Ocultar" : (telefonoWhatsApp ? `Tel: ${telefonoWhatsApp}` : "Ingresar número")}
+                                                        </button>
+                                                    </div>
+
+                                                    {mostrandoInputWhatsApp && (
+                                                        <div className="flex gap-2 animate-in fade-in duration-150">
+                                                            <Input
+                                                                type="tel"
+                                                                placeholder="Ej: 1144556677 o 3329..."
+                                                                value={telefonoWhatsApp}
+                                                                onChange={(e) => setTelefonoWhatsApp(e.target.value)}
+                                                                className="h-8 text-xs bg-white dark:bg-zinc-800 border-emerald-300"
+                                                            />
+                                                        </div>
+                                                    )}
+
+                                                    <Button
+                                                        type="button"
+                                                        onClick={() => enviarPorWhatsApp("A4")}
+                                                        className="w-full h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                                                    >
+                                                        <Send className="h-3.5 w-3.5" /> Enviar Factura / Recibo PDF
+                                                    </Button>
+                                                </div>
                                             </div>
                                             <Button variant="ghost" onClick={() => setModoDevolucion(true)} className="w-full mt-4 text-orange-600 hover:text-orange-700 hover:bg-orange-50 font-semibold border border-dashed border-orange-200">
                                                 <ArrowLeftRight className="h-4 w-4 mr-2" /> Iniciar Devolución

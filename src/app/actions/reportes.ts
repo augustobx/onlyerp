@@ -67,22 +67,29 @@ export async function getReporteMaestro(filtros: { fecha_desde?: string; fecha_h
     const rankingClientes: Record<number, { nombre: string; comprado: number; adeudado: number }> = {};
 
     ventas.forEach((v) => {
-      totalIngresos += v.total;
-      totalDescuentos += v.descuento_global;
-      ingresosPorMedio[v.metodo_pago] = (ingresosPorMedio[v.metodo_pago] || 0) + v.total;
+      totalIngresos += v.total || 0;
+      totalDescuentos += v.descuento_global || 0;
+      const metodo = v.metodo_pago || "CONTADO";
+      ingresosPorMedio[metodo] = (ingresosPorMedio[metodo] || 0) + (v.total || 0);
 
-      if (!rankingClientes[v.clienteId]) {
-        rankingClientes[v.clienteId] = { nombre: v.cliente.nombre_razon_social, comprado: 0, adeudado: 0 };
+      const clienteId = v.clienteId || 0;
+      const clienteNombre = v.cliente?.nombre_razon_social || "Consumidor Final";
+      if (!rankingClientes[clienteId]) {
+        rankingClientes[clienteId] = { nombre: clienteNombre, comprado: 0, adeudado: 0 };
       }
-      rankingClientes[v.clienteId].comprado += v.total;
-      rankingClientes[v.clienteId].adeudado += v.saldo_pendiente;
+      rankingClientes[clienteId].comprado += v.total || 0;
+      rankingClientes[clienteId].adeudado += v.saldo_pendiente || 0;
 
-      v.detalles.forEach((det) => {
+      (v.detalles || []).forEach((det) => {
+        if (!det.producto) return;
         const prodId = det.producto.id;
-        const costoLinea = det.producto.precio_costo * det.cantidad;
+        const costoUnit = det.producto.precio_costo ?? det.costo_unitario ?? 0;
+        const cant = det.cantidad || 0;
+        const costoLinea = costoUnit * cant;
         costoTotalMercaderia += costoLinea;
 
-        const rentabilidadLinea = det.subtotal - costoLinea;
+        const subtotal = det.subtotal || 0;
+        const rentabilidadLinea = subtotal - costoLinea;
 
         if (!rankingProductos[prodId]) {
           rankingProductos[prodId] = {
@@ -92,46 +99,102 @@ export async function getReporteMaestro(filtros: { fecha_desde?: string; fecha_h
             rentabilidad: 0,
           };
         }
-        rankingProductos[prodId].cantidad += det.cantidad;
-        rankingProductos[prodId].recaudado += det.subtotal;
+        rankingProductos[prodId].cantidad += cant;
+        rankingProductos[prodId].recaudado += subtotal;
         rankingProductos[prodId].rentabilidad += rentabilidadLinea;
       });
     });
 
-    let totalEgresos = 0;
+    let totalGastosCaja = 0;
     let egresosPorDescripcion: Record<string, number> = {};
 
     cajas.forEach((c) => {
-      c.movimientos.forEach((m) => {
+      (c.movimientos || []).forEach((m) => {
         if (m.tipo === "EGRESO_MANUAL") {
-          totalEgresos += m.monto;
-          egresosPorDescripcion[m.descripcion] = (egresosPorDescripcion[m.descripcion] || 0) + m.monto;
+          totalGastosCaja += m.monto || 0;
+          const desc = m.descripcion || "Gasto General";
+          egresosPorDescripcion[desc] = (egresosPorDescripcion[desc] || 0) + (m.monto || 0);
         }
       });
     });
 
-    const gananciaNeta = totalIngresos - costoTotalMercaderia - totalEgresos;
+    const gananciaBruta = totalIngresos - costoTotalMercaderia;
+    const gananciaNeta = gananciaBruta - totalGastosCaja;
 
-    const listaProductosRanking = Object.values(rankingProductos)
+    // Rankings requeridos por la vista de reportes
+    const topProductosVendidos = Object.values(rankingProductos)
       .sort((a, b) => b.cantidad - a.cantidad)
-      .slice(0, 10);
+      .slice(0, 15);
 
-    const listaClientesRanking = Object.values(rankingClientes)
+    const topProductosRentables = Object.values(rankingProductos)
+      .sort((a, b) => b.rentabilidad - a.rentabilidad)
+      .slice(0, 15);
+
+    // Consulta de productos menos vendidos / stock clavado filtrada por tenant
+    const todosLosProductos = await prisma.producto.findMany({
+      where: { tenantId: tenant.id },
+      select: { id: true, nombre_producto: true, stocks: { select: { cantidad: true } } },
+    });
+
+    const productosMenosVendidos = todosLosProductos
+      .map((p) => {
+        const stats = rankingProductos[p.id];
+        const stockActual = (p.stocks || []).reduce((acc, current) => acc + (current.cantidad || 0), 0);
+        return {
+          nombre: p.nombre_producto,
+          cantidad: stats ? stats.cantidad : 0,
+          stock_clavado: stockActual,
+        };
+      })
+      .sort((a, b) => a.cantidad - b.cantidad)
+      .slice(0, 15);
+
+    const topClientes = Object.values(rankingClientes)
       .sort((a, b) => b.comprado - a.comprado)
-      .slice(0, 10);
+      .slice(0, 15);
+
+    const topDeudores = Object.values(rankingClientes)
+      .filter((c) => c.adeudado > 0)
+      .sort((a, b) => b.adeudado - a.adeudado)
+      .slice(0, 15);
 
     const topGastos = Object.entries(egresosPorDescripcion)
       .map(([descripcion, monto]) => ({ descripcion, monto }))
       .sort((a, b) => b.monto - a.monto)
-      .slice(0, 5);
+      .slice(0, 10);
 
     return {
       success: true,
       data: {
+        // Objeto exacto esperado por src/app/reportes/page.tsx
+        kpis: {
+          ventasTotales: ventas.length,
+          ingresosTotales: totalIngresos,
+          costoMercaderia: costoTotalMercaderia,
+          gananciaBruta,
+          margenPromedio: totalIngresos > 0 ? (gananciaBruta / totalIngresos) * 100 : 0,
+          ticketPromedio: ventas.length > 0 ? totalIngresos / ventas.length : 0,
+          totalDescuentosOtorgados: totalDescuentos,
+          totalGastosCaja,
+          inflacionPromedio: Number(inflacionPromedio.toFixed(2)),
+        },
+        mediosDePago: ingresosPorMedio,
+        historialPrecios: cambiosPrecio,
+        rankings: {
+          topProductosVendidos,
+          topProductosRentables,
+          productosMenosVendidos,
+          topClientes,
+          topDeudores,
+          topGastos,
+          // Compatibilidad retroactiva
+          topProductos: topProductosVendidos,
+        },
+        // Compatibilidad retroactiva con consumidores previos
         financiero: {
           totalIngresos,
           costoTotalMercaderia,
-          totalEgresos,
+          totalEgresos: totalGastosCaja,
           totalDescuentos,
           gananciaNeta,
           rentabilidadPorcentaje:
@@ -142,11 +205,6 @@ export async function getReporteMaestro(filtros: { fecha_desde?: string; fecha_h
           inflacionPromedio: Number(inflacionPromedio.toFixed(2)),
           cantidadAumentos: aumentos.length,
           ultimosAumentos: cambiosPrecio.slice(0, 5),
-        },
-        rankings: {
-          topProductos: listaProductosRanking,
-          topClientes: listaClientesRanking,
-          topGastos,
         },
       },
     };

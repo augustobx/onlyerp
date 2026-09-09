@@ -30,7 +30,7 @@ export function limpiarNumeroWhatsApp(telefono: string | null | undefined): stri
 }
 
 export function generarLinkWhatsAppComprobante(params: {
-    telefono: string;
+    telefono?: string | null;
     clienteNombre: string;
     tipoComprobante: string;
     puntoVenta: number;
@@ -40,26 +40,27 @@ export function generarLinkWhatsAppComprobante(params: {
     nombreEmpresa?: string;
 }): string {
     const tel = limpiarNumeroWhatsApp(params.telefono);
-    const empresa = params.nombreEmpresa || "Sanu Distribuidora";
+    const empresa = params.nombreEmpresa || "OnlyERP";
     const compTexto = params.tipoComprobante.replace("_", " ");
     const nroCompleto = `000${params.puntoVenta}-${String(params.numeroComprobante).padStart(8, '0')}`;
     const totalFmt = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(params.total);
 
     let mensaje = `Hola *${params.clienteNombre}*, te compartimos el comprobante de tu compra en *${empresa}*:\n\n` +
-        `📄 *${compTexto} N° ${nroCompleto}*\n` +
-        `💰 *Importe Total:* ${totalFmt}\n\n`;
+        `🧾 *${compTexto} N° ${nroCompleto}*\n` +
+        `💵 *Importe Total:* ${totalFmt}\n\n`;
 
     if (params.urlComprobante) {
-        mensaje += `🔗 Podés ver o descargar tu comprobante digital aquí:\n${params.urlComprobante}\n\n`;
+        mensaje += `📄 Podés ver o descargar tu factura / recibo en PDF aquí:\n${params.urlComprobante}\n\n`;
     }
 
     mensaje += `¡Muchas gracias por confiar en nosotros! 🙌`;
 
-    return `https://wa.me/${tel}?text=${encodeURIComponent(mensaje)}`;
+    const baseUrl = tel ? `https://wa.me/${tel}` : `https://api.whatsapp.com/send`;
+    return `${baseUrl}?text=${encodeURIComponent(mensaje)}`;
 }
 
 export function generarLinkWhatsAppPresupuesto(params: {
-    telefono: string;
+    telefono?: string | null;
     clienteNombre: string;
     numeroPresupuesto: number;
     total: number;
@@ -68,13 +69,13 @@ export function generarLinkWhatsAppPresupuesto(params: {
     nombreEmpresa?: string;
 }): string {
     const tel = limpiarNumeroWhatsApp(params.telefono);
-    const empresa = params.nombreEmpresa || "Sanu Distribuidora";
+    const empresa = params.nombreEmpresa || "OnlyERP";
     const totalFmt = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(params.total);
     const validez = params.validezDias || 7;
 
     let mensaje = `Hola *${params.clienteNombre}*, te enviamos el presupuesto solicitado en *${empresa}*:\n\n` +
         `📋 *Presupuesto N° ${params.numeroPresupuesto}*\n` +
-        `💰 *Total Cotizado:* ${totalFmt}\n` +
+        `💵 *Total Cotizado:* ${totalFmt}\n` +
         `⏳ *Validez de precios:* ${validez} días\n\n`;
 
     if (params.urlPresupuesto) {
@@ -83,11 +84,12 @@ export function generarLinkWhatsAppPresupuesto(params: {
 
     mensaje += `Quedamos a tu disposición por cualquier consulta. ¡Saludos!`;
 
-    return `https://wa.me/${tel}?text=${encodeURIComponent(mensaje)}`;
+    const baseUrl = tel ? `https://wa.me/${tel}` : `https://api.whatsapp.com/send`;
+    return `${baseUrl}?text=${encodeURIComponent(mensaje)}`;
 }
 
 export function generarLinkWhatsAppSaldoCC(params: {
-    telefono: string;
+    telefono?: string | null;
     clienteNombre: string;
     saldoDeuda: number;
     facturasVencidas?: number;
@@ -95,7 +97,7 @@ export function generarLinkWhatsAppSaldoCC(params: {
     nombreEmpresa?: string;
 }): string {
     const tel = limpiarNumeroWhatsApp(params.telefono);
-    const empresa = params.nombreEmpresa || "Sanu Distribuidora";
+    const empresa = params.nombreEmpresa || "OnlyERP";
     const saldoFmt = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(params.saldoDeuda);
 
     let mensaje = `Estimado/a *${params.clienteNombre}*, te contactamos desde el área de administración de *${empresa}* para informarte el estado de tu cuenta corriente:\n\n` +
@@ -115,11 +117,12 @@ export function generarLinkWhatsAppSaldoCC(params: {
 
     mensaje += `¡Muchas gracias!`;
 
-    return `https://wa.me/${tel}?text=${encodeURIComponent(mensaje)}`;
+    const baseUrl = tel ? `https://wa.me/${tel}` : `https://api.whatsapp.com/send`;
+    return `${baseUrl}?text=${encodeURIComponent(mensaje)}`;
 }
 
 export function generarLinkWhatsAppPedido(params: {
-    telefono: string;
+    telefono?: string | null;
     clienteNombre: string;
     numeroPedido: number;
     total: number;
@@ -127,7 +130,7 @@ export function generarLinkWhatsAppPedido(params: {
     nombreEmpresa?: string;
 }): string {
     const tel = limpiarNumeroWhatsApp(params.telefono);
-    const empresa = params.nombreEmpresa || "Sanu Distribuidora";
+    const empresa = params.nombreEmpresa || "OnlyERP";
     const totalFmt = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(params.total);
 
     let mensaje = `Hola *${params.clienteNombre}*, registramos tu *Pedido N° ${params.numeroPedido}* en *${empresa}*:\n\n` +
@@ -139,5 +142,6 @@ export function generarLinkWhatsAppPedido(params: {
 
     mensaje += `\nTe avisaremos cuando el camión esté en camino. ¡Muchas gracias!`;
 
-    return `https://wa.me/${tel}?text=${encodeURIComponent(mensaje)}`;
+    const baseUrl = tel ? `https://wa.me/${tel}` : `https://api.whatsapp.com/send`;
+    return `${baseUrl}?text=${encodeURIComponent(mensaje)}`;
 }
