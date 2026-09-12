@@ -110,6 +110,10 @@ export default function PresupuestoA4PrintPage({ params }: { params: Promise<{ i
                     <p className="font-semibold text-base">{presupuesto.cliente?.dni_cuit || "---"}</p>
                 </div>
                 <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase">Dirección</p>
+                    <p className="font-semibold text-base">{presupuesto.cliente?.direccion || "---"}</p>
+                </div>
+                <div>
                     <p className="text-xs font-bold text-slate-500 uppercase">Tarifa</p>
                     <p className="font-semibold text-base">{presupuesto.listaPrecio?.nombre || "N/A"}</p>
                 </div>

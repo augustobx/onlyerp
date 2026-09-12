@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Save, Percent, AlertOctagon, TrendingDown, Users, Calculator, Landmark, ShieldCheck } from "lucide-react";
+import { Save, Percent, AlertOctagon, TrendingDown, Users, Calculator, Landmark, ShieldCheck, Boxes } from "lucide-react";
 
 export default function ConfiguracionComercialPage() {
     const [isPending, startTransition] = useTransition();
@@ -19,7 +19,8 @@ export default function ConfiguracionComercialPage() {
         penalizacion: 2,
         limite: 10,
         redondear_a_cinco: false,
-        aplicar_iva_en_precios: false
+        aplicar_iva_en_precios: false,
+        permitir_stock_negativo: false
     });
 
     const cargarDatos = () => {
@@ -32,7 +33,8 @@ export default function ConfiguracionComercialPage() {
                         penalizacion: res.config.penalizacion_global,
                         limite: res.config.limite_desc_global,
                         redondear_a_cinco: res.config.redondear_a_cinco,
-                        aplicar_iva_en_precios: res.config.aplicar_iva_en_precios || false
+                        aplicar_iva_en_precios: res.config.aplicar_iva_en_precios || false,
+                        permitir_stock_negativo: res.config.permitir_stock_negativo || false
                     });
                 }
             }
@@ -44,7 +46,7 @@ export default function ConfiguracionComercialPage() {
     const guardarGlobales = () => {
         startTransition(async () => {
             const res = await actualizarReglasGlobales(globales);
-            if (res.success) toast.success("¡Reglas comerciales y tratamiento de IVA actualizados!");
+            if (res.success) toast.success("¡Reglas comerciales, tratamiento de IVA y stock actualizados!");
             else toast.error(res.error);
         });
     };
@@ -136,7 +138,77 @@ export default function ConfiguracionComercialPage() {
                 </CardContent>
             </Card>
 
-            {/* CARD 2: REGLAS GLOBALES Y COMISIONES */}
+            {/* CARD 2: CONTROL DE STOCK Y VENTAS EN CERO / STOCK NEGATIVO */}
+            <Card className="border-slate-200 bg-white shadow-sm overflow-hidden">
+                <CardHeader className="bg-slate-50/80 border-b border-slate-100 pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <CardTitle className="text-lg flex items-center gap-2 text-slate-900 font-black">
+                            <Boxes className="h-5 w-5 text-indigo-600" /> Control de Stock y Ventas sin Stock
+                        </CardTitle>
+                        <Badge className={`font-bold text-xs ${globales.permitir_stock_negativo ? 'bg-amber-100 text-amber-800 border-amber-300' : 'bg-emerald-100 text-emerald-800 border-emerald-300'}`}>
+                            {globales.permitir_stock_negativo ? '⚠️ Permitir Stock Negativo (Permisivo)' : '🛡️ Bloqueo Activo en 0 (Estricto)'}
+                        </Badge>
+                    </div>
+                    <CardDescription className="text-xs text-slate-600">
+                        Elegí si el ERP y la PWA de preventa permiten realizar pedidos y ventas cuando el stock esté en 0 o sea insuficiente.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Opción 1: Bloquear ventas en 0 (Estricto) */}
+                        <div
+                            onClick={() => setGlobales({ ...globales, permitir_stock_negativo: false })}
+                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                !globales.permitir_stock_negativo
+                                    ? 'border-emerald-600 bg-emerald-50/40 shadow-sm'
+                                    : 'border-slate-200 hover:border-slate-300 bg-white opacity-70'
+                            }`}
+                        >
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <h4 className="font-black text-sm text-slate-900">Modo Estricto: Bloquear Ventas sin Stock (Recomendado)</h4>
+                                    <span className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${!globales.permitir_stock_negativo ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>
+                                        {!globales.permitir_stock_negativo && <span className="h-1.5 w-1.5 rounded-full bg-white"></span>}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    Si el producto está en <strong>0 o la cantidad solicitada supera el stock disponible</strong>, se bloquea la venta o pedido. <strong>No permite generar saldos negativos</strong> en el inventario.
+                                </p>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-md mt-3 inline-block w-fit">
+                                Ideal para: Clientes que si tienen 0 no quieren vender ni generar negativos
+                            </span>
+                        </div>
+
+                        {/* Opción 2: Permitir stock negativo (Permisivo) */}
+                        <div
+                            onClick={() => setGlobales({ ...globales, permitir_stock_negativo: true })}
+                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                globales.permitir_stock_negativo
+                                    ? 'border-amber-500 bg-amber-50/40 shadow-sm'
+                                    : 'border-slate-200 hover:border-slate-300 bg-white opacity-70'
+                            }`}
+                        >
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <h4 className="font-black text-sm text-slate-900">Modo Permisivo: Permitir Ventas y Pedidos en Negativo</h4>
+                                    <span className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${globales.permitir_stock_negativo ? 'border-amber-500 bg-amber-500' : 'border-slate-300'}`}>
+                                        {globales.permitir_stock_negativo && <span className="h-1.5 w-1.5 rounded-full bg-white"></span>}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    Permite continuar la venta o pedido en modo preventa aunque el producto esté en 0. <strong>El inventario pasará a valores negativos</strong> reflejando la mercadería adeudada.
+                                </p>
+                            </div>
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-100/60 px-2 py-0.5 rounded-md mt-3 inline-block w-fit">
+                                Ideal para: Preventa masiva antes del ingreso de mercadería
+                            </span>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* CARD 3: REGLAS GLOBALES Y COMISIONES */}
             <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="bg-slate-50/80 border-b border-slate-100 pb-4">
                     <CardTitle className="text-lg flex items-center gap-2 text-slate-900"><Percent className="h-5 w-5 text-indigo-600" /> Parámetros Comerciales y Redondeo</CardTitle>

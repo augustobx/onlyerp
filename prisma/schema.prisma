@@ -173,6 +173,7 @@ model EmpresaConfig {
   
   redondear_a_cinco    Boolean  @default(false)
   aplicar_iva_en_precios Boolean @default(false)
+  permitir_stock_negativo Boolean @default(false)
 
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt

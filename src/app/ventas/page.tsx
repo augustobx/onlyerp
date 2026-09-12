@@ -43,7 +43,7 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
     // ESTADOS DEL SISTEMA
     // ==========================================
     const [listasGlobales, setListasGlobales] = useState<any[]>([]);
-    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false, aplicar_iva_en_precios: false });
+    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false, aplicar_iva_en_precios: false, permitir_stock_negativo: false });
 
     // Sucursales y Depósitos Activos
     const [usuarioSesion, setUsuarioSesion] = useState<any>(null);
@@ -275,6 +275,11 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
 
         // === VALIDACIÓN DE STOCK ===
         if (stockEfectivo <= 0) {
+            if (!configuracionGlobal.permitir_stock_negativo) {
+                toast.error(`SIN STOCK: "${producto.nombre_producto}" tiene stock en ${stockEfectivo} un. en este depósito. Las ventas sin stock están deshabilitadas por configuración.`);
+                return;
+            }
+
             if (cantEnOtrosCarritos > 0) {
                 if (!window.confirm(`ATENCIÓN: Cuentas con ${stockFisico} en stock físico, pero ${cantEnOtrosCarritos} unidades están apartadas en otras pestañas. Stock libre es ${stockEfectivo}. ¿Forzar venta en negativo?`)) {
                     return;
@@ -370,8 +375,14 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
         const item = nuevosItems[index];
 
         if (campo === "cantidad") {
-            item.cantidad = numValue;
-            item.subtotal = numValue * item.precio_final;
+            if (!configuracionGlobal.permitir_stock_negativo && item.stock_actual !== undefined && numValue > item.stock_actual) {
+                toast.warning(`Límite de stock disponible para "${item.nombre}": ${item.stock_actual} unidades.`);
+                item.cantidad = Math.max(0, item.stock_actual);
+                item.subtotal = item.cantidad * item.precio_final;
+            } else {
+                item.cantidad = numValue;
+                item.subtotal = numValue * item.precio_final;
+            }
         }
         else if (campo === "descuento_individual") {
             item.descuento_individual = numValue;

@@ -39,7 +39,7 @@ export default function PwaVendedor() {
     const [listas, setListas] = useState<any[]>([]);
     const [marcas, setMarcas] = useState<any[]>([]);
     const [categorias, setCategorias] = useState<any[]>([]);
-    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false, aplicar_iva_en_precios: false });
+    const [configuracionGlobal, setConfiguracionGlobal] = useState({ redondear_a_cinco: false, aplicar_iva_en_precios: false, permitir_stock_negativo: false });
     const [pedidosHistorial, setPedidosHistorial] = useState<any[]>([]);
     const [filtroHistorial, setFiltroHistorial] = useState("");
     const [refrescando, setRefrescando] = useState(false);
@@ -366,7 +366,15 @@ export default function PwaVendedor() {
         const itemExistente = carrito[index];
         const nuevaCantidad = (itemExistente ? itemExistente.cantidad : 0) + delta;
 
-        if (nuevaCantidad > prod.stock_actual) return toast.warning(`Límite de stock: ${prod.stock_actual}`);
+        const stockDisponible = Number(prod.stock_actual ?? 0);
+        if (!configuracionGlobal.permitir_stock_negativo) {
+            if (stockDisponible <= 0 && delta > 0) {
+                return toast.error(`SIN STOCK: "${prod.nombre_producto}" tiene stock en 0. Las ventas sin stock están deshabilitadas.`);
+            }
+            if (nuevaCantidad > stockDisponible) {
+                return toast.warning(`Límite de stock disponible: ${stockDisponible} un.`);
+            }
+        }
         if (nuevaCantidad < 0) return;
 
         let nuevos = [...carrito];
@@ -420,6 +428,20 @@ export default function PwaVendedor() {
             return;
         }
 
+        // Si no se permite vender sin stock, validar que todos los productos del combo tengan stock suficiente
+        if (!configuracionGlobal.permitir_stock_negativo) {
+            for (const it of combo.items) {
+                const prod = it.producto;
+                const prodCat = productosCatalogo.find(p => p.id === prod.id);
+                const stockDisponible = Number(prodCat?.stock_actual ?? prod?.stock_actual ?? 0);
+                const itemExistente = carrito.find(i => i.productoId === prod.id);
+                const cantYaEnCarrito = itemExistente ? itemExistente.cantidad : 0;
+                if (stockDisponible < (cantYaEnCarrito + it.cantidad)) {
+                    return toast.error(`SIN STOCK: El combo incluye "${prod?.nombre_producto || 'un producto'}" que tiene solo ${stockDisponible} un. disponibles.`);
+                }
+            }
+        }
+
         let nuevos = [...carrito];
         for (const it of combo.items) {
             const prod = it.producto;
@@ -446,7 +468,7 @@ export default function PwaVendedor() {
                     descuento_individual: dtoCombo,
                     precio_final: precioFinal,
                     subtotal: Number((precioFinal * cantAgregar).toFixed(2)),
-                    stock_maximo: 999
+                    stock_maximo: prod.stock_actual ?? 999
                 });
             }
         }
@@ -465,6 +487,17 @@ export default function PwaVendedor() {
     const confirmarPedido = async () => {
         if (!cliente) return toast.error("Seleccione un cliente.");
         if (carrito.length === 0) return toast.error("El carrito está vacío.");
+
+        // Validación de stock antes de enviar
+        if (!configuracionGlobal.permitir_stock_negativo) {
+            for (const item of carrito) {
+                const prod = item.productoRaw || productosCatalogo.find(p => p.id === item.productoId);
+                const stockDisponible = Number(prod?.stock_actual ?? item.stock_maximo ?? 0);
+                if (stockDisponible < item.cantidad) {
+                    return toast.error(`SIN STOCK: "${item.nombre}" tiene solo ${stockDisponible} un. disponibles (pedido: ${item.cantidad}). Modificá la cantidad antes de enviar.`);
+                }
+            }
+        }
 
         const payload = {
             clienteId: cliente.id,
@@ -1430,7 +1463,9 @@ export default function PwaVendedor() {
                             const itemEnCarrito = obtenerItemCarrito(p.id);
                             const precioBase = calcularPrecioBase(p, selectedListaId);
                             const precioMostrar = itemEnCarrito ? itemEnCarrito.precio_final : precioBase;
-                            const tieneStock = p.stock_actual > 0;
+                            const stockNum = Number(p.stock_actual ?? 0);
+                            const tieneStock = stockNum > 0;
+                            const puedeSumar = tieneStock || configuracionGlobal.permitir_stock_negativo;
 
                             return (
                                 <Card key={p.id} className={`border-0 rounded-3xl shadow-sm ${!tieneStock && 'opacity-60'}`}>
@@ -1460,7 +1495,7 @@ export default function PwaVendedor() {
                                                 <p className="text-[10px] text-zinc-400 font-mono">{p.codigo_articulo}</p>
                                                 <div className="flex gap-1.5 mt-1 flex-wrap">
                                                     <span className="text-[9px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-lg">{p.marca?.nombre || 'S/M'}</span>
-                                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-lg ${tieneStock ? 'text-emerald-600 bg-emerald-50' : 'text-red-500 bg-red-50'}`}>STOCK: {p.stock_actual}</span>
+                                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-lg ${tieneStock ? 'text-emerald-600 bg-emerald-50' : 'text-red-500 bg-red-50'}`}>STOCK: {p.stock_actual ?? 0}</span>
                                                 </div>
                                             </div>
 
@@ -1472,9 +1507,9 @@ export default function PwaVendedor() {
                                         {rolUsuario !== 'REPARTIDOR' ? (
                                             <div className="grid grid-cols-5 gap-2 items-center pt-1 border-t border-slate-100">
                                                 <div className="col-span-3 flex items-center justify-between bg-zinc-100 rounded-2xl p-1 h-11">
-                                                    <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400" disabled={!tieneStock} onClick={() => ajustarCantidadProducto(p, -1)}><Minus className="h-4 w-4" /></Button>
+                                                    <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400" disabled={!itemEnCarrito || itemEnCarrito.cantidad <= 0} onClick={() => ajustarCantidadProducto(p, -1)}><Minus className="h-4 w-4" /></Button>
                                                     <span className="font-black text-zinc-900 text-base">{itemEnCarrito?.cantidad || 0}</span>
-                                                    <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400" disabled={!tieneStock} onClick={() => ajustarCantidadProducto(p, 1)}><Plus className="h-4 w-4" /></Button>
+                                                    <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400" disabled={!puedeSumar} onClick={() => ajustarCantidadProducto(p, 1)}><Plus className="h-4 w-4" /></Button>
                                                 </div>
                                                 <div className="col-span-2 relative">
                                                     <Percent className="absolute left-2 top-3.5 h-3 w-3 text-indigo-300" />
@@ -1483,7 +1518,7 @@ export default function PwaVendedor() {
                                             </div>
                                         ) : (
                                             <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
-                                                <span className="font-semibold text-zinc-400">Stock: {p.stock_actual} un.</span>
+                                                <span className="font-semibold text-zinc-400">Stock: {p.stock_actual ?? 0} un.</span>
                                                 <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200/60">
                                                     Consulta de Precio
                                                 </span>

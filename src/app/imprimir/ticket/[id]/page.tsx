@@ -92,6 +92,10 @@ export default function TicketPrintPage() {
             <div className="border-b-2 border-black border-dashed pb-3 mb-3">
                 <p><span className="font-bold">Cliente:</span> {venta.cliente.nombre_razon_social}</p>
                 <p><span className="font-bold">CUIT/DNI:</span> {venta.cliente.dni_cuit || "Consumidor Final"}</p>
+                <p><span className="font-bold">Dirección:</span> {venta.cliente?.direccion || venta.direccion_envio || "---"}</p>
+                {venta.direccion_envio && venta.cliente?.direccion && venta.direccion_envio !== venta.cliente.direccion && (
+                    <p><span className="font-bold">Entrega en:</span> {venta.direccion_envio}</p>
+                )}
                 <div className="mt-1">
                     <span className="font-bold">Medios de Pago:</span>
                     {venta.pagos && venta.pagos.length > 0 ? (

@@ -79,7 +79,7 @@ export async function obtenerListasPrecio() {
 
 export async function obtenerConfiguracionGlobal() {
   const tenant = await getTenantContext();
-  if (!tenant) return { redondear_a_cinco: false, aplicar_iva_en_precios: false };
+  if (!tenant) return { redondear_a_cinco: false, aplicar_iva_en_precios: false, permitir_stock_negativo: false };
 
   const config = await prisma.empresaConfig.findUnique({
     where: { tenantId: tenant.id },
@@ -87,6 +87,7 @@ export async function obtenerConfiguracionGlobal() {
   return {
     redondear_a_cinco: config?.redondear_a_cinco || false,
     aplicar_iva_en_precios: config?.aplicar_iva_en_precios || false,
+    permitir_stock_negativo: config?.permitir_stock_negativo || false,
   };
 }
 
@@ -240,13 +241,18 @@ export async function registrarVenta(data: any) {
         }
 
         // === LÓGICA DE STOCK Y LISTAS ===
+        const configEmpresa = await tx.empresaConfig.findUnique({
+          where: { tenantId: tenant.id },
+        });
+        const permitirStockNegativo = configEmpresa?.permitir_stock_negativo ?? false;
+
         for (const item of data.carrito) {
           const prod = await tx.producto.findFirst({
             where: { id: item.productoId, tenantId: tenant.id },
           });
           if (!prod) throw new Error(`Producto ID ${item.productoId} no encontrado.`);
 
-          const stockUbi = await tx.stockUbicacion.findUnique({
+          let stockUbi = await tx.stockUbicacion.findUnique({
             where: {
               productoId_depositoId: {
                 productoId: item.productoId,
@@ -256,13 +262,20 @@ export async function registrarVenta(data: any) {
           });
 
           if (!stockUbi) {
-            await tx.stockUbicacion.create({
+            stockUbi = await tx.stockUbicacion.create({
               data: {
                 productoId: item.productoId,
                 depositoId: data.depositoId,
                 cantidad: 0,
               },
             });
+          }
+
+          const disponible = stockUbi?.cantidad ?? 0;
+          if (!permitirStockNegativo && disponible < item.cantidad) {
+            throw new Error(
+              `SIN_STOCK: El producto "${prod.nombre_producto}" tiene solo ${disponible} un. disponibles en el depósito activo (solicitado: ${item.cantidad}). Las ventas sin stock están deshabilitadas por configuración.`
+            );
           }
         }
 

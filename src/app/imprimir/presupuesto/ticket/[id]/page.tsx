@@ -88,6 +88,7 @@ function TicketContent({ id }: { id: string }) {
             <div className="border-b-2 border-black border-dashed pb-3 mb-3">
                 <p><span className="font-bold">Cliente:</span> {presupuesto.cliente?.nombre_razon_social || "Consumidor Final"}</p>
                 <p><span className="font-bold">DNI/CUIT:</span> {presupuesto.cliente?.dni_cuit || "N/A"}</p>
+                <p><span className="font-bold">Dirección:</span> {presupuesto.cliente?.direccion || "---"}</p>
                 {presupuesto.notas && (
                     <p className="mt-1 italic text-[10px]">Notas: {presupuesto.notas}</p>
                 )}

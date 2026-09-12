@@ -139,7 +139,8 @@ export default function FacturaA4PrintPage({ params }: { params: Promise<{ id: s
                     <div><span className="font-bold">Cliente:</span> {venta.cliente?.nombre_razon_social || "Consumidor Final"}</div>
                     <div><span className="font-bold">CUIT/DNI:</span> {venta.cliente?.dni_cuit || "---"}</div>
                     <div><span className="font-bold">Condición de IVA:</span> {venta.cliente?.condicion_iva || "Consumidor Final"}</div>
-                    <div className="flex items-center">
+                    <div><span className="font-bold">Dirección / Domicilio:</span> {venta.cliente?.direccion || "---"}</div>
+                    <div className="col-span-2 flex items-center">
                         <span className="font-bold whitespace-nowrap mr-1">Pago:</span>
                         <span className="truncate">
                             {venta.pagos && venta.pagos.length > 0 ? (
@@ -149,9 +150,9 @@ export default function FacturaA4PrintPage({ params }: { params: Promise<{ id: s
                             )}
                         </span>
                     </div>
-                    {venta.direccion_envio && (
+                    {venta.direccion_envio && venta.direccion_envio !== venta.cliente?.direccion && (
                         <div className="col-span-2 text-[10px] text-slate-700">
-                            <span className="font-bold">Entrega en:</span> {venta.direccion_envio}
+                            <span className="font-bold">Lugar de Entrega:</span> {venta.direccion_envio}
                         </div>
                     )}
                 </div>

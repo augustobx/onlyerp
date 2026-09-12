@@ -117,6 +117,11 @@ export async function registrarPedidoPWA(data: any) {
       );
 
       // A. VERIFICACIÓN INTELIGENTE DE STOCK
+      const configEmpresa = await tx.empresaConfig.findUnique({
+        where: { tenantId: tenant.id },
+      });
+      const permitirStockNegativo = configEmpresa?.permitir_stock_negativo ?? false;
+
       const itemsConDeposito: { item: any; targetDepositoId: number }[] = [];
 
       for (const item of data.carrito) {
@@ -139,7 +144,7 @@ export async function registrarPedidoPWA(data: any) {
           }
         }
 
-        if (!stockUbi || stockUbi.cantidad < item.cantidad) {
+        if (!permitirStockNegativo && (!stockUbi || stockUbi.cantidad < item.cantidad)) {
           const totalStockAgg = await tx.stockUbicacion.aggregate({
             where: {
               productoId: item.productoId,
@@ -151,7 +156,7 @@ export async function registrarPedidoPWA(data: any) {
             where: { id: item.productoId, tenantId: tenant.id },
           });
           const disponible = stockUbi?.cantidad ?? (totalStockAgg._sum.cantidad || 0);
-          throw new Error(`SIN STOCK: Solo quedan ${disponible} de "${prod?.nombre_producto}".`);
+          throw new Error(`SIN STOCK: Solo quedan ${disponible} un. de "${prod?.nombre_producto}". Las ventas sin stock están deshabilitadas.`);
         }
 
         itemsConDeposito.push({ item, targetDepositoId: targetDepoId });
@@ -794,6 +799,11 @@ export async function editarPedidoAdmin(
         });
       }
 
+      const configEmpresa = await tx.empresaConfig.findUnique({
+        where: { tenantId: tenant.id },
+      });
+      const permitirStockNegativo = configEmpresa?.permitir_stock_negativo ?? false;
+
       for (const item of nuevoCarrito) {
         let targetDepoId = depositoCentralId;
         let stockUbi = await tx.stockUbicacion.findUnique({
@@ -814,7 +824,7 @@ export async function editarPedidoAdmin(
           }
         }
 
-        if (!stockUbi || stockUbi.cantidad < item.cantidad) {
+        if (!permitirStockNegativo && (!stockUbi || stockUbi.cantidad < item.cantidad)) {
           const totalStockAgg = await tx.stockUbicacion.aggregate({
             where: { productoId: item.productoId, deposito: { tenantId: tenant.id, estado: true } },
             _sum: { cantidad: true },
@@ -823,7 +833,7 @@ export async function editarPedidoAdmin(
             where: { id: item.productoId, tenantId: tenant.id },
           });
           const disponible = stockUbi?.cantidad ?? (totalStockAgg._sum.cantidad || 0);
-          throw new Error(`SIN STOCK SUFICIENTE: Solo quedan ${disponible} de "${prod?.nombre_producto}".`);
+          throw new Error(`SIN STOCK SUFICIENTE: Solo quedan ${disponible} un. de "${prod?.nombre_producto}". Las ventas sin stock están deshabilitadas.`);
         }
 
         await tx.stockUbicacion.upsert({
