@@ -218,6 +218,9 @@ export async function getProductos() {
         marca: true,
         categoria: true,
         stocks: {
+          where: {
+            deposito: { estado: true },
+          },
           include: {
             deposito: {
               include: { sucursal: true },
@@ -248,7 +251,7 @@ export async function getProductos() {
         : 0;
       return {
         ...p,
-        stock_actual: stockFisico - stockComprometido,
+        stock_actual: stockFisico,
         stock_fisico: stockFisico,
         stock_comprometido: stockComprometido,
       };
@@ -275,6 +278,9 @@ export async function getProductoById(id: number) {
         marca: true,
         categoria: true,
         stocks: {
+          where: {
+            deposito: { estado: true },
+          },
           include: {
             deposito: {
               include: { sucursal: true },
@@ -304,7 +310,7 @@ export async function getProductoById(id: number) {
 
     return {
       ...producto,
-      stock_actual: stockFisico - stockComprometido,
+      stock_actual: stockFisico,
       stock_fisico: stockFisico,
       stock_comprometido: stockComprometido,
     };

@@ -27,6 +27,102 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+function CantidadInput({
+    cantidad,
+    disabledMenos = false,
+    disabledMas = false,
+    onAjustar,
+    onCambiar,
+    className = "",
+    size = "md"
+}: {
+    cantidad: number;
+    disabledMenos?: boolean;
+    disabledMas?: boolean;
+    onAjustar: (delta: number) => void;
+    onCambiar: (cantidad: number) => void;
+    className?: string;
+    size?: "sm" | "md";
+}) {
+    const [localVal, setLocalVal] = useState<string>(cantidad > 0 ? String(cantidad) : "0");
+
+    useEffect(() => {
+        setLocalVal(cantidad > 0 ? String(cantidad) : "0");
+    }, [cantidad]);
+
+    const handleBlur = () => {
+        const parsed = parseInt(localVal, 10);
+        if (isNaN(parsed) || parsed < 0) {
+            setLocalVal(String(cantidad || 0));
+            onCambiar(cantidad || 0);
+        } else {
+            setLocalVal(String(parsed));
+            onCambiar(parsed);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.currentTarget.blur();
+        }
+    };
+
+    const btnH = size === "sm" ? "h-8 w-8" : "h-9 w-9";
+
+    return (
+        <div className={`flex items-center justify-between rounded-2xl p-1 ${className}`}>
+            <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={`${btnH} text-zinc-400 hover:text-zinc-700 shrink-0`}
+                disabled={disabledMenos}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onAjustar(-1);
+                }}
+            >
+                <Minus className="h-4 w-4" />
+            </Button>
+
+            <input
+                type="number"
+                min="0"
+                step="1"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={localVal}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => {
+                    setLocalVal(e.target.value);
+                    const n = parseInt(e.target.value, 10);
+                    if (!isNaN(n) && n >= 0) {
+                        onCambiar(n);
+                    }
+                }}
+                onBlur={handleBlur}
+                onKeyDown={handleKeyDown}
+                onClick={(e) => e.stopPropagation()}
+                className="w-14 text-center font-black text-zinc-900 text-base bg-transparent border-0 focus:outline-none focus:ring-0 p-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+
+            <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={`${btnH} text-zinc-400 hover:text-zinc-700 shrink-0`}
+                disabled={disabledMas}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onAjustar(1);
+                }}
+            >
+                <Plus className="h-4 w-4" />
+            </Button>
+        </div>
+    );
+}
+
 export default function PwaVendedor() {
     // ==========================================
     // ESTADOS MAESTROS Y NAVEGACIÓN
@@ -361,45 +457,62 @@ export default function PwaVendedor() {
 
     const obtenerItemCarrito = (productoId: number) => carrito.find(i => i.productoId === productoId);
 
-    const ajustarCantidadProducto = (prod: any, delta: number) => {
-        const index = carrito.findIndex(i => i.productoId === prod.id);
-        const itemExistente = carrito[index];
-        const nuevaCantidad = (itemExistente ? itemExistente.cantidad : 0) + delta;
+    const recalcularTotalesItem = (item: any) => {
+        const descuentoMonto = item.precio_unitario * (item.descuento_individual / 100);
+        let final = item.precio_unitario - descuentoMonto;
+        final = Number(redondearPrecio(final, configuracionGlobal.redondear_a_cinco).toFixed(2));
+        item.precio_final = final;
+        item.subtotal = Number((final * item.cantidad).toFixed(2));
+    };
 
-        const stockDisponible = Number(prod.stock_actual ?? 0);
+    const establecerCantidadProducto = (prod: any, cantidadDeseada: number) => {
+        const stockDisponible = Number(prod.stock_actual ?? prod.stock_maximo ?? 0);
+        let cantidadFinal = Math.max(0, cantidadDeseada);
+
         if (!configuracionGlobal.permitir_stock_negativo) {
-            if (stockDisponible <= 0 && delta > 0) {
-                return toast.error(`SIN STOCK: "${prod.nombre_producto}" tiene stock en 0. Las ventas sin stock están deshabilitadas.`);
-            }
-            if (nuevaCantidad > stockDisponible) {
-                return toast.warning(`Límite de stock disponible: ${stockDisponible} un.`);
+            if (stockDisponible <= 0 && cantidadFinal > 0) {
+                toast.error(`SIN STOCK: "${prod.nombre_producto || prod.nombre}" tiene stock en 0. Las ventas sin stock están deshabilitadas.`);
+                cantidadFinal = 0;
+            } else if (stockDisponible > 0 && cantidadFinal > stockDisponible) {
+                toast.warning(`Límite de stock disponible: ${stockDisponible} un.`);
+                cantidadFinal = stockDisponible;
             }
         }
-        if (nuevaCantidad < 0) return;
 
+        const index = carrito.findIndex(i => i.productoId === prod.id);
         let nuevos = [...carrito];
-        const precioBase = calcularPrecioBase(prod, selectedListaId);
 
         if (index >= 0) {
-            if (nuevaCantidad === 0) nuevos = nuevos.filter(i => i.productoId !== prod.id);
-            else {
-                nuevos[index].cantidad = nuevaCantidad;
+            if (cantidadFinal === 0) {
+                nuevos = nuevos.filter(i => i.productoId !== prod.id);
+            } else {
+                nuevos[index].cantidad = cantidadFinal;
                 recalcularTotalesItem(nuevos[index]);
             }
-        } else if (nuevaCantidad > 0) {
-            nuevos.push({
+        } else if (cantidadFinal > 0) {
+            const precioBase = calcularPrecioBase(prod, selectedListaId);
+            const nuevoItem = {
                 productoId: prod.id,
-                nombre: prod.nombre_producto,
-                cantidad: 1,
+                nombre: prod.nombre_producto || prod.nombre,
+                cantidad: cantidadFinal,
                 precio_unitario: precioBase,
                 descuento_individual: 0,
                 precio_final: precioBase,
-                subtotal: precioBase,
-                stock_maximo: prod.stock_actual,
+                subtotal: Number((precioBase * cantidadFinal).toFixed(2)),
+                stock_maximo: prod.stock_actual ?? prod.stock_maximo,
                 productoRaw: prod
-            });
+            };
+            recalcularTotalesItem(nuevoItem);
+            nuevos.push(nuevoItem);
         }
         setCarrito(nuevos);
+    };
+
+    const ajustarCantidadProducto = (prod: any, delta: number) => {
+        const index = carrito.findIndex(i => i.productoId === prod.id);
+        const itemExistente = carrito[index];
+        const actual = itemExistente ? itemExistente.cantidad : 0;
+        establecerCantidadProducto(prod, actual + delta);
     };
 
     const cambiarDescuento = (productoId: number, nuevoDto: number) => {
@@ -410,14 +523,6 @@ export default function PwaVendedor() {
             recalcularTotalesItem(nuevos[index]);
             setCarrito(nuevos);
         }
-    };
-
-    const recalcularTotalesItem = (item: any) => {
-        const descuentoMonto = item.precio_unitario * (item.descuento_individual / 100);
-        let final = item.precio_unitario - descuentoMonto;
-        final = Number(redondearPrecio(final, configuracionGlobal.redondear_a_cinco).toFixed(2));
-        item.precio_final = final;
-        item.subtotal = Number((final * item.cantidad).toFixed(2));
     };
 
     // Agregar Combo completo al carrito
@@ -852,11 +957,14 @@ export default function PwaVendedor() {
                                                     <p className="font-black text-lg text-emerald-600 leading-none">${item.subtotal.toFixed(2)}</p>
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <div className="flex items-center justify-between bg-zinc-50 rounded-2xl p-1 border border-zinc-100">
-                                                        <Button variant="ghost" size="icon" className="text-zinc-400" onClick={() => ajustarCantidadProducto({ id: item.productoId, stock_actual: item.stock_maximo }, -1)}><Minus className="h-4 w-4" /></Button>
-                                                        <span className="font-black text-zinc-800">{item.cantidad}</span>
-                                                        <Button variant="ghost" size="icon" className="text-zinc-400" onClick={() => ajustarCantidadProducto({ id: item.productoId, stock_actual: item.stock_maximo }, 1)}><Plus className="h-4 w-4" /></Button>
-                                                    </div>
+                                                    <CantidadInput
+                                                        cantidad={item.cantidad}
+                                                        disabledMenos={false}
+                                                        disabledMas={!configuracionGlobal.permitir_stock_negativo && Number(item.stock_maximo ?? 999999) <= item.cantidad}
+                                                        onAjustar={(delta) => ajustarCantidadProducto({ id: item.productoId, nombre: item.nombre, stock_actual: item.stock_maximo }, delta)}
+                                                        onCambiar={(nuevaCant) => establecerCantidadProducto({ id: item.productoId, nombre: item.nombre, stock_actual: item.stock_maximo }, nuevaCant)}
+                                                        className="bg-zinc-50 border border-zinc-100 h-12"
+                                                    />
                                                     <div className="relative">
                                                         <Percent className="absolute left-3 top-3 h-4 w-4 text-indigo-400" />
                                                         <Input type="number" placeholder="Dto %" className="pl-9 h-12 bg-indigo-50/50 border-indigo-100 rounded-2xl font-black text-indigo-700 text-center" value={item.descuento_individual || ""} onChange={(e) => cambiarDescuento(item.productoId, Number(e.target.value))} />
@@ -1506,10 +1614,15 @@ export default function PwaVendedor() {
 
                                         {rolUsuario !== 'REPARTIDOR' ? (
                                             <div className="grid grid-cols-5 gap-2 items-center pt-1 border-t border-slate-100">
-                                                <div className="col-span-3 flex items-center justify-between bg-zinc-100 rounded-2xl p-1 h-11">
-                                                    <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400" disabled={!itemEnCarrito || itemEnCarrito.cantidad <= 0} onClick={() => ajustarCantidadProducto(p, -1)}><Minus className="h-4 w-4" /></Button>
-                                                    <span className="font-black text-zinc-900 text-base">{itemEnCarrito?.cantidad || 0}</span>
-                                                    <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400" disabled={!puedeSumar} onClick={() => ajustarCantidadProducto(p, 1)}><Plus className="h-4 w-4" /></Button>
+                                                <div className="col-span-3">
+                                                    <CantidadInput
+                                                        cantidad={itemEnCarrito?.cantidad || 0}
+                                                        disabledMenos={!itemEnCarrito || itemEnCarrito.cantidad <= 0}
+                                                        disabledMas={!puedeSumar}
+                                                        onAjustar={(delta) => ajustarCantidadProducto(p, delta)}
+                                                        onCambiar={(nuevaCant) => establecerCantidadProducto(p, nuevaCant)}
+                                                        className="bg-zinc-100 h-11"
+                                                    />
                                                 </div>
                                                 <div className="col-span-2 relative">
                                                     <Percent className="absolute left-2 top-3.5 h-3 w-3 text-indigo-300" />

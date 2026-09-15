@@ -122,44 +122,93 @@ export async function registrarPedidoPWA(data: any) {
       });
       const permitirStockNegativo = configEmpresa?.permitir_stock_negativo ?? false;
 
-      const itemsConDeposito: { item: any; targetDepositoId: number }[] = [];
+      const deduccionesStock: { productoId: number; depositoId: number; cantidad: number }[] = [];
 
       for (const item of data.carrito) {
-        let targetDepoId = baseDepositoId;
-        let stockUbi = await tx.stockUbicacion.findUnique({
-          where: { productoId_depositoId: { productoId: item.productoId, depositoId: targetDepoId } },
+        const cantRequerida = Number(item.cantidad);
+
+        // 1. Obtener todos los stocks del producto en depósitos activos de este tenant
+        const stocksDisponibles = await tx.stockUbicacion.findMany({
+          where: {
+            productoId: item.productoId,
+            deposito: { tenantId: tenant.id, estado: true },
+          },
+          include: { deposito: true },
+          orderBy: { cantidad: "desc" },
         });
 
-        if (!stockUbi || stockUbi.cantidad < item.cantidad) {
-          const altStock = await tx.stockUbicacion.findFirst({
-            where: {
-              productoId: item.productoId,
-              cantidad: { gte: item.cantidad },
-              deposito: { tenantId: tenant.id, estado: true },
-            },
-          });
-          if (altStock) {
-            targetDepoId = altStock.depositoId;
-            stockUbi = altStock;
-          }
-        }
+        const totalDisponible = stocksDisponibles.reduce(
+          (acc: number, curr: any) => acc + (curr.cantidad > 0 ? curr.cantidad : 0),
+          0
+        );
 
-        if (!permitirStockNegativo && (!stockUbi || stockUbi.cantidad < item.cantidad)) {
-          const totalStockAgg = await tx.stockUbicacion.aggregate({
-            where: {
-              productoId: item.productoId,
-              deposito: { tenantId: tenant.id, estado: true },
-            },
-            _sum: { cantidad: true },
-          });
+        if (!permitirStockNegativo && totalDisponible < cantRequerida) {
           const prod = await tx.producto.findFirst({
             where: { id: item.productoId, tenantId: tenant.id },
           });
-          const disponible = stockUbi?.cantidad ?? (totalStockAgg._sum.cantidad || 0);
-          throw new Error(`SIN STOCK: Solo quedan ${disponible} un. de "${prod?.nombre_producto}". Las ventas sin stock están deshabilitadas.`);
+          throw new Error(
+            `SIN STOCK: Solo quedan ${totalDisponible} un. de "${prod?.nombre_producto || item.nombre}". Las ventas sin stock están deshabilitadas.`
+          );
         }
 
-        itemsConDeposito.push({ item, targetDepositoId: targetDepoId });
+        // 2. Distribuir el descuento entre depósitos disponibles
+        const stockBase = stocksDisponibles.find((s: any) => s.depositoId === baseDepositoId);
+        if (stockBase && stockBase.cantidad >= cantRequerida) {
+          deduccionesStock.push({
+            productoId: item.productoId,
+            depositoId: baseDepositoId,
+            cantidad: cantRequerida,
+          });
+        } else {
+          const stockAlternativoCompleto = stocksDisponibles.find((s: any) => s.cantidad >= cantRequerida);
+          if (stockAlternativoCompleto) {
+            deduccionesStock.push({
+              productoId: item.productoId,
+              depositoId: stockAlternativoCompleto.depositoId,
+              cantidad: cantRequerida,
+            });
+          } else if (permitirStockNegativo && totalDisponible <= 0) {
+            deduccionesStock.push({
+              productoId: item.productoId,
+              depositoId: baseDepositoId,
+              cantidad: cantRequerida,
+            });
+          } else {
+            let restante = cantRequerida;
+
+            if (stockBase && stockBase.cantidad > 0) {
+              const aTomar = Math.min(stockBase.cantidad, restante);
+              deduccionesStock.push({
+                productoId: item.productoId,
+                depositoId: baseDepositoId,
+                cantidad: aTomar,
+              });
+              restante -= aTomar;
+            }
+
+            for (const s of stocksDisponibles) {
+              if (restante <= 0) break;
+              if (s.depositoId === baseDepositoId) continue;
+              if (s.cantidad <= 0) continue;
+
+              const aTomar = Math.min(s.cantidad, restante);
+              deduccionesStock.push({
+                productoId: item.productoId,
+                depositoId: s.depositoId,
+                cantidad: aTomar,
+              });
+              restante -= aTomar;
+            }
+
+            if (restante > 0) {
+              deduccionesStock.push({
+                productoId: item.productoId,
+                depositoId: baseDepositoId,
+                cantidad: restante,
+              });
+            }
+          }
+        }
       }
 
       // B. GENERAR NÚMERO DE PEDIDO SECUENCIAL ATÓMICO POR TENANT
@@ -211,11 +260,11 @@ export async function registrarPedidoPWA(data: any) {
       });
 
       // D. DESCONTAR STOCK PREVENTIVO DEL DEPÓSITO
-      for (const { item, targetDepositoId } of itemsConDeposito) {
+      for (const d of deduccionesStock) {
         await tx.stockUbicacion.upsert({
-          where: { productoId_depositoId: { productoId: item.productoId, depositoId: targetDepositoId } },
-          update: { cantidad: { decrement: item.cantidad } },
-          create: { productoId: item.productoId, depositoId: targetDepositoId, cantidad: -item.cantidad },
+          where: { productoId_depositoId: { productoId: d.productoId, depositoId: d.depositoId } },
+          update: { cantidad: { decrement: d.cantidad } },
+          create: { productoId: d.productoId, depositoId: d.depositoId, cantidad: -d.cantidad },
         });
       }
 
@@ -337,12 +386,24 @@ export async function accionarPedidoVendedor(pedidoId: number, accion: "CANCELAR
           update: { cantidad: { increment: item.cantidad } },
           create: { productoId: item.productoId, depositoId: depositoCentralId, cantidad: item.cantidad },
         });
+
+        await tx.movimientoStock.create({
+          data: {
+            tenantId: tenant.id,
+            productoId: item.productoId,
+            depositoDestinoId: depositoCentralId,
+            cantidad: item.cantidad,
+            tipo: "REINGRESO_RECHAZO_REPARTO",
+            motivo: `Devolución de stock por Pedido #${pedido.numero} ${accion === "EDITAR" ? "ANULADO PARA EDICIÓN" : "CANCELADO"} desde PWA Vendedor`,
+            usuarioId: pedido.usuarioId,
+          },
+        });
       }
 
       const fechaHora = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
       const mensajeAuditoria = `\n\n[SISTEMA ${fechaHora}] -> Pedido ${
         accion === "EDITAR" ? "ANULADO PARA EDICIÓN" : "CANCELADO"
-      } por el vendedor en calle. Stock liberado.`;
+      } por el vendedor en calle. Stock devuelto a depósito.`;
 
       const pedidoActualizado = await tx.pedido.update({
         where: { id: pedidoId },
@@ -356,6 +417,10 @@ export async function accionarPedidoVendedor(pedidoId: number, accion: "CANCELAR
     });
 
     revalidatePath("/vendedor");
+    revalidatePath("/pedidos");
+    revalidatePath("/pedidos/armados");
+    revalidatePath("/inventario");
+    revalidatePath("/ventas");
     return { success: true, data: resultado };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -416,12 +481,15 @@ export async function cambiarEstadoPedidoAdmin(
   nuevoEstado:
     | "APROBADO"
     | "RECHAZADO"
+    | "CANCELADO"
     | "FACTURADO"
     | "ARMADO"
     | "LISTO_ENTREGA"
     | "ENTREGADO"
     | "NO_ENTREGADO",
-  tipoComprobante?: string
+  tipoComprobante?: string,
+  requestedDepositoId?: number | null,
+  motivoCancelacion?: string
 ) {
   try {
     const tenant = await requireTenant();
@@ -439,19 +507,44 @@ export async function cambiarEstadoPedidoAdmin(
         });
         if (!pedido) throw new Error("Pedido no encontrado");
 
-        if (nuevoEstado === "RECHAZADO" && pedido.estado !== "RECHAZADO" && pedido.estado !== "CANCELADO") {
+        if (nuevoEstado === "RECHAZADO" || nuevoEstado === "CANCELADO") {
+          if (pedido.estado === "RECHAZADO" || pedido.estado === "CANCELADO") {
+            throw new Error(`El pedido ya se encuentra ${pedido.estado.toLowerCase()}.`);
+          }
+
           if (pedido.ventaId) {
             throw new Error(
-              `ACCESO DENEGADO: El pedido ya tiene una factura/comprobante emitido (Venta #${pedido.ventaId}).`
+              `ACCESO DENEGADO: El pedido ya tiene una factura/comprobante emitido (Venta #${pedido.ventaId}). Debe anular o procesar la nota de crédito desde Ventas.`
             );
           }
 
-          const depositoCentralId = await resolverDepositoId(tx, tenant.id, pedido.usuarioId, null);
+          const session = await getClientSession();
+          const sessionUsuarioId = (session as any)?.id ? Number((session as any).id) : null;
+
+          const depositoCentralId = await resolverDepositoId(
+            tx,
+            tenant.id,
+            pedido.usuarioId,
+            requestedDepositoId || null
+          );
+
           for (const item of pedido.detalles) {
             await tx.stockUbicacion.upsert({
               where: { productoId_depositoId: { productoId: item.productoId, depositoId: depositoCentralId } },
               update: { cantidad: { increment: item.cantidad } },
               create: { productoId: item.productoId, depositoId: depositoCentralId, cantidad: item.cantidad },
+            });
+
+            await tx.movimientoStock.create({
+              data: {
+                tenantId: tenant.id,
+                productoId: item.productoId,
+                depositoDestinoId: depositoCentralId,
+                cantidad: item.cantidad,
+                tipo: "REINGRESO_RECHAZO_REPARTO",
+                motivo: `Devolución de stock por Pedido #${pedido.numero} ${nuevoEstado} (Estado anterior: ${pedido.estado})${motivoCancelacion ? ` - Obs: ${motivoCancelacion}` : ""}`,
+                usuarioId: sessionUsuarioId || pedido.usuarioId,
+              },
             });
           }
 
@@ -459,8 +552,8 @@ export async function cambiarEstadoPedidoAdmin(
           const actualizado = await tx.pedido.update({
             where: { id: pedidoId },
             data: {
-              estado: "RECHAZADO",
-              notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> RECHAZADO. Stock devuelto.`,
+              estado: nuevoEstado,
+              notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> ${nuevoEstado}. Stock devuelto al inventario (Depósito ID: ${depositoCentralId}).${motivoCancelacion ? ` Motivo: ${motivoCancelacion}` : ""}`,
             },
           });
           return { pedido: actualizado };
@@ -804,42 +897,98 @@ export async function editarPedidoAdmin(
       });
       const permitirStockNegativo = configEmpresa?.permitir_stock_negativo ?? false;
 
+      const deduccionesStockEditar: { productoId: number; depositoId: number; cantidad: number }[] = [];
+
       for (const item of nuevoCarrito) {
-        let targetDepoId = depositoCentralId;
-        let stockUbi = await tx.stockUbicacion.findUnique({
-          where: { productoId_depositoId: { productoId: item.productoId, depositoId: targetDepoId } },
+        const cantRequerida = Number(item.cantidad);
+
+        const stocksDisponibles = await tx.stockUbicacion.findMany({
+          where: {
+            productoId: item.productoId,
+            deposito: { tenantId: tenant.id, estado: true },
+          },
+          include: { deposito: true },
+          orderBy: { cantidad: "desc" },
         });
 
-        if (!stockUbi || stockUbi.cantidad < item.cantidad) {
-          const altStock = await tx.stockUbicacion.findFirst({
-            where: {
-              productoId: item.productoId,
-              cantidad: { gte: item.cantidad },
-              deposito: { tenantId: tenant.id, estado: true },
-            },
-          });
-          if (altStock) {
-            targetDepoId = altStock.depositoId;
-            stockUbi = altStock;
-          }
-        }
+        const totalDisponible = stocksDisponibles.reduce(
+          (acc: number, curr: any) => acc + (curr.cantidad > 0 ? curr.cantidad : 0),
+          0
+        );
 
-        if (!permitirStockNegativo && (!stockUbi || stockUbi.cantidad < item.cantidad)) {
-          const totalStockAgg = await tx.stockUbicacion.aggregate({
-            where: { productoId: item.productoId, deposito: { tenantId: tenant.id, estado: true } },
-            _sum: { cantidad: true },
-          });
+        if (!permitirStockNegativo && totalDisponible < cantRequerida) {
           const prod = await tx.producto.findFirst({
             where: { id: item.productoId, tenantId: tenant.id },
           });
-          const disponible = stockUbi?.cantidad ?? (totalStockAgg._sum.cantidad || 0);
-          throw new Error(`SIN STOCK SUFICIENTE: Solo quedan ${disponible} un. de "${prod?.nombre_producto}". Las ventas sin stock están deshabilitadas.`);
+          throw new Error(
+            `SIN STOCK SUFICIENTE: Solo quedan ${totalDisponible} un. de "${prod?.nombre_producto || item.nombre}". Las ventas sin stock están deshabilitadas.`
+          );
         }
 
+        const stockCentral = stocksDisponibles.find((s: any) => s.depositoId === depositoCentralId);
+        if (stockCentral && stockCentral.cantidad >= cantRequerida) {
+          deduccionesStockEditar.push({
+            productoId: item.productoId,
+            depositoId: depositoCentralId,
+            cantidad: cantRequerida,
+          });
+        } else {
+          const stockAlternativo = stocksDisponibles.find((s: any) => s.cantidad >= cantRequerida);
+          if (stockAlternativo) {
+            deduccionesStockEditar.push({
+              productoId: item.productoId,
+              depositoId: stockAlternativo.depositoId,
+              cantidad: cantRequerida,
+            });
+          } else if (permitirStockNegativo && totalDisponible <= 0) {
+            deduccionesStockEditar.push({
+              productoId: item.productoId,
+              depositoId: depositoCentralId,
+              cantidad: cantRequerida,
+            });
+          } else {
+            let restante = cantRequerida;
+
+            if (stockCentral && stockCentral.cantidad > 0) {
+              const aTomar = Math.min(stockCentral.cantidad, restante);
+              deduccionesStockEditar.push({
+                productoId: item.productoId,
+                depositoId: depositoCentralId,
+                cantidad: aTomar,
+              });
+              restante -= aTomar;
+            }
+
+            for (const s of stocksDisponibles) {
+              if (restante <= 0) break;
+              if (s.depositoId === depositoCentralId) continue;
+              if (s.cantidad <= 0) continue;
+
+              const aTomar = Math.min(s.cantidad, restante);
+              deduccionesStockEditar.push({
+                productoId: item.productoId,
+                depositoId: s.depositoId,
+                cantidad: aTomar,
+              });
+              restante -= aTomar;
+            }
+
+            if (restante > 0) {
+              deduccionesStockEditar.push({
+                productoId: item.productoId,
+                depositoId: depositoCentralId,
+                cantidad: restante,
+              });
+            }
+          }
+        }
+      }
+
+      for (const d of deduccionesStockEditar) {
         await tx.stockUbicacion.upsert({
-          where: { productoId_depositoId: { productoId: item.productoId, depositoId: targetDepoId } },
-          update: { cantidad: { decrement: item.cantidad } },
-          create: { productoId: item.productoId, depositoId: targetDepoId, cantidad: -item.cantidad },
+          where: { productoId_depositoId: { productoId: d.productoId, depositoId: d.depositoId } },
+          update: { cantidad: { decrement: d.cantidad } },
+          create: { productoId: d.productoId, depositoId: d.depositoId, cantidad: -d.cantidad },
         });
       }
 
@@ -1223,3 +1372,11 @@ export async function actualizarFechaEntregaPedido(
     return { success: false, error: error.message || "Error al actualizar fecha de entrega." };
   }
 }
+
+export async function cancelarPedido(
+  pedidoId: number,
+  motivo?: string,
+  depositoId?: number | null
+) {
+  return await cambiarEstadoPedidoAdmin(pedidoId, "CANCELADO", undefined, depositoId, motivo);
+}

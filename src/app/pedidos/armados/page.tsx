@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import {
   Truck, CheckCircle2, XCircle, Clock, Calendar, User, Phone, MapPin,
   Search, Filter, ArrowLeft, RefreshCw, AlertCircle, Package, ExternalLink,
-  Printer, Receipt, RotateCcw, AlertTriangle, FileText, CreditCard, X
+  Printer, Receipt, RotateCcw, AlertTriangle, FileText, CreditCard, X, Ban
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -91,6 +91,24 @@ export default function PedidosArmadosPage() {
         toast.warning("Pedido registrado como NO ENTREGADO.");
         setPedidoNoEntregadoModal(null);
         setMotivoNoEntrega("");
+        cargarDatos();
+      } else {
+        toast.error(res.error);
+      }
+    });
+  };
+
+  const handleCancelarPedido = (pedido: any) => {
+    if (
+      !confirm(
+        `¿Seguro que querés CANCELAR el Pedido #${pedido.numero}? Se devolverá el stock de todos los artículos al depósito.`
+      )
+    )
+      return;
+    startTransition(async () => {
+      const res = await cambiarEstadoPedidoAdmin(pedido.id, "CANCELADO");
+      if (res.success) {
+        toast.success(`Pedido #${pedido.numero} cancelado y stock reintegrado con éxito.`);
         cargarDatos();
       } else {
         toast.error(res.error);
@@ -515,18 +533,42 @@ export default function PedidosArmadosPage() {
                           >
                             <XCircle className="h-3.5 w-3.5 mr-1" /> No Entregado
                           </Button>
+                          {!estaFacturado && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={isPending}
+                              onClick={() => handleCancelarPedido(pedido)}
+                              className="h-8 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                            >
+                              <Ban className="h-3.5 w-3.5 mr-1" /> Cancelar
+                            </Button>
+                          )}
                         </>
                       )}
 
                       {esNoEntregado && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleEntregar(pedido.id)}
-                          disabled={isPending}
-                          className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Reintentar y Entregar
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            onClick={() => handleEntregar(pedido.id)}
+                            disabled={isPending}
+                            className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Reintentar y Entregar
+                          </Button>
+                          {!estaFacturado && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={isPending}
+                              onClick={() => handleCancelarPedido(pedido)}
+                              className="h-8 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                            >
+                              <Ban className="h-3.5 w-3.5 mr-1" /> Cancelar Pedido
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

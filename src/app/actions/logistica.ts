@@ -569,11 +569,13 @@ export async function procesarRendicionChofer(data: {
           if (itemCobro.estado_entrega === "RECHAZADO_TOTAL") {
             totalRechazos += pedido.total;
 
+            const fechaHora = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
             await tx.pedido.update({
               where: { id: pedido.id },
               data: {
-                estado: "NO_ENTREGADO",
+                estado: "RECHAZADO",
                 motivo_no_entrega: itemCobro.motivo_rechazo || "Rechazado por cliente en reparto",
+                notas: (pedido.notas || "") + `\n\n[LOGÍSTICA ${fechaHora}] -> RECHAZADO EN REPARTO. Motivo: ${itemCobro.motivo_rechazo || "Rechazo total en reparto"}. Stock devuelto al depósito.`,
               },
             });
 

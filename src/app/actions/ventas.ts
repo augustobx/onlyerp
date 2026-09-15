@@ -132,7 +132,10 @@ export async function buscarProductos(query: string) {
     },
     include: {
       listas_precios: { include: { listaPrecio: true } },
-      stocks: { include: { deposito: true } },
+      stocks: {
+        where: { deposito: { estado: true } },
+        include: { deposito: true },
+      },
       marca: { select: { id: true, nombre: true, aumento_porcentaje: true } },
       categoria: { select: { id: true, nombre: true, aumento_porcentaje: true } },
       proveedor: { select: { id: true, nombre: true, aumento_porcentaje: true } },
@@ -153,7 +156,7 @@ export async function buscarProductos(query: string) {
       : 0;
     return {
       ...p,
-      stock_actual: stockFisico - stockComprometido,
+      stock_actual: stockFisico,
       stock_fisico: stockFisico,
       stock_comprometido: stockComprometido,
     };
