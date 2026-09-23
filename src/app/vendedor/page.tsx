@@ -23,7 +23,7 @@ import {
     Trash2, Search, ShoppingCart, User, FileText, Ban, PackageSearch,
     Plus, Minus, X, ChevronRight, Bookmark, Tag, Percent, History, Edit,
     CheckCircle2, RefreshCw, UserPlus, CloudOff, Wifi, Eye, Loader2, LogOut,
-    Sparkles, Truck, Phone, MapPin, ImageIcon, AlertCircle, Calendar
+    Sparkles, Truck, Phone, MapPin, ImageIcon, AlertCircle, Calendar, Award
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -1330,10 +1330,29 @@ export default function PwaVendedor() {
                                                     {pedido.estado}
                                                 </div>
                                             </div>
-                                            <div className="flex justify-between items-center mb-4">
+                                            <div className="flex justify-between items-center mb-2">
                                                 <p className="text-xs text-zinc-500 font-medium">{pedido.detalles?.length || 0} artículos</p>
                                                 <p className="font-black text-lg text-indigo-950">${pedido.total.toFixed(2)}</p>
                                             </div>
+
+                                            {pedido.comision_info && (
+                                                <div className={`flex justify-between items-center px-3 py-1.5 rounded-xl mb-4 text-xs ${
+                                                    pedido.comision_info.estado_comision === "CANCELADA"
+                                                        ? "bg-rose-50 text-rose-700 border border-rose-100"
+                                                        : "bg-emerald-50 text-emerald-800 border border-emerald-100"
+                                                }`}>
+                                                    <span className="font-bold flex items-center gap-1 text-[11px]">
+                                                        {pedido.comision_info.estado_comision === "CANCELADA" ? (
+                                                            <>🚫 Comisión: <span className="font-black text-rose-700">CANCELADA ($0.00)</span></>
+                                                        ) : (
+                                                            <>💰 Comisión: <span className="font-black">${pedido.comision_info.comision_monto.toFixed(2)}</span></>
+                                                        )}
+                                                    </span>
+                                                    <span className="text-[10px] font-bold opacity-75">
+                                                        {pedido.comision_info.porcentaje_aplicado.toFixed(1)}% asig.
+                                                    </span>
+                                                </div>
+                                            )}
 
                                             <div className="flex gap-2">
                                                 <Button variant="outline" size="sm" onClick={() => setPedidoVer(pedido)} className="flex-1 h-10 rounded-xl border-indigo-200 text-indigo-600 font-bold bg-indigo-50"><Eye className="w-4 h-4 mr-2" /> Ver Detalles</Button>
@@ -1963,6 +1982,58 @@ export default function PwaVendedor() {
                                             </a>
                                         </div>
                                     )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ESTADO DE COMISIÓN PREVENTA */}
+                        {pedidoVer.comision_info && (
+                            <div className={`p-4 rounded-2xl border text-xs space-y-1.5 ${
+                                pedidoVer.comision_info.estado_comision === "CANCELADA"
+                                    ? "bg-rose-50/80 border-rose-200 text-rose-900"
+                                    : "bg-emerald-50/80 border-emerald-200 text-emerald-900"
+                            }`}>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                                        {pedidoVer.comision_info.estado_comision === "CANCELADA" ? (
+                                            <><Ban className="h-3.5 w-3.5 text-rose-600" /> Comisión Cancelada</>
+                                        ) : (
+                                            <><Award className="h-3.5 w-3.5 text-emerald-600" /> Comisión Preventa</>
+                                        )}
+                                    </span>
+                                    <Badge variant="outline" className={`font-mono text-[9px] font-bold ${
+                                        pedidoVer.comision_info.estado_comision === "CANCELADA"
+                                            ? "bg-rose-100 text-rose-700 border-rose-300"
+                                            : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                                    }`}>
+                                        {pedidoVer.comision_info.estado_comision === "CANCELADA" ? "🚫 ANULADA" : "ACTIVA"}
+                                    </Badge>
+                                </div>
+
+                                <div className="flex justify-between items-end pt-1">
+                                    <div>
+                                        <p className="text-[11px] font-medium text-slate-600">
+                                            Regla: {pedidoVer.comision_info.porcentaje_aplicado.toFixed(1)}%
+                                            {pedidoVer.comision_info.es_penalizado && " (Penalizado por exceder límite de descuento)"}
+                                        </p>
+                                        {pedidoVer.comision_info.estado_comision === "CANCELADA" ? (
+                                            <p className="text-[10px] text-rose-600 font-bold mt-0.5">
+                                                El pedido fue cancelado. No computa para la liquidación.
+                                            </p>
+                                        ) : (
+                                            <p className="text-[10px] text-emerald-700 font-bold mt-0.5">
+                                                Suma al total liquidable del período.
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="text-[10px] text-slate-400 block font-bold">Importe</span>
+                                        <span className={`text-base font-black ${
+                                            pedidoVer.comision_info.estado_comision === "CANCELADA" ? "line-through text-rose-600" : "text-emerald-700"
+                                        }`}>
+                                            ${(pedidoVer.comision_info.comision_monto || pedidoVer.comision_info.comision_cancelada_monto || 0).toFixed(2)}
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         )}

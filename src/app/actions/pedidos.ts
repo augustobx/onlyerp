@@ -331,21 +331,61 @@ export async function obtenerPedidosVendedor() {
     const usuarioId = (session as any)?.id ? Number((session as any).id) : null;
     if (!usuarioId) return [];
 
-    const pedidos = await prisma.pedido.findMany({
-      where: { tenantId: tenant.id, usuarioId },
-      include: {
-        cliente: true,
-        detalles: {
-          include: {
-            producto: { select: { nombre_producto: true, codigo_articulo: true } },
+    const [pedidos, usuarioDb, config] = await Promise.all([
+      prisma.pedido.findMany({
+        where: { tenantId: tenant.id, usuarioId },
+        include: {
+          cliente: true,
+          detalles: {
+            include: {
+              producto: { select: { nombre_producto: true, codigo_articulo: true } },
+            },
           },
         },
-      },
-      orderBy: { fecha: "desc" },
-      take: 100,
-    });
+        orderBy: { fecha: "desc" },
+        take: 100,
+      }),
+      prisma.usuario.findUnique({
+        where: { id: usuarioId },
+        select: { comision_personalizada: true, limite_desc_vendedor: true },
+      }),
+      prisma.empresaConfig.findUnique({
+        where: { tenantId: tenant.id },
+        select: { comision_base_global: true, penalizacion_global: true, limite_desc_global: true },
+      }),
+    ]);
 
-    return await adjuntarVentasAPedidos(pedidos);
+    const comisionGlobal = (config?.comision_base_global || 5) / 100;
+    const penalizacionGlobal = (config?.penalizacion_global || 2) / 100;
+    const limiteGlobal = config?.limite_desc_global || 10;
+    const comisionBase =
+      usuarioDb?.comision_personalizada !== null && usuarioDb?.comision_personalizada !== undefined
+        ? usuarioDb.comision_personalizada / 100
+        : comisionGlobal;
+
+    const pedidosConVenta = await adjuntarVentasAPedidos(pedidos);
+
+    return pedidosConVenta.map((p: any) => {
+      const dtoGlobalPorcentaje = p.subtotal > 0 ? (p.descuento_global / p.subtotal) * 100 : 0;
+      const limite = p.cliente?.limite_desc_cliente ?? usuarioDb?.limite_desc_vendedor ?? limiteGlobal;
+      const esPenalizado = dtoGlobalPorcentaje > limite;
+      const comisionFinal = esPenalizado ? Math.max(0, comisionBase - penalizacionGlobal) : comisionBase;
+      const comisionCalculada = p.total * comisionFinal;
+      const esCancelado = p.estado === "CANCELADO" || p.estado === "RECHAZADO";
+
+      return {
+        ...p,
+        comision_info: {
+          porcentaje_aplicado: comisionFinal * 100,
+          porcentaje_base: comisionBase * 100,
+          es_penalizado: esPenalizado,
+          limite_aplicado: limite,
+          estado_comision: esCancelado ? "CANCELADA" : "ACTIVA",
+          comision_monto: esCancelado ? 0 : comisionCalculada,
+          comision_cancelada_monto: esCancelado ? comisionCalculada : 0,
+        },
+      };
+    });
   } catch (error) {
     console.error("Error al obtener pedidos:", error);
     return [];
