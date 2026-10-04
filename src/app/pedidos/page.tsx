@@ -184,6 +184,7 @@ export default function AdminPedidosPage() {
         if (!pedidoActivo) return;
 
         let motivo: string | undefined = undefined;
+        let descontarMontoVenta: boolean = false;
 
         if (nuevoEstado === 'RECHAZADO' || nuevoEstado === 'CANCELADO') {
             const resp = prompt(
@@ -191,6 +192,16 @@ export default function AdminPedidosPage() {
             );
             if (resp === null) return;
             motivo = resp.trim() || undefined;
+
+            const pedidoEstaFacturado = !!pedidoActivo.ventaId || !!pedidoActivo.venta;
+            if (pedidoEstaFacturado) {
+                descontarMontoVenta = confirm(
+                    `El Pedido #${pedidoActivo.numero} ya se encuentra FACTURADO por un total de $${(pedidoActivo.total || 0).toLocaleString('es-AR')}.\n\n` +
+                    `¿Desea DESCONTAR este monto del sistema (Caja / Cuenta Corriente)?\n\n` +
+                    `• Presione [Aceptar] para SÍ descontar del sistema contable.\n` +
+                    `• Presione [Cancelar] para NO descontar (solo anular pedido y devolver stock).`
+                );
+            }
         }
 
         if (nuevoEstado === 'NO_ENTREGADO') {
@@ -208,7 +219,7 @@ export default function AdminPedidosPage() {
 
         const res = nuevoEstado === 'NO_ENTREGADO'
             ? await marcarPedidoNoEntregado(pedidoActivo.id, motivo!)
-            : await cambiarEstadoPedidoAdmin(pedidoActivo.id, nuevoEstado as any, undefined, null, motivo);
+            : await cambiarEstadoPedidoAdmin(pedidoActivo.id, nuevoEstado as any, undefined, null, motivo, descontarMontoVenta);
 
         if (res.success) {
             toast.success(`Pedido actualizado a ${nuevoEstado}.`, { id: toastId });
@@ -581,11 +592,9 @@ export default function AdminPedidosPage() {
                                             <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} className="bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-md text-xs h-9 px-4 rounded-xl">
                                                 <Truck className="w-4 h-4 mr-1.5" /> 📦 Marcar Armado
                                             </Button>
-                                            {!estaFacturado && (
-                                                <Button disabled={cargando} onClick={() => procesarPedido('CANCELADO')} variant="ghost" className="text-rose-600 hover:bg-rose-50 font-bold text-xs h-9 rounded-xl">
-                                                    <Ban className="w-3.5 h-3.5 mr-1" /> Cancelar Pedido
-                                                </Button>
-                                            )}
+                                            <Button disabled={cargando} onClick={() => procesarPedido('CANCELADO')} variant="ghost" className="text-rose-600 hover:bg-rose-50 font-bold text-xs h-9 rounded-xl">
+                                                <Ban className="w-3.5 h-3.5 mr-1" /> Cancelar Pedido
+                                            </Button>
                                         </>
                                     )}
 
@@ -598,11 +607,9 @@ export default function AdminPedidosPage() {
                                             <Button disabled={cargando} onClick={() => procesarPedido('ENTREGADO')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md shadow-emerald-600/20 text-xs h-9 px-4 rounded-xl">
                                                 <CheckCircle2 className="w-4 h-4 mr-1.5" /> ✅ Confirmar Entrega
                                             </Button>
-                                            {!estaFacturado && (
-                                                <Button disabled={cargando} onClick={() => procesarPedido('CANCELADO')} variant="ghost" className="text-rose-600 hover:bg-rose-50 font-bold text-xs h-9 rounded-xl">
-                                                    <Ban className="w-3.5 h-3.5 mr-1" /> Cancelar Pedido
-                                                </Button>
-                                            )}
+                                            <Button disabled={cargando} onClick={() => procesarPedido('CANCELADO')} variant="ghost" className="text-rose-600 hover:bg-rose-50 font-bold text-xs h-9 rounded-xl">
+                                                <Ban className="w-3.5 h-3.5 mr-1" /> Cancelar Pedido
+                                            </Button>
                                         </>
                                     )}
 
@@ -615,11 +622,9 @@ export default function AdminPedidosPage() {
                                             <Button disabled={cargando} onClick={() => procesarPedido('ENTREGADO')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs h-9 rounded-xl">
                                                 <CheckCircle2 className="w-4 h-4 mr-1.5" /> Marcar Entregado
                                             </Button>
-                                            {!estaFacturado && (
-                                                <Button disabled={cargando} onClick={() => procesarPedido('CANCELADO')} variant="outline" className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs h-9 rounded-xl">
-                                                    <Ban className="w-3.5 h-3.5 mr-1" /> Cancelar Pedido (Devolver Stock)
-                                                </Button>
-                                            )}
+                                            <Button disabled={cargando} onClick={() => procesarPedido('CANCELADO')} variant="outline" className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs h-9 rounded-xl">
+                                                <Ban className="w-3.5 h-3.5 mr-1" /> Cancelar Pedido (Devolver Stock)
+                                            </Button>
                                         </>
                                     )}
 
@@ -629,11 +634,9 @@ export default function AdminPedidosPage() {
                                             <Button disabled={cargando} onClick={() => procesarPedido('ARMADO')} variant="outline" className="border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs h-9 rounded-xl">
                                                 <RotateCcw className="w-3.5 h-3.5 mr-1 text-slate-400" /> Re-abrir Despacho
                                             </Button>
-                                            {!estaFacturado && (
-                                                <Button disabled={cargando} onClick={() => procesarPedido('CANCELADO')} variant="ghost" className="text-rose-600 hover:bg-rose-50 font-bold text-xs h-9 rounded-xl">
-                                                    <Ban className="w-3.5 h-3.5 mr-1" /> Cancelar y Devolver Stock
-                                                </Button>
-                                            )}
+                                            <Button disabled={cargando} onClick={() => procesarPedido('CANCELADO')} variant="ghost" className="text-rose-600 hover:bg-rose-50 font-bold text-xs h-9 rounded-xl">
+                                                <Ban className="w-3.5 h-3.5 mr-1" /> Cancelar y Devolver Stock
+                                            </Button>
                                         </>
                                     )}
 

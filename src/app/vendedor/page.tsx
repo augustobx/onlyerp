@@ -676,10 +676,27 @@ export default function PwaVendedor() {
 
     const manejarAccionHistorial = async (pedido: any, accion: 'CANCELAR' | 'EDITAR') => {
         if (!isOnline) return toast.error("Debés estar conectado para cancelar o editar pedidos pasados.");
+
+        if (accion === 'EDITAR' && (pedido.ventaId || pedido.estado === 'FACTURADO')) {
+            return toast.error("No es posible editar un pedido ya facturado. Si es necesario, cancélelo y genere uno nuevo.");
+        }
+
         if (!confirm(`¿Seguro que querés ${accion} este pedido?`)) return;
 
+        let descontarMonto = false;
+        if (accion === 'CANCELAR' && pedido.ventaId) {
+            descontarMonto = confirm(
+                `El Pedido #${pedido.numero} está FACTURADO por un total de $${(pedido.total || 0).toLocaleString("es-AR")}.\n\n` +
+                `¿Desea DESCONTAR este monto del sistema (Caja / Cuenta Corriente)?\n\n` +
+                `• Presione [Aceptar] para SÍ descontar del sistema contable.\n` +
+                `• Presione [Cancelar] para NO descontar (solo anular pedido y devolver stock).`
+            );
+        }
+
         const toastId = toast.loading(`Procesando...`);
-        const res = await accionarPedidoVendedor(pedido.id, accion);
+        const res = accion === 'CANCELAR'
+            ? await cancelarPedido(pedido.id, "Cancelado desde historial vendedor", null, descontarMonto)
+            : await accionarPedidoVendedor(pedido.id, accion);
 
         if (res.success) {
             toast.success(`Acción realizada`, { id: toastId });
@@ -760,9 +777,20 @@ export default function PwaVendedor() {
         if (!modalNoEntrega) return;
         const motivo = motivoNoEntrega.trim() || "Cancelado por incidencia en reparto (No entregado)";
         if (!confirm(`¿Estás seguro de CANCELAR y ANULAR DEFINITIVAMENTE el pedido #${modalNoEntrega.numero}?\n\nEsta acción devuelve todo el stock al depósito y el pedido NO podrá volver a entregarse.`)) return;
+
+        let descontarMonto = false;
+        if (modalNoEntrega.ventaId) {
+            descontarMonto = confirm(
+                `El Pedido #${modalNoEntrega.numero} está FACTURADO por un total de $${(modalNoEntrega.total || 0).toLocaleString("es-AR")}.\n\n` +
+                `¿Desea DESCONTAR este monto del sistema (Caja / Cuenta Corriente)?\n\n` +
+                `• Presione [Aceptar] para SÍ descontar del sistema contable.\n` +
+                `• Presione [Cancelar] para NO descontar (solo anular pedido y devolver stock).`
+            );
+        }
+
         startTransition(async () => {
             const toastId = toast.loading("Cancelando pedido y reintegrando stock...");
-            const res = await cancelarPedido(modalNoEntrega.id, motivo);
+            const res = await cancelarPedido(modalNoEntrega.id, motivo, null, descontarMonto);
             if (res.success) {
                 toast.success(`Pedido #${modalNoEntrega.numero} cancelado y stock devuelto con éxito.`, { id: toastId });
                 setModalNoEntrega(null);
@@ -777,9 +805,20 @@ export default function PwaVendedor() {
 
     const handleCancelarPedidoDesdeReparto = (pedido: any) => {
         if (!confirm(`¿Estás seguro de CANCELAR y ANULAR DEFINITIVAMENTE el pedido #${pedido.numero}?\n\nEsta acción devuelve todo el stock al depósito y el pedido NO podrá volver a entregarse.`)) return;
+
+        let descontarMonto = false;
+        if (pedido.ventaId) {
+            descontarMonto = confirm(
+                `El Pedido #${pedido.numero} está FACTURADO por un total de $${(pedido.total || 0).toLocaleString("es-AR")}.\n\n` +
+                `¿Desea DESCONTAR este monto del sistema (Caja / Cuenta Corriente)?\n\n` +
+                `• Presione [Aceptar] para SÍ descontar del sistema contable.\n` +
+                `• Presione [Cancelar] para NO descontar (solo anular pedido y devolver stock).`
+            );
+        }
+
         startTransition(async () => {
             const toastId = toast.loading("Cancelando pedido y reintegrando stock...");
-            const res = await cancelarPedido(pedido.id, pedido.motivo_no_entrega || "Cancelado desde reparto (No entregado)");
+            const res = await cancelarPedido(pedido.id, pedido.motivo_no_entrega || "Cancelado desde reparto (No entregado)", null, descontarMonto);
             if (res.success) {
                 toast.success(`Pedido #${pedido.numero} cancelado y stock reintegrado con éxito.`, { id: toastId });
                 cargarRepartos();

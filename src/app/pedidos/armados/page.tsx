@@ -107,8 +107,20 @@ export default function PedidosArmadosPage() {
       )
     )
       return;
+
+    let descontarMonto = false;
+    const estaFacturado = !!pedidoNoEntregadoModal.ventaId || !!pedidoNoEntregadoModal.venta;
+    if (estaFacturado) {
+      descontarMonto = confirm(
+        `El Pedido #${pedidoNoEntregadoModal.numero} está FACTURADO por $${(pedidoNoEntregadoModal.total || 0).toLocaleString("es-AR")}.\n\n` +
+        `¿Desea DESCONTAR este monto del sistema (Caja / Cuenta Corriente)?\n\n` +
+        `• Presione [Aceptar] para SÍ descontar del sistema contable.\n` +
+        `• Presione [Cancelar] para NO descontar (solo anular pedido y devolver stock).`
+      );
+    }
+
     startTransition(async () => {
-      const res = await cambiarEstadoPedidoAdmin(pedidoNoEntregadoModal.id, "CANCELADO", undefined, null, motivo);
+      const res = await cambiarEstadoPedidoAdmin(pedidoNoEntregadoModal.id, "CANCELADO", undefined, null, motivo, descontarMonto);
       if (res.success) {
         toast.success(`Pedido #${pedidoNoEntregadoModal.numero} cancelado y stock devuelto con éxito.`);
         setPedidoNoEntregadoModal(null);
@@ -127,8 +139,20 @@ export default function PedidosArmadosPage() {
       )
     )
       return;
+
+    let descontarMonto = false;
+    const estaFacturado = !!pedido.ventaId || !!pedido.venta;
+    if (estaFacturado) {
+      descontarMonto = confirm(
+        `El Pedido #${pedido.numero} está FACTURADO por $${(pedido.total || 0).toLocaleString("es-AR")}.\n\n` +
+        `¿Desea DESCONTAR este monto del sistema (Caja / Cuenta Corriente)?\n\n` +
+        `• Presione [Aceptar] para SÍ descontar del sistema contable.\n` +
+        `• Presione [Cancelar] para NO descontar (solo anular pedido y devolver stock).`
+      );
+    }
+
     startTransition(async () => {
-      const res = await cambiarEstadoPedidoAdmin(pedido.id, "CANCELADO", undefined, null, pedido.motivo_no_entrega || "Cancelado desde despacho");
+      const res = await cambiarEstadoPedidoAdmin(pedido.id, "CANCELADO", undefined, null, pedido.motivo_no_entrega || "Cancelado desde despacho", descontarMonto);
       if (res.success) {
         toast.success(`Pedido #${pedido.numero} cancelado y stock reintegrado con éxito.`);
         cargarDatos();
@@ -555,17 +579,15 @@ export default function PedidosArmadosPage() {
                           >
                             <XCircle className="h-3.5 w-3.5 mr-1" /> No Entregado
                           </Button>
-                          {!estaFacturado && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={isPending}
-                              onClick={() => handleCancelarPedido(pedido)}
-                              className="h-8 text-xs font-bold text-rose-600 hover:bg-rose-50"
-                            >
-                              <Ban className="h-3.5 w-3.5 mr-1" /> Cancelar
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={isPending}
+                            onClick={() => handleCancelarPedido(pedido)}
+                            className="h-8 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                          >
+                            <Ban className="h-3.5 w-3.5 mr-1" /> Cancelar
+                          </Button>
                         </>
                       )}
 
@@ -579,17 +601,15 @@ export default function PedidosArmadosPage() {
                           >
                             <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Reintentar y Entregar
                           </Button>
-                          {!estaFacturado && (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              disabled={isPending}
-                              onClick={() => handleCancelarPedido(pedido)}
-                              className="h-8 text-xs font-bold"
-                            >
-                              <Ban className="h-3.5 w-3.5 mr-1" /> Cancelar Pedido (Devolver Stock)
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            disabled={isPending}
+                            onClick={() => handleCancelarPedido(pedido)}
+                            className="h-8 text-xs font-bold"
+                          >
+                            <Ban className="h-3.5 w-3.5 mr-1" /> Cancelar Pedido (Devolver Stock)
+                          </Button>
                         </>
                       )}
                     </div>

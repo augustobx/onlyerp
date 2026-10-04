@@ -398,8 +398,20 @@ export async function obtenerPedidosVendedor() {
 export async function accionarPedidoVendedor(
   pedidoId: number,
   accion: "CANCELAR" | "EDITAR",
-  motivoCancelacion?: string
+  motivoCancelacion?: string,
+  descontarMontoVenta?: boolean
 ) {
+  if (accion === "CANCELAR") {
+    return await cambiarEstadoPedidoAdmin(
+      pedidoId,
+      "CANCELADO",
+      undefined,
+      null,
+      motivoCancelacion,
+      descontarMontoVenta
+    );
+  }
+
   try {
     const tenant = await requireTenant();
 
@@ -538,7 +550,8 @@ export async function cambiarEstadoPedidoAdmin(
     | "NO_ENTREGADO",
   tipoComprobante?: string,
   requestedDepositoId?: number | null,
-  motivoCancelacion?: string
+  motivoCancelacion?: string,
+  descontarMontoVenta?: boolean
 ) {
   try {
     const tenant = await requireTenant();
@@ -567,14 +580,127 @@ export async function cambiarEstadoPedidoAdmin(
         }
 
         if (nuevoEstado === "RECHAZADO" || nuevoEstado === "CANCELADO") {
-          if (pedido.ventaId) {
-            throw new Error(
-              `ACCESO DENEGADO: El pedido ya tiene una factura/comprobante emitido (Venta #${pedido.ventaId}). Debe anular o procesar la nota de crédito desde Ventas.`
-            );
-          }
-
           const session = await getClientSession();
           const sessionUsuarioId = (session as any)?.id ? Number((session as any).id) : null;
+
+          let auditFinanzas = "";
+
+          // Si el pedido ya fue FACTURADO (tiene venta asociada)
+          if (pedido.ventaId) {
+            const venta = await tx.venta.findFirst({
+              where: { id: pedido.ventaId, tenantId: tenant.id },
+              include: { pagos: true },
+            });
+
+            if (venta) {
+              if (descontarMontoVenta) {
+                const sucursalId = venta.sucursalId || pedido.usuario?.sucursalId || null;
+                const cajaAbierta = sucursalId
+                  ? await tx.cajaDiaria.findFirst({ where: { tenantId: tenant.id, estado: "ABIERTA", sucursalId } })
+                  : await tx.cajaDiaria.findFirst({ where: { tenantId: tenant.id, estado: "ABIERTA" } });
+
+                if (venta.pagos && venta.pagos.length > 0) {
+                  for (const p of venta.pagos) {
+                    if (p.metodo_pago === "CUENTA_CORRIENTE") {
+                      await tx.movimientoCuentaCorriente.create({
+                        data: {
+                          tenantId: tenant.id,
+                          clienteId: venta.clienteId,
+                          ventaId: venta.id,
+                          tipo: "ABONO",
+                          monto: p.monto,
+                          metodo_pago: "CUENTA_CORRIENTE",
+                          notas: `Anulación por Pedido #${pedido.numero} CANCELADO (Venta #${venta.numero_comprobante || venta.id})`,
+                          usuarioId: sessionUsuarioId || pedido.usuarioId,
+                        },
+                      });
+                    } else if (["CONTADO", "TARJETA", "TRANSFERENCIA"].includes(p.metodo_pago)) {
+                      if (cajaAbierta) {
+                        await tx.movimientoCaja.create({
+                          data: {
+                            cajaId: cajaAbierta.id,
+                            tipo: "EGRESO_MANUAL",
+                            metodo_pago: p.metodo_pago as any,
+                            monto: p.monto,
+                            descripcion: `Anulación Pedido #${pedido.numero} s/ Factura #${venta.numero_comprobante || venta.id} (${p.metodo_pago})`,
+                            ventaId: venta.id,
+                            usuarioId: sessionUsuarioId || pedido.usuarioId,
+                          },
+                        });
+                      }
+                    }
+                  }
+                } else {
+                  // Fallback si no hay registros en PagoVenta
+                  if (venta.metodo_pago === "CUENTA_CORRIENTE" || venta.saldo_pendiente > 0) {
+                    await tx.movimientoCuentaCorriente.create({
+                      data: {
+                        tenantId: tenant.id,
+                        clienteId: venta.clienteId,
+                        ventaId: venta.id,
+                        tipo: "ABONO",
+                        monto: venta.total,
+                        metodo_pago: "CUENTA_CORRIENTE",
+                        notas: `Anulación por Pedido #${pedido.numero} CANCELADO (Venta #${venta.numero_comprobante || venta.id})`,
+                        usuarioId: sessionUsuarioId || pedido.usuarioId,
+                      },
+                    });
+                  } else {
+                    if (cajaAbierta) {
+                      await tx.movimientoCaja.create({
+                        data: {
+                          cajaId: cajaAbierta.id,
+                          tipo: "EGRESO_MANUAL",
+                          metodo_pago: (venta.metodo_pago as any) || "CONTADO",
+                          monto: venta.total,
+                          descripcion: `Anulación Pedido #${pedido.numero} s/ Factura #${venta.numero_comprobante || venta.id}`,
+                          ventaId: venta.id,
+                          usuarioId: sessionUsuarioId || pedido.usuarioId,
+                        },
+                      });
+                    }
+                  }
+                }
+
+                await tx.venta.update({
+                  where: { id: venta.id },
+                  data: {
+                    saldo_pendiente: 0,
+                    notas_venta:
+                      (venta.notas_venta || "") +
+                      `\n\n[ANULACIÓN CON DESCUENTO] Pedido #${pedido.numero} cancelado. Monto total ($${venta.total.toLocaleString("es-AR")}) revertido y descontado del sistema contable.`,
+                  },
+                });
+
+                auditFinanzas = ` Monto facturado ($${venta.total.toLocaleString("es-AR")}) DESCONTADO del sistema contable.`;
+              } else {
+                // Usuario eligió NO descontar del sistema
+                await tx.venta.update({
+                  where: { id: venta.id },
+                  data: {
+                    notas_venta:
+                      (venta.notas_venta || "") +
+                      `\n\n[CANCELACIÓN SIN DESCUENTO FINANCIERO] Pedido #${pedido.numero} cancelado. El monto facturado ($${venta.total.toLocaleString("es-AR")}) SE MANTUVO registrado en el sistema contable según decisión del usuario.`,
+                  },
+                });
+
+                auditFinanzas = ` Monto facturado ($${venta.total.toLocaleString("es-AR")}) MANTENIDO en el sistema contable (no descontado).`;
+              }
+
+              // Registrar devolución de unidades en DetalleVenta
+              for (const item of pedido.detalles) {
+                const detVenta = await tx.detalleVenta.findFirst({
+                  where: { ventaId: venta.id, productoId: item.productoId },
+                });
+                if (detVenta) {
+                  await tx.detalleVenta.update({
+                    where: { id: detVenta.id },
+                    data: { cantidad_devuelta: detVenta.cantidad },
+                  });
+                }
+              }
+            }
+          }
 
           const depositoCentralId = await resolverDepositoId(
             tx,
@@ -609,7 +735,7 @@ export async function cambiarEstadoPedidoAdmin(
             data: {
               estado: nuevoEstado,
               motivo_no_entrega: motivoCancelacion ? motivoCancelacion : pedido.motivo_no_entrega,
-              notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> ${nuevoEstado}. Stock devuelto al inventario (Depósito ID: ${depositoCentralId}).${motivoCancelacion ? ` Motivo: ${motivoCancelacion}` : ""}`,
+              notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> ${nuevoEstado}. Stock devuelto al inventario (Depósito ID: ${depositoCentralId}).${auditFinanzas}${motivoCancelacion ? ` Motivo: ${motivoCancelacion}` : ""}`,
             },
           });
           return { pedido: actualizado };
@@ -1455,7 +1581,8 @@ export async function actualizarFechaEntregaPedido(
 export async function cancelarPedido(
   pedidoId: number,
   motivo?: string,
-  depositoId?: number | null
+  depositoId?: number | null,
+  descontarMontoVenta?: boolean
 ) {
-  return await cambiarEstadoPedidoAdmin(pedidoId, "CANCELADO", undefined, depositoId, motivo);
+  return await cambiarEstadoPedidoAdmin(pedidoId, "CANCELADO", undefined, depositoId, motivo, descontarMontoVenta);
 }
