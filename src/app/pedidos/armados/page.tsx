@@ -98,15 +98,37 @@ export default function PedidosArmadosPage() {
     });
   };
 
-  const handleCancelarPedido = (pedido: any) => {
+  const handleCancelarDesdeModalNoEntrega = () => {
+    if (!pedidoNoEntregadoModal) return;
+    const motivo = motivoNoEntrega.trim() || "Cancelado por no entrega en despacho";
     if (
       !confirm(
-        `¿Seguro que querés CANCELAR el Pedido #${pedido.numero}? Se devolverá el stock de todos los artículos al depósito.`
+        `¿Seguro que querés CANCELAR y ANULAR DEFINITIVAMENTE el Pedido #${pedidoNoEntregadoModal.numero}?\n\nSe devolverá todo el stock al depósito y el pedido NO podrá volver a ponerse para entrega.`
       )
     )
       return;
     startTransition(async () => {
-      const res = await cambiarEstadoPedidoAdmin(pedido.id, "CANCELADO");
+      const res = await cambiarEstadoPedidoAdmin(pedidoNoEntregadoModal.id, "CANCELADO", undefined, null, motivo);
+      if (res.success) {
+        toast.success(`Pedido #${pedidoNoEntregadoModal.numero} cancelado y stock devuelto con éxito.`);
+        setPedidoNoEntregadoModal(null);
+        setMotivoNoEntrega("");
+        cargarDatos();
+      } else {
+        toast.error(res.error);
+      }
+    });
+  };
+
+  const handleCancelarPedido = (pedido: any) => {
+    if (
+      !confirm(
+        `¿Seguro que querés CANCELAR y ANULAR DEFINITIVAMENTE el Pedido #${pedido.numero}?\n\nSe devolverá el stock de todos los artículos al depósito y el pedido NO podrá volver a ponerse para entrega.`
+      )
+    )
+      return;
+    startTransition(async () => {
+      const res = await cambiarEstadoPedidoAdmin(pedido.id, "CANCELADO", undefined, null, pedido.motivo_no_entrega || "Cancelado desde despacho");
       if (res.success) {
         toast.success(`Pedido #${pedido.numero} cancelado y stock reintegrado con éxito.`);
         cargarDatos();
@@ -560,12 +582,12 @@ export default function PedidosArmadosPage() {
                           {!estaFacturado && (
                             <Button
                               size="sm"
-                              variant="ghost"
+                              variant="destructive"
                               disabled={isPending}
                               onClick={() => handleCancelarPedido(pedido)}
-                              className="h-8 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                              className="h-8 text-xs font-bold"
                             >
-                              <Ban className="h-3.5 w-3.5 mr-1" /> Cancelar Pedido
+                              <Ban className="h-3.5 w-3.5 mr-1" /> Cancelar Pedido (Devolver Stock)
                             </Button>
                           )}
                         </>
@@ -689,16 +711,27 @@ export default function PedidosArmadosPage() {
                 />
               </div>
 
-              <div className="flex gap-2 pt-2 border-t border-slate-100">
-                <Button variant="outline" onClick={() => setPedidoNoEntregadoModal(null)} className="w-1/3">
-                  Cancelar
-                </Button>
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setPedidoNoEntregadoModal(null)} className="w-1/3 text-xs">
+                    Cerrar
+                  </Button>
+                  <Button
+                    onClick={handleGuardarNoEntregado}
+                    disabled={isPending || !motivoNoEntrega.trim()}
+                    className="w-2/3 bg-slate-800 hover:bg-slate-900 font-bold text-white text-xs"
+                  >
+                    Guardar Incidencia (No Entregado)
+                  </Button>
+                </div>
                 <Button
-                  onClick={handleGuardarNoEntregado}
-                  disabled={isPending || !motivoNoEntrega.trim()}
-                  className="w-2/3 bg-rose-600 hover:bg-rose-700 font-bold text-white"
+                  type="button"
+                  onClick={handleCancelarDesdeModalNoEntrega}
+                  disabled={isPending}
+                  variant="destructive"
+                  className="w-full h-10 font-bold text-xs flex items-center justify-center gap-1.5"
                 >
-                  Confirmar Incidencia
+                  <Ban className="h-4 w-4 mr-1" /> Cancelar Pedido Definitivo (Devolver Stock)
                 </Button>
               </div>
             </div>

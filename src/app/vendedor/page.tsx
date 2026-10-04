@@ -6,7 +6,7 @@ import { getDepositos } from "@/app/actions/configuracion";
 import {
     registrarPedidoPWA, obtenerPedidosVendedor, accionarPedidoVendedor,
     obtenerPedidosParaReparto, marcarPedidoEntregado, marcarPedidoNoEntregado,
-    marcarPedidoListoEntrega
+    marcarPedidoListoEntrega, cancelarPedido
 } from "@/app/actions/pedidos";
 import { getCombosActivos } from "@/app/actions/combos";
 import { registrarClientePWA } from "@/app/actions/clientes";
@@ -756,6 +756,42 @@ export default function PwaVendedor() {
         });
     };
 
+    const handleCancelarDesdeModalNoEntrega = () => {
+        if (!modalNoEntrega) return;
+        const motivo = motivoNoEntrega.trim() || "Cancelado por incidencia en reparto (No entregado)";
+        if (!confirm(`¿Estás seguro de CANCELAR y ANULAR DEFINITIVAMENTE el pedido #${modalNoEntrega.numero}?\n\nEsta acción devuelve todo el stock al depósito y el pedido NO podrá volver a entregarse.`)) return;
+        startTransition(async () => {
+            const toastId = toast.loading("Cancelando pedido y reintegrando stock...");
+            const res = await cancelarPedido(modalNoEntrega.id, motivo);
+            if (res.success) {
+                toast.success(`Pedido #${modalNoEntrega.numero} cancelado y stock devuelto con éxito.`, { id: toastId });
+                setModalNoEntrega(null);
+                setMotivoNoEntrega("");
+                cargarRepartos();
+                cargarHistorial();
+                cargarCatalogo();
+            } else {
+                toast.error(res.error || "Error al cancelar pedido.", { id: toastId });
+            }
+        });
+    };
+
+    const handleCancelarPedidoDesdeReparto = (pedido: any) => {
+        if (!confirm(`¿Estás seguro de CANCELAR y ANULAR DEFINITIVAMENTE el pedido #${pedido.numero}?\n\nEsta acción devuelve todo el stock al depósito y el pedido NO podrá volver a entregarse.`)) return;
+        startTransition(async () => {
+            const toastId = toast.loading("Cancelando pedido y reintegrando stock...");
+            const res = await cancelarPedido(pedido.id, pedido.motivo_no_entrega || "Cancelado desde reparto (No entregado)");
+            if (res.success) {
+                toast.success(`Pedido #${pedido.numero} cancelado y stock reintegrado con éxito.`, { id: toastId });
+                cargarRepartos();
+                cargarHistorial();
+                cargarCatalogo();
+            } else {
+                toast.error(res.error || "Error al cancelar pedido.", { id: toastId });
+            }
+        });
+    };
+
     // ==========================================
     // ACCIONES DE COBRANZA
     // ==========================================
@@ -1272,12 +1308,21 @@ export default function PwaVendedor() {
                                                 )}
 
                                                 {esNoEntregado && (
-                                                    <Button
-                                                        onClick={() => handleMarcarEntregado(p.id)}
-                                                        className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs"
-                                                    >
-                                                        <CheckCircle2 className="h-4 w-4 mr-1" /> Reintentar y Entregar
-                                                    </Button>
+                                                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                                                        <Button
+                                                            onClick={() => handleMarcarEntregado(p.id)}
+                                                            className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs"
+                                                        >
+                                                            <CheckCircle2 className="h-4 w-4 mr-1" /> Reintentar
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            onClick={() => handleCancelarPedidoDesdeReparto(p)}
+                                                            className="h-11 border-rose-300 text-rose-600 hover:bg-rose-50 font-bold rounded-2xl text-xs"
+                                                        >
+                                                            <Ban className="h-4 w-4 mr-1" /> Cancelar Pedido
+                                                        </Button>
+                                                    </div>
                                                 )}
                                             </CardContent>
                                         </Card>
@@ -1734,16 +1779,26 @@ export default function PwaVendedor() {
                                 />
                             </div>
 
-                            <div className="flex gap-2 pt-2">
-                                <Button variant="outline" onClick={() => setModalNoEntrega(null)} className="w-1/3 rounded-xl">
-                                    Cancelar
-                                </Button>
+                            <div className="space-y-2 pt-2 border-t border-slate-100">
+                                <div className="flex gap-2">
+                                    <Button variant="outline" onClick={() => setModalNoEntrega(null)} className="w-1/3 rounded-xl text-xs">
+                                        Cerrar
+                                    </Button>
+                                    <Button
+                                        onClick={handleConfirmarNoEntrega}
+                                        disabled={isPending || !motivoNoEntrega.trim()}
+                                        className="w-2/3 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs"
+                                    >
+                                        Guardar No Entregado
+                                    </Button>
+                                </div>
                                 <Button
-                                    onClick={handleConfirmarNoEntrega}
-                                    disabled={isPending || !motivoNoEntrega.trim()}
-                                    className="w-2/3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl"
+                                    type="button"
+                                    onClick={handleCancelarDesdeModalNoEntrega}
+                                    disabled={isPending}
+                                    className="w-full h-11 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm"
                                 >
-                                    Confirmar No Entrega
+                                    <Ban className="h-4 w-4" /> Cancelar Pedido Definitivo (Devolver Stock)
                                 </Button>
                             </div>
                         </div>
@@ -2135,15 +2190,28 @@ export default function PwaVendedor() {
                         )}
 
                         {pedidoVer.estado === 'NO_ENTREGADO' && (
-                            <Button
-                                onClick={() => {
-                                    handleMarcarEntregado(pedidoVer.id);
-                                    setPedidoVer(null);
-                                }}
-                                className="w-full h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg text-sm"
-                            >
-                                <CheckCircle2 className="h-5 w-5 mr-1.5" /> Reintentar y Entregar
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button
+                                    onClick={() => {
+                                        handleMarcarEntregado(pedidoVer.id);
+                                        setPedidoVer(null);
+                                    }}
+                                    className="flex-1 h-14 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl shadow-lg text-sm"
+                                >
+                                    <CheckCircle2 className="h-5 w-5 mr-1.5" /> Reintentar
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        const p = pedidoVer;
+                                        setPedidoVer(null);
+                                        handleCancelarPedidoDesdeReparto(p);
+                                    }}
+                                    className="flex-1 h-14 border-rose-300 text-rose-600 hover:bg-rose-50 font-bold rounded-2xl text-sm"
+                                >
+                                    <Ban className="h-5 w-5 mr-1.5" /> Cancelar Pedido
+                                </Button>
+                            </div>
                         )}
 
                         {(pedidoVer.estado === 'PENDIENTE' || pedidoVer.estado === 'APROBADO') && (

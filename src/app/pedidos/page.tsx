@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { obtenerTodosLosPedidos, cambiarEstadoPedidoAdmin, editarPedidoAdmin, recalcularPreciosPendientes, actualizarFechaEntregaPedido } from "@/app/actions/pedidos";
+import { obtenerTodosLosPedidos, cambiarEstadoPedidoAdmin, editarPedidoAdmin, recalcularPreciosPendientes, actualizarFechaEntregaPedido, marcarPedidoNoEntregado } from "@/app/actions/pedidos";
 import { buscarProductos, obtenerConfiguracionGlobal } from "@/app/actions/ventas";
 import { redondearPrecio, formatFechaLocal, formatFechaInput, parsearFechaEntrega } from "@/lib/utils";
 import Link from "next/link";
@@ -183,19 +183,39 @@ export default function AdminPedidosPage() {
     const procesarPedido = async (nuevoEstado: 'APROBADO' | 'RECHAZADO' | 'CANCELADO' | 'ARMADO' | 'ENTREGADO' | 'NO_ENTREGADO' | string) => {
         if (!pedidoActivo) return;
 
-        if (
-            (nuevoEstado === 'RECHAZADO' || nuevoEstado === 'CANCELADO') &&
-            !confirm("¿Seguro que querés CANCELAR este pedido? Se devolverán todas las cantidades al stock del inventario.")
-        ) return;
+        let motivo: string | undefined = undefined;
+
+        if (nuevoEstado === 'RECHAZADO' || nuevoEstado === 'CANCELADO') {
+            const resp = prompt(
+                `¿Seguro que querés CANCELAR y ANULAR DEFINITIVAMENTE el Pedido #${pedidoActivo.numero}?\n\nSe devolverán todas las cantidades al stock del depósito y el pedido NO podrá volver a ponerse para entrega.\n\n(Opcional) Ingresá el motivo de cancelación:`
+            );
+            if (resp === null) return;
+            motivo = resp.trim() || undefined;
+        }
+
+        if (nuevoEstado === 'NO_ENTREGADO') {
+            const resp = prompt("Indique el motivo por el cual no se pudo entregar el pedido (cliente ausente, rechazado, dirección errónea, etc.):");
+            if (resp === null) return;
+            if (!resp.trim()) {
+                toast.error("Debe ingresar un motivo de no entrega.");
+                return;
+            }
+            motivo = resp.trim();
+        }
 
         setCargando(true);
         const toastId = toast.loading(`Procesando pedido #${pedidoActivo.numero}...`);
 
-        const res = await cambiarEstadoPedidoAdmin(pedidoActivo.id, nuevoEstado as any);
+        const res = nuevoEstado === 'NO_ENTREGADO'
+            ? await marcarPedidoNoEntregado(pedidoActivo.id, motivo!)
+            : await cambiarEstadoPedidoAdmin(pedidoActivo.id, nuevoEstado as any, undefined, null, motivo);
 
         if (res.success) {
             toast.success(`Pedido actualizado a ${nuevoEstado}.`, { id: toastId });
             await cargarPedidos();
+            if (res.data) {
+                setPedidoActivo((prev: any) => prev ? { ...prev, ...res.data } : null);
+            }
         } else {
             toast.error(res.error, { id: toastId });
         }
@@ -596,8 +616,8 @@ export default function AdminPedidosPage() {
                                                 <CheckCircle2 className="w-4 h-4 mr-1.5" /> Marcar Entregado
                                             </Button>
                                             {!estaFacturado && (
-                                                <Button disabled={cargando} onClick={() => procesarPedido('CANCELADO')} variant="ghost" className="text-rose-600 hover:bg-rose-50 font-bold text-xs h-9 rounded-xl">
-                                                    <Ban className="w-3.5 h-3.5 mr-1" /> Cancelar Definitivo
+                                                <Button disabled={cargando} onClick={() => procesarPedido('CANCELADO')} variant="outline" className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold text-xs h-9 rounded-xl">
+                                                    <Ban className="w-3.5 h-3.5 mr-1" /> Cancelar Pedido (Devolver Stock)
                                                 </Button>
                                             )}
                                         </>
@@ -615,6 +635,14 @@ export default function AdminPedidosPage() {
                                                 </Button>
                                             )}
                                         </>
+                                    )}
+
+                                    {/* CASO F: Pedido CANCELADO */}
+                                    {pedidoActivo.estado === 'CANCELADO' && (
+                                        <div className="bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 flex items-center gap-2 text-rose-800 text-xs font-bold">
+                                            <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+                                            <span>PEDIDO ANULADO Y CANCELADO DEFINITIVAMENTE. Stock devuelto a inventario. No se puede volver a poner para entrega.</span>
+                                        </div>
                                     )}
 
                                 </div>

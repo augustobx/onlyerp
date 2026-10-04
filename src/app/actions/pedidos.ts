@@ -395,7 +395,11 @@ export async function obtenerPedidosVendedor() {
 // ============================================================================
 // 3. ANULAR O EDITAR PEDIDO
 // ============================================================================
-export async function accionarPedidoVendedor(pedidoId: number, accion: "CANCELAR" | "EDITAR") {
+export async function accionarPedidoVendedor(
+  pedidoId: number,
+  accion: "CANCELAR" | "EDITAR",
+  motivoCancelacion?: string
+) {
   try {
     const tenant = await requireTenant();
 
@@ -434,7 +438,9 @@ export async function accionarPedidoVendedor(pedidoId: number, accion: "CANCELAR
             depositoDestinoId: depositoCentralId,
             cantidad: item.cantidad,
             tipo: "REINGRESO_RECHAZO_REPARTO",
-            motivo: `Devolución de stock por Pedido #${pedido.numero} ${accion === "EDITAR" ? "ANULADO PARA EDICIÓN" : "CANCELADO"} desde PWA Vendedor`,
+            motivo: `Devolución de stock por Pedido #${pedido.numero} ${
+              accion === "EDITAR" ? "ANULADO PARA EDICIÓN" : "CANCELADO"
+            } desde PWA Vendedor${motivoCancelacion ? ` - Obs: ${motivoCancelacion}` : ""}`,
             usuarioId: pedido.usuarioId,
           },
         });
@@ -443,12 +449,13 @@ export async function accionarPedidoVendedor(pedidoId: number, accion: "CANCELAR
       const fechaHora = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
       const mensajeAuditoria = `\n\n[SISTEMA ${fechaHora}] -> Pedido ${
         accion === "EDITAR" ? "ANULADO PARA EDICIÓN" : "CANCELADO"
-      } por el vendedor en calle. Stock devuelto a depósito.`;
+      } por el vendedor en calle. Stock devuelto a depósito.${motivoCancelacion ? ` Motivo: ${motivoCancelacion}` : ""}`;
 
       const pedidoActualizado = await tx.pedido.update({
         where: { id: pedidoId },
         data: {
           estado: "CANCELADO",
+          motivo_no_entrega: motivoCancelacion ? motivoCancelacion : pedido.motivo_no_entrega,
           notas: (pedido.notas || "") + mensajeAuditoria,
         },
       });
@@ -461,6 +468,8 @@ export async function accionarPedidoVendedor(pedidoId: number, accion: "CANCELAR
     revalidatePath("/pedidos/armados");
     revalidatePath("/inventario");
     revalidatePath("/ventas");
+    revalidatePath("/reportes/comisiones");
+    revalidatePath("/reportes/vendedores");
     return { success: true, data: resultado };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -547,11 +556,17 @@ export async function cambiarEstadoPedidoAdmin(
         });
         if (!pedido) throw new Error("Pedido no encontrado");
 
-        if (nuevoEstado === "RECHAZADO" || nuevoEstado === "CANCELADO") {
-          if (pedido.estado === "RECHAZADO" || pedido.estado === "CANCELADO") {
-            throw new Error(`El pedido ya se encuentra ${pedido.estado.toLowerCase()}.`);
+        // Si el pedido ya está CANCELADO o RECHAZADO, NUNCA permitir reactivarlo ni ponerlo para entrega
+        if (pedido.estado === "CANCELADO" || pedido.estado === "RECHAZADO") {
+          if (nuevoEstado === pedido.estado) {
+            throw new Error(`El pedido #${pedido.numero} ya se encuentra ${pedido.estado.toLowerCase()}.`);
           }
+          throw new Error(
+            `El pedido #${pedido.numero} fue ${pedido.estado} y anulado por completo. No se puede reactivar, poner para entrega ni modificar.`
+          );
+        }
 
+        if (nuevoEstado === "RECHAZADO" || nuevoEstado === "CANCELADO") {
           if (pedido.ventaId) {
             throw new Error(
               `ACCESO DENEGADO: El pedido ya tiene una factura/comprobante emitido (Venta #${pedido.ventaId}). Debe anular o procesar la nota de crédito desde Ventas.`
@@ -593,6 +608,7 @@ export async function cambiarEstadoPedidoAdmin(
             where: { id: pedidoId },
             data: {
               estado: nuevoEstado,
+              motivo_no_entrega: motivoCancelacion ? motivoCancelacion : pedido.motivo_no_entrega,
               notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> ${nuevoEstado}. Stock devuelto al inventario (Depósito ID: ${depositoCentralId}).${motivoCancelacion ? ` Motivo: ${motivoCancelacion}` : ""}`,
             },
           });
@@ -1218,6 +1234,12 @@ export async function marcarPedidoListoEntrega(
       where: { id: pedidoId, tenantId: tenant.id },
     });
     if (!pedido) return { success: false, error: "Pedido no encontrado." };
+    if (pedido.estado === "CANCELADO" || pedido.estado === "RECHAZADO") {
+      return {
+        success: false,
+        error: `El pedido #${pedido.numero} está ${pedido.estado} y anulado por completo. No se puede poner para entrega.`,
+      };
+    }
 
     const notaAuditoria = `\n\n[DESPACHO ${fechaHora}] -> Pedido ARMADO y listo para reparto.`;
 
@@ -1263,6 +1285,12 @@ export async function marcarPedidoEntregado(pedidoId: number, notas?: string) {
       where: { id: pedidoId, tenantId: tenant.id },
     });
     if (!pedido) return { success: false, error: "Pedido no encontrado." };
+    if (pedido.estado === "CANCELADO" || pedido.estado === "RECHAZADO") {
+      return {
+        success: false,
+        error: `El pedido #${pedido.numero} está ${pedido.estado} y anulado por completo. No se puede marcar como entregado.`,
+      };
+    }
 
     const notaAuditoria = `\n\n[REPARTO ${fechaHora}] -> ENTREGADO con éxito.` + (notas ? ` Obs: ${notas}` : "");
 
@@ -1294,6 +1322,12 @@ export async function marcarPedidoNoEntregado(pedidoId: number, motivo: string) 
       where: { id: pedidoId, tenantId: tenant.id },
     });
     if (!pedido) return { success: false, error: "Pedido no encontrado." };
+    if (pedido.estado === "CANCELADO" || pedido.estado === "RECHAZADO") {
+      return {
+        success: false,
+        error: `El pedido #${pedido.numero} está ${pedido.estado} y anulado por completo.`,
+      };
+    }
 
     const notaAuditoria = `\n\n[REPARTO ${fechaHora}] -> NO ENTREGADO. Motivo: ${motivo.trim()}`;
 
@@ -1396,6 +1430,14 @@ export async function actualizarFechaEntregaPedido(
 ) {
   try {
     const tenant = await requireTenant();
+    const pedido = await prisma.pedido.findFirst({
+      where: { id: Number(pedidoId), tenantId: tenant.id },
+    });
+    if (!pedido) return { success: false, error: "Pedido no encontrado." };
+    if (pedido.estado === "CANCELADO" || pedido.estado === "RECHAZADO") {
+      return { success: false, error: `El pedido #${pedido.numero} está ${pedido.estado} y anulado. No se puede modificar la fecha de entrega.` };
+    }
+
     const fechaObj = parsearFechaEntrega(fechaEntrega);
 
     const actualizado = await prisma.pedido.update({
