@@ -400,7 +400,7 @@ export async function accionarPedidoVendedor(
   accion: "CANCELAR" | "EDITAR",
   motivoCancelacion?: string,
   descontarMontoVenta?: boolean
-) {
+): Promise<{ success: boolean; data?: any; error?: string }> {
   if (accion === "CANCELAR") {
     return await cambiarEstadoPedidoAdmin(
       pedidoId,
@@ -552,7 +552,7 @@ export async function cambiarEstadoPedidoAdmin(
   requestedDepositoId?: number | null,
   motivoCancelacion?: string,
   descontarMontoVenta?: boolean
-) {
+): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
     const tenant = await requireTenant();
 
@@ -1583,6 +1583,6 @@ export async function cancelarPedido(
   motivo?: string,
   depositoId?: number | null,
   descontarMontoVenta?: boolean
-) {
+): Promise<{ success: boolean; data?: any; error?: string }> {
   return await cambiarEstadoPedidoAdmin(pedidoId, "CANCELADO", undefined, depositoId, motivo, descontarMontoVenta);
 }

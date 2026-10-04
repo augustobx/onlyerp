@@ -719,7 +719,7 @@ export default function PwaVendedor() {
                 setTabActiva('NUEVO');
             }
         } else {
-            toast.error(res.error, { id: toastId });
+            toast.error((res as any).error || "Error al procesar el pedido.", { id: toastId });
         }
     };
 
