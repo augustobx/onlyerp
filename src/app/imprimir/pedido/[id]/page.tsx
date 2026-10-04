@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { getDatosEmpresa } from "@/app/actions/configuracion-empresa";
 import { getPedidoParaImprimir } from "@/app/actions/pedidos";
 import { Store, Loader2, Printer, ArrowLeft, Scissors, FileText, LayoutTemplate, MessageSquare, Truck, Clock, CheckCircle2 } from "lucide-react";
-import { generarLinkWhatsAppComprobante } from "@/lib/whatsapp";
+import { generarLinkWhatsAppPedido } from "@/lib/whatsapp";
 
 type FormatoImpresion = "AUTO" | "DOBLE" | "A4";
 
@@ -258,13 +258,14 @@ export default function PedidoA4PrintPage({ params }: { params: Promise<{ id: st
     };
 
     const linkWpp = pedido.cliente?.telefono
-        ? generarLinkWhatsAppComprobante({
+        ? generarLinkWhatsAppPedido({
             telefono: pedido.cliente.telefono,
             clienteNombre: pedido.cliente.nombre_razon_social,
-            tipoComprobante: "Comprobante de Pedido",
-            numeroComprobante: String(pedido.numero),
+            numeroPedido: Number(pedido.numero),
             total: pedido.total,
-            urlComprobante: typeof window !== "undefined" ? `${window.location.origin}/imprimir/pedido/${pedido.id}` : undefined,
+            fechaEntrega: pedido.fecha_entrega ? new Date(pedido.fecha_entrega).toLocaleDateString("es-AR") : undefined,
+            urlPedido: typeof window !== "undefined" ? `${window.location.origin}/imprimir/pedido/${pedido.id}` : undefined,
+            nombreEmpresa: empresa?.nombre_fantasia || empresa?.razon_social,
         })
         : null;
 

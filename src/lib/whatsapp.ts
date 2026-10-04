@@ -127,20 +127,25 @@ export function generarLinkWhatsAppPedido(params: {
     numeroPedido: number;
     total: number;
     fechaEntrega?: string;
+    urlPedido?: string;
     nombreEmpresa?: string;
 }): string {
     const tel = limpiarNumeroWhatsApp(params.telefono);
     const empresa = params.nombreEmpresa || "OnlyERP";
     const totalFmt = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(params.total);
 
-    let mensaje = `Hola *${params.clienteNombre}*, registramos tu *Pedido N° ${params.numeroPedido}* en *${empresa}*:\n\n` +
+    let mensaje = `Hola *${params.clienteNombre}*, te compartimos los detalles de tu *Pedido N° ${params.numeroPedido}* en *${empresa}*:\n\n` +
         `📦 *Total del pedido:* ${totalFmt}\n`;
 
     if (params.fechaEntrega) {
         mensaje += `🚚 *Entrega programada:* ${params.fechaEntrega}\n`;
     }
 
-    mensaje += `\nTe avisaremos cuando el camión esté en camino. ¡Muchas gracias!`;
+    if (params.urlPedido) {
+        mensaje += `📄 Podés consultar el comprobante de tu pedido aquí:\n${params.urlPedido}\n`;
+    }
+
+    mensaje += `\n¡Muchas gracias por confiar en nosotros! 🙌`;
 
     const baseUrl = tel ? `https://wa.me/${tel}` : `https://api.whatsapp.com/send`;
     return `${baseUrl}?text=${encodeURIComponent(mensaje)}`;
