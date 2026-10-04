@@ -15,6 +15,7 @@ import { getClientesDeudores, getFichaCuentaCorriente, registrarPagoCC } from "@
 import { guardarOffline, obtenerTodosOffline, eliminarOffline, STORE_PEDIDOS, STORE_CLIENTES } from "@/lib/offline-db";
 import { redondearPrecio, calcularPrecioConCascada, resolverMargenYDescuento, formatCurrency, formatFechaLocal } from "@/lib/utils";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,7 +24,7 @@ import {
     Trash2, Search, ShoppingCart, User, FileText, Ban, PackageSearch,
     Plus, Minus, X, ChevronRight, Bookmark, Tag, Percent, History, Edit,
     CheckCircle2, RefreshCw, UserPlus, CloudOff, Wifi, Eye, Loader2, LogOut,
-    Sparkles, Truck, Phone, MapPin, ImageIcon, AlertCircle, Calendar, Award
+    Sparkles, Truck, Phone, MapPin, ImageIcon, AlertCircle, Calendar, Award, Printer
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -2262,6 +2263,28 @@ export default function PwaVendedor() {
                                 </div>
                             </>
                         )}
+
+                        {/* ACCIONES DE IMPRESIÓN (TICKET Y REMITO) */}
+                        <div className="flex gap-2">
+                            <Link
+                                href={pedidoVer.ventaId ? `/imprimir/ticket/${pedidoVer.ventaId}` : `/imprimir/pedido/ticket/${pedidoVer.id}`}
+                                target="_blank"
+                                className="flex-1"
+                            >
+                                <Button variant="outline" className="w-full h-12 border-slate-300 text-slate-700 hover:bg-slate-100 font-bold rounded-2xl text-xs">
+                                    <Printer className="w-4 h-4 mr-1.5 text-slate-600" /> Ticket 80mm
+                                </Button>
+                            </Link>
+                            <Link
+                                href={`/imprimir/pedido/${pedidoVer.id}`}
+                                target="_blank"
+                                className="flex-1"
+                            >
+                                <Button variant="outline" className="w-full h-12 border-slate-300 text-slate-700 hover:bg-slate-100 font-bold rounded-2xl text-xs">
+                                    <FileText className="w-4 h-4 mr-1.5 text-slate-600" /> Remito A4
+                                </Button>
+                            </Link>
+                        </div>
 
                         <Button onClick={() => setPedidoVer(null)} className="w-full h-12 bg-zinc-800 hover:bg-zinc-900 rounded-2xl font-bold text-white text-sm">
                             Cerrar Detalle

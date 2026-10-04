@@ -529,21 +529,40 @@ export default function PedidosArmadosPage() {
                         </Button>
                       )}
 
-                      {/* BOTONES DE IMPRESIÓN SI YA ESTÁ FACTURADO */}
-                      {estaFacturado && ventaId && (
-                        <div className="flex gap-1">
-                          <Link href={`/imprimir/ticket/${ventaId}`} target="_blank">
-                            <Button variant="outline" size="sm" className="h-8 text-xs font-bold border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100">
-                              <Printer className="h-3.5 w-3.5 mr-1 text-emerald-600" /> Ticket
-                            </Button>
-                          </Link>
-                          <Link href={`/imprimir/a4/${ventaId}`} target="_blank">
+                      {/* BOTONES DE IMPRESIÓN (DISPONIBLES CON O SIN FACTURA) */}
+                      <div className="flex gap-1">
+                        <Link 
+                          href={estaFacturado && ventaId ? `/imprimir/ticket/${ventaId}` : `/imprimir/pedido/ticket/${pedido.id}`} 
+                          target="_blank"
+                          title="Imprimir Ticket Térmico 80mm"
+                        >
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className={`h-8 text-xs font-bold ${
+                              estaFacturado 
+                                ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100' 
+                                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                            }`}
+                          >
+                            <Printer className={`h-3.5 w-3.5 mr-1 ${estaFacturado ? 'text-emerald-600' : 'text-slate-600'}`} /> Ticket
+                          </Button>
+                        </Link>
+
+                        {estaFacturado && ventaId ? (
+                          <Link href={`/imprimir/a4/${ventaId}`} target="_blank" title="Imprimir Factura A4">
                             <Button variant="outline" size="sm" className="h-8 text-xs font-bold border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100">
                               <FileText className="h-3.5 w-3.5 mr-1 text-emerald-600" /> A4
                             </Button>
                           </Link>
-                        </div>
-                      )}
+                        ) : null}
+
+                        <Link href={`/imprimir/pedido/${pedido.id}`} target="_blank" title="Imprimir Remito / Despacho A4">
+                          <Button variant="outline" size="sm" className="h-8 text-xs font-bold border-slate-300 bg-white text-slate-700 hover:bg-slate-100">
+                            <FileText className="h-3.5 w-3.5 mr-1 text-slate-600" /> Remito
+                          </Button>
+                        </Link>
+                      </div>
 
                       <Button
                         variant="outline"

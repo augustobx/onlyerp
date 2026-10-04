@@ -1585,4 +1585,54 @@ export async function cancelarPedido(
   descontarMontoVenta?: boolean
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   return await cambiarEstadoPedidoAdmin(pedidoId, "CANCELADO", undefined, depositoId, motivo, descontarMontoVenta);
+}
+
+export async function getPedidoParaImprimir(pedidoId: number) {
+  try {
+    const tenant = await getTenantContext();
+    if (!tenant) return { success: false, error: "Tenant no encontrado" };
+
+    const pedido = await prisma.pedido.findFirst({
+      where: { id: Number(pedidoId), tenantId: tenant.id },
+      include: {
+        cliente: true,
+        usuario: { select: { id: true, nombre: true, telefono: true, rol: true } },
+        repartidor: { select: { id: true, nombre: true, telefono: true } },
+        listaPrecio: true,
+        venta: {
+          select: {
+            id: true,
+            tipo_comprobante: true,
+            punto_venta: true,
+            numero_comprobante: true,
+            cae: true,
+            cae_vto: true,
+            total: true,
+            saldo_pendiente: true,
+            metodo_pago: true,
+            fecha_emision: true,
+          },
+        },
+        detalles: {
+          include: {
+            producto: {
+              select: {
+                id: true,
+                codigo_articulo: true,
+                nombre_producto: true,
+                categoria: true,
+                marca: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!pedido) return { success: false, error: "Pedido no encontrado" };
+    return { success: true, data: pedido };
+  } catch (error: any) {
+    console.error("Error al obtener pedido para imprimir:", error);
+    return { success: false, error: error.message || "Error al obtener pedido" };
+  }
 }
