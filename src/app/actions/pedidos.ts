@@ -673,9 +673,6 @@ export async function cambiarEstadoPedidoAdmin(
           if (pedido.ventaId) {
             throw new Error(`Este pedido ya fue facturado previamente (Venta #${pedido.ventaId}).`);
           }
-          if (pedido.estado === "RECHAZADO" || pedido.estado === "CANCELADO") {
-            throw new Error("No se puede facturar un pedido cancelado o rechazado.");
-          }
 
           const tipo_comprobante = tipoComprobante || "COMPROBANTE_X";
           const usuarioVendedorId = pedido.usuarioId;
