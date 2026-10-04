@@ -769,7 +769,6 @@ export default function PwaVendedor() {
                 setMotivoNoEntrega("");
                 cargarRepartos();
                 cargarHistorial();
-                cargarCatalogo();
             } else {
                 toast.error(res.error || "Error al cancelar pedido.", { id: toastId });
             }
@@ -785,7 +784,6 @@ export default function PwaVendedor() {
                 toast.success(`Pedido #${pedido.numero} cancelado y stock reintegrado con éxito.`, { id: toastId });
                 cargarRepartos();
                 cargarHistorial();
-                cargarCatalogo();
             } else {
                 toast.error(res.error || "Error al cancelar pedido.", { id: toastId });
             }
