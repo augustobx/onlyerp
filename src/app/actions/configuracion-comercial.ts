@@ -35,6 +35,7 @@ export async function actualizarReglasGlobales(data: {
     redondear_a_cinco?: boolean;
     aplicar_iva_en_precios?: boolean;
     permitir_stock_negativo?: boolean;
+    facturar_al_entregar?: boolean;
 }) {
     try {
         const tenant = await requireTenant();
@@ -47,6 +48,7 @@ export async function actualizarReglasGlobales(data: {
                 redondear_a_cinco: data.redondear_a_cinco ?? false,
                 aplicar_iva_en_precios: data.aplicar_iva_en_precios ?? false,
                 permitir_stock_negativo: data.permitir_stock_negativo ?? false,
+                facturar_al_entregar: data.facturar_al_entregar ?? false,
             },
             create: {
                 tenantId: tenant.id,
@@ -56,11 +58,14 @@ export async function actualizarReglasGlobales(data: {
                 redondear_a_cinco: data.redondear_a_cinco ?? false,
                 aplicar_iva_en_precios: data.aplicar_iva_en_precios ?? false,
                 permitir_stock_negativo: data.permitir_stock_negativo ?? false,
+                facturar_al_entregar: data.facturar_al_entregar ?? false,
             }
         });
         revalidatePath('/configuracion/comercial');
         revalidatePath('/ventas');
         revalidatePath('/vendedor');
+        revalidatePath('/pedidos');
+        revalidatePath('/pedidos/armados');
         return { success: true };
     } catch (error: any) {
         console.error("Error al guardar reglas comerciales globales:", error);

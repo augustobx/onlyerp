@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Save, Percent, AlertOctagon, TrendingDown, Users, Calculator, Landmark, ShieldCheck, Boxes } from "lucide-react";
+import { Save, Percent, AlertOctagon, TrendingDown, Users, Calculator, Landmark, ShieldCheck, Boxes, Receipt } from "lucide-react";
 
 export default function ConfiguracionComercialPage() {
     const [isPending, startTransition] = useTransition();
@@ -20,7 +20,8 @@ export default function ConfiguracionComercialPage() {
         limite: 10,
         redondear_a_cinco: false,
         aplicar_iva_en_precios: false,
-        permitir_stock_negativo: false
+        permitir_stock_negativo: false,
+        facturar_al_entregar: false
     });
 
     const cargarDatos = () => {
@@ -34,7 +35,8 @@ export default function ConfiguracionComercialPage() {
                         limite: res.config.limite_desc_global,
                         redondear_a_cinco: res.config.redondear_a_cinco,
                         aplicar_iva_en_precios: res.config.aplicar_iva_en_precios || false,
-                        permitir_stock_negativo: res.config.permitir_stock_negativo || false
+                        permitir_stock_negativo: res.config.permitir_stock_negativo || false,
+                        facturar_al_entregar: res.config.facturar_al_entregar || false
                     });
                 }
             }
@@ -208,7 +210,77 @@ export default function ConfiguracionComercialPage() {
                 </CardContent>
             </Card>
 
-            {/* CARD 3: REGLAS GLOBALES Y COMISIONES */}
+            {/* CARD 3: FACTURACIÓN AUTOMÁTICA AL ENTREGAR Y CUENTA CORRIENTE */}
+            <Card className="border-slate-200 bg-white shadow-sm overflow-hidden">
+                <CardHeader className="bg-slate-50/80 border-b border-slate-100 pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <CardTitle className="text-lg flex items-center gap-2 text-slate-900 font-black">
+                            <Receipt className="h-5 w-5 text-indigo-600" /> Facturación y Cuenta Corriente al Entregar Pedidos
+                        </CardTitle>
+                        <Badge className={`font-bold text-xs ${globales.facturar_al_entregar ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-slate-100 text-slate-700 border-slate-300'}`}>
+                            {globales.facturar_al_entregar ? '🟢 Auto-facturar con Comprobante X' : '⚪ Facturación Manual (Admin)'}
+                        </Badge>
+                    </div>
+                    <CardDescription className="text-xs text-slate-600">
+                        Elegí si los pedidos se facturan automáticamente con Comprobante X al ser marcados como ENTREGADOS (desde preventa, reparto o administración), impactando de inmediato en la deuda del cliente si es Cuenta Corriente.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Opción 1: Facturar Automáticamente */}
+                        <div
+                            onClick={() => setGlobales({ ...globales, facturar_al_entregar: true })}
+                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                globales.facturar_al_entregar
+                                    ? 'border-emerald-600 bg-emerald-50/40 shadow-sm'
+                                    : 'border-slate-200 hover:border-slate-300 bg-white opacity-70'
+                            }`}
+                        >
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <h4 className="font-black text-sm text-slate-900">Modo Automático: Facturar al Entregar (Recomendado)</h4>
+                                    <span className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${globales.facturar_al_entregar ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>
+                                        {globales.facturar_al_entregar && <span className="h-1.5 w-1.5 rounded-full bg-white"></span>}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    Al marcar el pedido como <strong>ENTREGADO</strong>, el sistema genera automáticamente la venta con <strong>Comprobante X</strong>. Si fue a Cuenta Corriente, <strong>el monto se suma inmediatamente al saldo deudor</strong> del cliente sin esperar facturación manual. Si luego necesitás factura fiscal (ARCA / AFIP), podés emitirla desde la venta.
+                                </p>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/60 px-2 py-0.5 rounded-md mt-3 inline-block w-fit">
+                                Ideal para: Reparto con Cuenta Corriente (evita olvidos de cobro)
+                            </span>
+                        </div>
+
+                        {/* Opción 2: Facturación Manual */}
+                        <div
+                            onClick={() => setGlobales({ ...globales, facturar_al_entregar: false })}
+                            className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                !globales.facturar_al_entregar
+                                    ? 'border-indigo-600 bg-indigo-50/40 shadow-sm'
+                                    : 'border-slate-200 hover:border-slate-300 bg-white opacity-70'
+                            }`}
+                        >
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <h4 className="font-black text-sm text-slate-900">Modo Manual: Facturar Solo desde Administración</h4>
+                                    <span className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${!globales.facturar_al_entregar ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                                        {!globales.facturar_al_entregar && <span className="h-1.5 w-1.5 rounded-full bg-white"></span>}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    Al entregar el pedido solo cambia su estado a ENTREGADO. La venta y el cargo en cuenta corriente <strong>no se crean hasta que un administrador presione manualmente Facturar</strong> en el módulo de Pedidos.
+                                </p>
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md mt-3 inline-block w-fit">
+                                Tradicional: Requiere control administrativo previo
+                            </span>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* CARD 4: REGLAS GLOBALES Y COMISIONES */}
             <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="bg-slate-50/80 border-b border-slate-100 pb-4">
                     <CardTitle className="text-lg flex items-center gap-2 text-slate-900"><Percent className="h-5 w-5 text-indigo-600" /> Parámetros Comerciales y Redondeo</CardTitle>

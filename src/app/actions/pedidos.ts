@@ -551,7 +551,8 @@ export async function cambiarEstadoPedidoAdmin(
   tipoComprobante?: string,
   requestedDepositoId?: number | null,
   motivoCancelacion?: string,
-  descontarMontoVenta?: boolean
+  descontarMontoVenta?: boolean,
+  notasEntrega?: string
 ): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
     const tenant = await requireTenant();
@@ -770,14 +771,191 @@ export async function cambiarEstadoPedidoAdmin(
         }
 
         if (nuevoEstado === "ENTREGADO") {
+          const configEmpresa = await tx.empresaConfig.findUnique({
+            where: { tenantId: tenant.id },
+          });
+
           const fechaHora = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+          const notaAuditoria = notasEntrega
+            ? `\n\n[REPARTO ${fechaHora}] -> ENTREGADO con éxito.` + (notasEntrega ? ` Obs: ${notasEntrega}` : "")
+            : `\n\n[ADMINISTRACIÓN ${fechaHora}] -> Marcado como ENTREGADO.`;
+
+          // Facturación automática con COMPROBANTE_X si está habilitada en la configuración comercial y el pedido aún no fue facturado
+          if (configEmpresa?.facturar_al_entregar && !pedido.ventaId) {
+            const tipo_comprobante = "COMPROBANTE_X";
+            const usuarioVendedorId = pedido.usuarioId;
+            const sucursalId = pedido.usuario?.sucursalId || null;
+            const depositoCentralId = await resolverDepositoId(tx, tenant.id, usuarioVendedorId, null);
+
+            let secuencia = await tx.secuenciaFactura.findUnique({
+              where: {
+                tenantId_tipo_comprobante: {
+                  tenantId: tenant.id,
+                  tipo_comprobante,
+                },
+              },
+            });
+            if (!secuencia) {
+              secuencia = await tx.secuenciaFactura.create({
+                data: {
+                  tenantId: tenant.id,
+                  tipo_comprobante,
+                  punto_venta: 1,
+                  numero_actual: 0,
+                },
+              });
+            }
+            const nuevoNumero = secuencia.numero_actual + 1;
+
+            const esCuentaCorriente = pedido.metodo_pago === "CUENTA_CORRIENTE";
+            const estadoPago = esCuentaCorriente ? "PENDIENTE" : "PAGADO";
+            const saldoPendiente = esCuentaCorriente ? pedido.total : 0;
+
+            let fechaVencimientoCC: Date | null = null;
+            if (esCuentaCorriente && pedido.cliente && pedido.cliente.dias_aviso_deuda > 0) {
+              fechaVencimientoCC = new Date();
+              fechaVencimientoCC.setDate(fechaVencimientoCC.getDate() + pedido.cliente.dias_aviso_deuda);
+            }
+
+            const ventaData = {
+              tenantId: tenant.id,
+              fecha_emision: new Date(),
+              tipo_comprobante,
+              punto_venta: secuencia.punto_venta,
+              numero_comprobante: nuevoNumero,
+              clienteId: pedido.clienteId,
+              listaPrecioId: pedido.listaPrecioId,
+              sucursalId,
+              depositoOrigenId: depositoCentralId,
+
+              cae: null,
+              cae_vto: null,
+              importe_neto: pedido.subtotal,
+              importe_iva: 0,
+
+              metodo_pago: (esCuentaCorriente ? "CUENTA_CORRIENTE" : (pedido.metodo_pago || "CONTADO")) as any,
+              estado_pago: estadoPago as any,
+              saldo_pendiente: saldoPendiente,
+              fecha_vencimiento_cc: fechaVencimientoCC,
+
+              notas_venta: `Auto-facturado al entregar Pedido #${pedido.numero}`,
+              comentario_venta: pedido.notas,
+
+              subtotal: pedido.subtotal,
+              descuento_global: pedido.descuento_global,
+              total: pedido.total,
+
+              presupuestoOrigenId: null,
+              usuarioId: usuarioVendedorId,
+
+              detalles: {
+                create: pedido.detalles.map((item: any) => ({
+                  productoId: item.productoId,
+                  cantidad: item.cantidad,
+                  precio_unitario: item.precio_unitario,
+                  descuento_individual: item.descuento_individual,
+                  precio_final: item.precio_final,
+                  subtotal: item.subtotal,
+                  costo_unitario: item.producto?.precio_costo || 0,
+                })),
+              },
+
+              pagos: {
+                create: [
+                  {
+                    metodo_pago: (esCuentaCorriente ? "CUENTA_CORRIENTE" : (pedido.metodo_pago || "CONTADO")) as any,
+                    monto: pedido.total,
+                  },
+                ],
+              },
+            };
+
+            const nuevaVenta = await tx.venta.create({
+              data: ventaData,
+            });
+
+            if (!esCuentaCorriente) {
+              const cajaAbierta = sucursalId
+                ? await tx.cajaDiaria.findFirst({ where: { tenantId: tenant.id, estado: "ABIERTA", sucursalId } })
+                : await tx.cajaDiaria.findFirst({ where: { tenantId: tenant.id, estado: "ABIERTA" } });
+
+              if (cajaAbierta) {
+                await tx.movimientoCaja.create({
+                  data: {
+                    cajaId: cajaAbierta.id,
+                    tipo: "VENTA",
+                    metodo_pago: (pedido.metodo_pago as any) || "CONTADO",
+                    monto: pedido.total,
+                    descripcion: `Pedido #${pedido.numero} → ${tipo_comprobante.replace("_", " ")} 000${secuencia.punto_venta}-${nuevoNumero}`,
+                    ventaId: nuevaVenta.id,
+                    usuarioId: pedido.usuarioId,
+                  },
+                });
+              }
+            }
+
+            if (esCuentaCorriente) {
+              await tx.movimientoCuentaCorriente.create({
+                data: {
+                  tenantId: tenant.id,
+                  clienteId: pedido.clienteId,
+                  ventaId: nuevaVenta.id,
+                  tipo: "CARGO",
+                  monto: pedido.total,
+                  metodo_pago: "CUENTA_CORRIENTE",
+                  notas: `Crédito por Pedido #${pedido.numero} entregado → Factura #${nuevoNumero}`,
+                },
+              });
+            }
+
+            for (const item of pedido.detalles) {
+              await tx.movimientoStock.create({
+                data: {
+                  tenantId: tenant.id,
+                  productoId: item.productoId,
+                  depositoOrigenId: depositoCentralId,
+                  cantidad: item.cantidad,
+                  tipo: "VENTA",
+                  motivo: `Facturación automática por entrega de Pedido #${pedido.numero}`,
+                  ventaId: nuevaVenta.id,
+                },
+              });
+            }
+
+            await tx.secuenciaFactura.update({
+              where: {
+                tenantId_tipo_comprobante: {
+                  tenantId: tenant.id,
+                  tipo_comprobante,
+                },
+              },
+              data: { numero_actual: nuevoNumero },
+            });
+
+            const actualizado = await tx.pedido.update({
+              where: { id: pedidoId },
+              data: {
+                estado: "ENTREGADO",
+                fecha_entrega: pedido.fecha_entrega || new Date(),
+                motivo_no_entrega: null,
+                ventaId: nuevaVenta.id,
+                notas:
+                  (pedido.notas || "") +
+                  notaAuditoria +
+                  `\n[AUTO-FACTURACIÓN] Facturado automáticamente con COMPROBANTE X #${nuevoNumero}. Venta #${nuevaVenta.id}. Asentado en cuenta corriente/contable.`,
+              },
+            });
+
+            return { pedido: actualizado, venta: nuevaVenta };
+          }
+
           const actualizado = await tx.pedido.update({
             where: { id: pedidoId },
             data: {
               estado: "ENTREGADO",
               fecha_entrega: pedido.fecha_entrega || new Date(),
               motivo_no_entrega: null,
-              notas: (pedido.notas || "") + `\n\n[ADMINISTRACIÓN ${fechaHora}] -> Marcado como ENTREGADO.`,
+              notas: (pedido.notas || "") + notaAuditoria,
             },
           });
           return { pedido: actualizado };
@@ -1027,6 +1205,8 @@ export async function cambiarEstadoPedidoAdmin(
     revalidatePath("/cuentas-corrientes");
     revalidatePath("/inventario");
     revalidatePath("/vendedor");
+    revalidatePath("/ventas");
+    revalidatePath("/clientes");
 
     return { success: true, data: resultado };
   } catch (error: any) {
@@ -1402,35 +1582,19 @@ export async function marcarPedidoListoEntrega(
 
 export async function marcarPedidoEntregado(pedidoId: number, notas?: string) {
   try {
-    const tenant = await requireTenant();
-    const fechaHora = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
-    const pedido = await prisma.pedido.findFirst({
-      where: { id: pedidoId, tenantId: tenant.id },
-    });
-    if (!pedido) return { success: false, error: "Pedido no encontrado." };
-    if (pedido.estado === "CANCELADO" || pedido.estado === "RECHAZADO") {
-      return {
-        success: false,
-        error: `El pedido #${pedido.numero} está ${pedido.estado} y anulado por completo. No se puede marcar como entregado.`,
-      };
+    const res = await cambiarEstadoPedidoAdmin(
+      pedidoId,
+      "ENTREGADO",
+      undefined,
+      null,
+      undefined,
+      undefined,
+      notas
+    );
+    if (!res.success) {
+      return { success: false, error: res.error || "Error al registrar entrega." };
     }
-
-    const notaAuditoria = `\n\n[REPARTO ${fechaHora}] -> ENTREGADO con éxito.` + (notas ? ` Obs: ${notas}` : "");
-
-    const actualizado = await prisma.pedido.update({
-      where: { id: pedidoId },
-      data: {
-        estado: "ENTREGADO",
-        fecha_entrega: new Date(),
-        motivo_no_entrega: null,
-        notas: (pedido.notas || "") + notaAuditoria,
-      },
-    });
-
-    revalidatePath("/pedidos");
-    revalidatePath("/pedidos/armados");
-    revalidatePath("/vendedor");
-    return { success: true, data: actualizado };
+    return { success: true, data: res.data?.pedido || res.data };
   } catch (error: any) {
     return { success: false, error: error.message || "Error al registrar entrega." };
   }

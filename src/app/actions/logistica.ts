@@ -469,6 +469,10 @@ export async function procesarRendicionChofer(data: {
         const detalleCobrosCreate: any[] = [];
         const chequesCreate: any[] = [];
 
+        const configEmpresa = await tx.empresaConfig.findUnique({
+          where: { tenantId: tenant.id },
+        });
+
         for (const itemCobro of data.cobros) {
           const detRuta = ruta.detalles.find((d: any) => d.pedidoId === itemCobro.pedidoId);
           if (!detRuta) continue;
@@ -492,11 +496,95 @@ export async function procesarRendicionChofer(data: {
           });
 
           if (itemCobro.estado_entrega === "ENTREGADO") {
+            let ventaIdActual = pedido.ventaId;
+
+            if (configEmpresa?.facturar_al_entregar && !ventaIdActual) {
+              const tipo_comprobante = "COMPROBANTE_X";
+              let secuencia = await tx.secuenciaFactura.findUnique({
+                where: {
+                  tenantId_tipo_comprobante: {
+                    tenantId: tenant.id,
+                    tipo_comprobante,
+                  },
+                },
+              });
+              if (!secuencia) {
+                secuencia = await tx.secuenciaFactura.create({
+                  data: {
+                    tenantId: tenant.id,
+                    tipo_comprobante,
+                    punto_venta: 1,
+                    numero_actual: 0,
+                  },
+                });
+              }
+              const nuevoNumero = secuencia.numero_actual + 1;
+              const esCuentaCorriente = pedido.metodo_pago === "CUENTA_CORRIENTE" || (itemCobro.monto_cuenta_corriente || 0) > 0;
+              const saldoPendiente = itemCobro.monto_cuenta_corriente !== undefined ? itemCobro.monto_cuenta_corriente : (esCuentaCorriente ? pedido.total : 0);
+
+              const nuevaVenta = await tx.venta.create({
+                data: {
+                  tenantId: tenant.id,
+                  fecha_emision: new Date(),
+                  tipo_comprobante,
+                  punto_venta: secuencia.punto_venta,
+                  numero_comprobante: nuevoNumero,
+                  clienteId: pedido.clienteId,
+                  listaPrecioId: pedido.listaPrecioId,
+                  sucursalId,
+                  depositoOrigenId: null,
+                  importe_neto: pedido.subtotal,
+                  importe_iva: 0,
+                  metodo_pago: (esCuentaCorriente ? "CUENTA_CORRIENTE" : (pedido.metodo_pago || "CONTADO")) as any,
+                  estado_pago: saldoPendiente > 0 ? (saldoPendiente < pedido.total ? "PARCIAL" : "PENDIENTE") : "PAGADO",
+                  saldo_pendiente: saldoPendiente,
+                  notas_venta: `Auto-facturado al cerrar reparto HR #${ruta.numero}`,
+                  comentario_venta: pedido.notas,
+                  subtotal: pedido.subtotal,
+                  descuento_global: pedido.descuento_global,
+                  total: pedido.total,
+                  usuarioId: pedido.usuarioId,
+                  detalles: {
+                    create: pedido.detalles.map((item: any) => ({
+                      productoId: item.productoId,
+                      cantidad: item.cantidad,
+                      precio_unitario: item.precio_unitario,
+                      descuento_individual: item.descuento_individual,
+                      precio_final: item.precio_final,
+                      subtotal: item.subtotal,
+                      costo_unitario: 0,
+                    })),
+                  },
+                  pagos: {
+                    create: [
+                      {
+                        metodo_pago: (esCuentaCorriente ? "CUENTA_CORRIENTE" : (pedido.metodo_pago || "CONTADO")) as any,
+                        monto: pedido.total,
+                      },
+                    ],
+                  },
+                },
+              });
+
+              await tx.secuenciaFactura.update({
+                where: {
+                  tenantId_tipo_comprobante: {
+                    tenantId: tenant.id,
+                    tipo_comprobante,
+                  },
+                },
+                data: { numero_actual: nuevoNumero },
+              });
+
+              ventaIdActual = nuevaVenta.id;
+            }
+
             await tx.pedido.update({
               where: { id: pedido.id },
               data: {
                 estado: "ENTREGADO",
                 fecha_entrega: new Date(),
+                ...(ventaIdActual ? { ventaId: ventaIdActual } : {}),
               },
             });
 
@@ -550,12 +638,12 @@ export async function procesarRendicionChofer(data: {
               }
             }
 
-            if (itemCobro.monto_cuenta_corriente > 0 && pedido.ventaId) {
+            if (itemCobro.monto_cuenta_corriente > 0 && ventaIdActual) {
               await tx.movimientoCuentaCorriente.create({
                 data: {
                   tenantId: tenant.id,
                   clienteId: pedido.clienteId,
-                  ventaId: pedido.ventaId,
+                  ventaId: ventaIdActual,
                   tipo: "CARGO",
                   monto: itemCobro.monto_cuenta_corriente,
                   metodo_pago: "CUENTA_CORRIENTE",
