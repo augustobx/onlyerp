@@ -69,7 +69,8 @@ export async function proxy(request: NextRequest) {
         pathname === '/manifest.json' ||
         pathname === '/sw.js' ||
         pathname === '/favicon.ico' ||
-        pathname.startsWith('/icons')
+        pathname.startsWith('/icons') ||
+        pathname.startsWith('/nanolabs')
     ) {
         return NextResponse.next();
     }
@@ -137,5 +138,5 @@ export async function proxy(request: NextRequest) {
 
 // Configuración del matcher — excluye archivos estáticos para que el proxy no pierda tiempo
 export const config = {
-    matcher: ['/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|icons).*)'],
+    matcher: ['/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|icons|nanolabs).*)'],
 };

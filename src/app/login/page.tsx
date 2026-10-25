@@ -1,84 +1,65 @@
-"use client";
+import { headers } from "next/headers";
+import { resolveTenantByHostname, normalizeHostname, getTenantContext } from "@/lib/tenant-context";
+import TenantLoginClient from "./TenantLoginClient";
+import type { Metadata } from "next";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { Store, Loader2, LockKeyhole } from "lucide-react";
-import { login } from "@/app/actions/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+export async function generateMetadata(): Promise<Metadata> {
+  let tenantName = "OnlyERP";
+  try {
+    const requestHeaders = await headers();
+    const host = normalizeHostname(requestHeaders.get("host") || "");
+    const resolved = await resolveTenantByHostname(host);
+    if (resolved?.nombre) {
+      tenantName = resolved.nombre;
+    } else {
+      const current = await getTenantContext();
+      if (current?.nombre) {
+        tenantName = current.nombre;
+      }
+    }
+  } catch (e) {
+    console.error("Error generating metadata for login:", e);
+  }
 
-export default function LoginPage() {
-    const router = useRouter();
-    const [isPending, startTransition] = useTransition();
-    const [errorMsg, setErrorMsg] = useState("");
+  return {
+    title: `${tenantName} | Iniciar Sesión`,
+    description: `Ingreso al sistema de gestión de ${tenantName}`,
+  };
+}
 
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        setErrorMsg("");
-        const formData = new FormData(e.currentTarget);
+export default async function LoginPage() {
+  let tenantName = "OnlyERP";
+  let tenantArea = "NanoLabs · Business Cloud";
+  let tenantBajada = "Sistema integral de gestión comercial, inventario y facturación.";
+  let tenantLogo: string | null = null;
+  let tenantSlug = "";
 
-        startTransition(async () => {
-            const res = await login(formData);
-            if (res.success) {
-                if (['VENDEDOR', 'REPARTIDOR', 'MIXTO'].includes(res.rol || '')) {
-                    router.push("/vendedor");
-                } else {
-                    router.push("/");
-                }
-                router.refresh(); // Refrescamos para que el layout lea la sesión
-            } else {
-                if (res.suspended) {
-                    router.push("/suspendido");
-                    return;
-                }
-                setErrorMsg(res.error || "Error desconocido");
-            }
-        });
-    };
+  try {
+    const requestHeaders = await headers();
+    const host = normalizeHostname(requestHeaders.get("host") || "");
+    let tenant = await resolveTenantByHostname(host);
+    if (!tenant) {
+      tenant = await getTenantContext();
+    }
 
-    return (
-        <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 flex flex-col justify-center items-center p-4">
-            <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl shadow-xl border border-slate-200 dark:border-zinc-800 overflow-hidden">
+    if (tenant) {
+      tenantName = tenant.nombre;
+      tenantArea = `${tenant.nombre} · Gestión Empresarial`;
+      tenantBajada = `Sistema integral de gestión comercial y empresarial para ${tenant.nombre}.`;
+      tenantLogo = tenant.logoUrl || null;
+      tenantSlug = tenant.slug;
+    }
+  } catch (e) {
+    console.error("Error resolving tenant context in LoginPage:", e);
+  }
 
-                {/* Cabecera */}
-                <div className="bg-indigo-600 p-8 text-center text-white flex flex-col items-center">
-                    <div className="bg-white/20 p-4 rounded-2xl mb-4 backdrop-blur-sm">
-                        <Store className="h-10 w-10 text-white" />
-                    </div>
-                    <h1 className="text-2xl font-black tracking-tight">OnlyERP</h1>
-                    <p className="text-indigo-200 text-sm mt-1 font-medium">Sistema de Gestión Empresarial</p>
-                </div>
-
-                {/* Formulario */}
-                <div className="p-8">
-                    <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-6 flex items-center gap-2">
-                        <LockKeyhole className="h-5 w-5 text-indigo-500" /> Iniciar Sesión
-                    </h2>
-
-                    <form onSubmit={handleSubmit} className="space-y-5">
-                        <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase text-slate-500">Usuario</Label>
-                            <Input name="username" required autoFocus className="h-12 bg-slate-50" placeholder="Ej: marcos" />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label className="text-xs font-bold uppercase text-slate-500">Contraseña</Label>
-                            <Input name="password" type="password" required className="h-12 bg-slate-50" placeholder="••••••••" />
-                        </div>
-
-                        {errorMsg && (
-                            <div className="p-3 bg-red-50 text-red-600 text-sm font-semibold rounded-lg border border-red-100 text-center">
-                                {errorMsg}
-                            </div>
-                        )}
-
-                        <Button type="submit" disabled={isPending} className="w-full h-12 bg-slate-900 hover:bg-slate-800 text-white font-bold text-base mt-4 shadow-sm">
-                            {isPending ? <Loader2 className="animate-spin h-5 w-5" /> : "Ingresar al Sistema"}
-                        </Button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    );
+  return (
+    <TenantLoginClient
+      tenantName={tenantName}
+      tenantArea={tenantArea}
+      tenantBajada={tenantBajada}
+      tenantLogo={tenantLogo}
+      tenantSlug={tenantSlug}
+    />
+  );
 }
