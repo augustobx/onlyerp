@@ -486,7 +486,7 @@ export default function HojasDeRutaPage() {
                                         No hay pedidos pendientes de asignar en este momento.
                                     </p>
                                 ) : (
-                                    <div className="border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden divide-y divide-slate-100 dark:divide-zinc-800 max-h-64 overflow-y-auto">
+                                    <div className="border border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden divide-y divide-slate-100 dark:divide-zinc-800 max-h-64 overflow-y-auto custom-scrollbar">
                                         {pedidosDisponibles.map(p => {
                                             const isSelected = pedidosSeleccionados.includes(p.id);
                                             return (

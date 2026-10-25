@@ -530,8 +530,8 @@ export default function RendimientoVendedoresPage() {
             {/* ============================================================== */}
             {vistaModo === "DETALLE" && (
                 <Card className="border-slate-200 dark:border-zinc-800 shadow-sm bg-white dark:bg-zinc-900 rounded-3xl overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs">
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left text-xs min-w-[950px]">
                             <thead>
                                 <tr className="border-b border-slate-100 dark:border-zinc-800 bg-slate-50/75 dark:bg-zinc-800/50 text-slate-500 font-bold uppercase tracking-wider">
                                     <th className="py-3.5 px-4 w-12 text-center">Detalle</th>
@@ -824,8 +824,8 @@ export default function RendimientoVendedoresPage() {
                                     </div>
                                 </div>
 
-                                <div className="p-4 overflow-x-auto">
-                                    <table className="w-full text-left text-xs">
+                                <div className="p-4 overflow-x-auto custom-scrollbar">
+                                    <table className="w-full text-left text-xs min-w-[650px]">
                                         <thead>
                                             <tr className="text-slate-400 uppercase text-[10px] font-bold border-b border-slate-100 pb-2">
                                                 <th className="pb-2">Hora</th>
@@ -932,8 +932,8 @@ export default function RendimientoVendedoresPage() {
                                     </div>
                                 </div>
 
-                                <div className="p-4 overflow-x-auto">
-                                    <table className="w-full text-left text-xs">
+                                <div className="p-4 overflow-x-auto custom-scrollbar">
+                                    <table className="w-full text-left text-xs min-w-[650px]">
                                         <thead>
                                             <tr className="text-slate-400 uppercase text-[10px] font-bold border-b border-slate-100 pb-2">
                                                 <th className="pb-2">Fecha</th>

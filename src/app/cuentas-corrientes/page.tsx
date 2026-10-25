@@ -208,8 +208,8 @@ export default function CuentasCorrientesPage() {
 
             {/* LISTA DE DEUDORES */}
             <Card className="flex-1 shadow-sm border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-auto">
-                    <table className="w-full text-sm text-left">
+                <div className="flex-1 overflow-auto custom-scrollbar">
+                    <table className="w-full text-sm text-left min-w-[750px]">
                         <thead className="text-[10px] uppercase tracking-wider bg-slate-50 dark:bg-zinc-800/50 sticky top-0 z-10 text-slate-500 border-b border-slate-200 dark:border-zinc-800">
                             <tr>
                                 <th className="px-6 py-4 font-semibold">Cliente</th>

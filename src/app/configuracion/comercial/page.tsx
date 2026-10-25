@@ -318,8 +318,8 @@ export default function ConfiguracionComercialPage() {
                 <CardHeader className="bg-slate-50 border-b border-slate-100 pb-4">
                     <CardTitle className="text-lg flex items-center gap-2 text-slate-800"><Users className="h-5 w-5 text-indigo-600" /> Excepciones por Vendedor</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
-                    <table className="w-full text-sm text-left">
+                <CardContent className="p-0 overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-sm text-left min-w-[650px]">
                         <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[10px] uppercase tracking-wider">
                             <tr><th className="p-4">Vendedor</th><th className="p-4">Comisión Específica (%)</th><th className="p-4">Límite Dto Específico (%)</th><th className="p-4 text-center">Acción</th></tr>
                         </thead>

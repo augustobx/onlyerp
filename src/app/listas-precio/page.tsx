@@ -170,7 +170,7 @@ export default function ListasPrecioPage() {
                                 <ClipboardList className="h-4 w-4 text-slate-400" /> Tarifarios Activos
                             </CardTitle>
                         </CardHeader>
-                        <div className="p-0">
+                        <div className="p-0 overflow-x-auto custom-scrollbar">
                             {loading ? (
                                 <div className="flex justify-center py-12"><Loader2 className="animate-spin h-6 w-6 text-slate-300" /></div>
                             ) : listas.length === 0 ? (
@@ -179,7 +179,7 @@ export default function ListasPrecioPage() {
                                     <p className="text-sm font-medium">Aún no hay listas de precios.</p>
                                 </div>
                             ) : (
-                                <table className="w-full text-sm text-left">
+                                <table className="w-full text-sm text-left min-w-[500px]">
                                     <thead className="text-[10px] uppercase tracking-wider bg-slate-50 dark:bg-zinc-800/50 text-slate-500 border-b border-slate-200 dark:border-zinc-800">
                                         <tr>
                                             <th className="px-6 py-3 font-semibold">Nombre de la Lista</th>

@@ -112,8 +112,8 @@ export function TenantsManagerClient({
 
       {/* Tenants Table */}
       <div className="bg-slate-900/70 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left text-sm text-slate-300 min-w-[750px]">
             <thead className="text-xs uppercase bg-slate-950/80 text-slate-400 border-b border-slate-800">
               <tr>
                 <th className="py-3.5 px-6">Empresa & Dominio</th>

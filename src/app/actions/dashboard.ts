@@ -124,6 +124,7 @@ export async function getDashboardMetrics() {
     return {
       success: true,
       data: {
+        tenantNombre: tenant.nombre,
         ventasHoy: ventasHoy._sum?.total || 0,
         cantidadVentasHoy: ventasHoy._count?.id || 0,
         deudaTotal: deudaTotal._sum?.saldo_pendiente || 0,

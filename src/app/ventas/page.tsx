@@ -799,8 +799,8 @@ function PosTerminal({ tabId, allOtherCarts, updateCartInfo }: any) {
                             </Button>
                         </div>
 
-                        <div className="flex-1 overflow-auto bg-slate-50/50 dark:bg-zinc-900/50">
-                            <table className="w-full text-sm text-left">
+                        <div className="flex-1 overflow-auto custom-scrollbar bg-slate-50/50 dark:bg-zinc-900/50">
+                            <table className="w-full text-sm text-left min-w-[680px]">
                                 <thead className="text-[10px] uppercase tracking-wider bg-slate-50 dark:bg-zinc-800/50 sticky top-0 z-10 text-slate-500 border-b border-slate-200 dark:border-zinc-800">
                                     <tr>
                                         <th className="px-4 py-3 w-[35%] font-semibold">Producto</th>

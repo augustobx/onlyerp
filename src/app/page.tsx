@@ -68,7 +68,7 @@ export default function DashboardPage() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
             </div>
-            <p className="text-xs font-semibold text-slate-500 mt-0.5">Visión operativa y financiera en tiempo real para Sanu Distribuidora.</p>
+            <p className="text-xs font-semibold text-slate-500 mt-0.5">Visión operativa y financiera en tiempo real para {metrics.tenantNombre || "tu empresa"}.</p>
           </div>
         </div>
 
@@ -317,8 +317,8 @@ export default function DashboardPage() {
             </Link>
           </CardHeader>
 
-          <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-sm text-left">
+          <CardContent className="p-0 overflow-x-auto custom-scrollbar">
+            <table className="w-full text-sm text-left min-w-[650px]">
               <thead className="text-[10px] uppercase tracking-wider bg-slate-50 text-slate-500 border-b border-slate-200">
                 <tr>
                   <th className="px-5 py-3 font-semibold">Cliente</th>

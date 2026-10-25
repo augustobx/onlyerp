@@ -184,8 +184,8 @@ export default function NuevoPresupuestoPage() {
                                 <PackageSearch className="w-4 h-4 mr-2" /> Buscar Producto
                             </Button>
                         </div>
-                        <div className="overflow-auto bg-slate-50/50 flex-1">
-                            <table className="w-full text-sm">
+                        <div className="overflow-auto custom-scrollbar bg-slate-50/50 flex-1">
+                            <table className="w-full text-sm min-w-[650px]">
                                 <thead className="text-[10px] uppercase tracking-wider bg-slate-50 text-slate-500 border-b sticky top-0">
                                     <tr>
                                         <th className="px-4 py-3 text-left">Producto</th>

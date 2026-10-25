@@ -341,8 +341,8 @@ export default function ClientesPage() {
 
                     {/* LISTADO DE CLIENTES */}
                     <Card className="shadow-sm border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col overflow-hidden">
-                        <div className="p-0 overflow-x-auto">
-                            <table className="w-full text-sm text-left">
+                        <div className="p-0 overflow-x-auto custom-scrollbar">
+                            <table className="w-full text-sm text-left min-w-[850px]">
                                 <thead className="bg-slate-50 dark:bg-zinc-800/50 border-b border-slate-200 dark:border-zinc-800 text-slate-500 uppercase text-[10px] tracking-wider font-bold">
                                     <tr>
                                         <th className="px-6 py-4">Cliente / Razón Social</th>
@@ -529,9 +529,9 @@ export default function ClientesPage() {
                                                     <p className="text-sm font-medium">Este cliente no tiene compras ni pagos registrados.</p>
                                                 </div>
                                             ) : (
-                                                <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl max-h-[500px] overflow-y-auto">
+                                                <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl max-h-[500px] overflow-auto custom-scrollbar">
                                                     {/* Usaremos el mismo mapeo que el modal viejo, simplificado */}
-                                                    <table className="w-full text-sm text-left">
+                                                    <table className="w-full text-sm text-left min-w-[650px]">
                                                         <thead className="text-[10px] uppercase tracking-wider bg-slate-50 dark:bg-zinc-800/50 sticky top-0 text-slate-500 border-b border-slate-200 dark:border-zinc-800 z-10">
                                                             <tr>
                                                                 <th className="px-5 py-3 font-semibold">Fecha</th>

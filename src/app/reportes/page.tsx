@@ -351,8 +351,8 @@ export default function ReportesMaestrosPage() {
                     </div>
 
                     <Card className="shadow-sm border-slate-200 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left">
+                        <div className="overflow-x-auto custom-scrollbar">
+                            <table className="w-full text-sm text-left min-w-[800px]">
                                 <thead className="text-[10px] uppercase tracking-wider bg-slate-50 text-slate-500 border-b border-slate-200">
                                     <tr>
                                         <th className="px-6 py-4 font-semibold">Fecha y Hora</th>

@@ -319,8 +319,8 @@ export default function CarteraValoresPage() {
             </div>
 
             {/* TABLA DE CHEQUES */}
-            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-                <table className="w-full text-left text-xs">
+            <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left text-xs min-w-[800px]">
                     <thead>
                         <tr className="border-b border-slate-100 dark:border-zinc-800 bg-slate-50/75 dark:bg-zinc-800/50 text-slate-500 font-bold uppercase tracking-wider">
                             <th className="py-3.5 px-4 w-10">

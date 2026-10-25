@@ -837,8 +837,8 @@ export default function AdminPedidosPage() {
                             {/* Tabla de Artículos */}
                             <div>
                                 <h3 className="font-black text-slate-800 mb-3 border-b pb-2">Artículos Solicitados ({pedidoActivo.detalles.length})</h3>
-                                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                                    <table className="w-full text-sm text-left">
+                                <div className="border border-slate-200 rounded-xl overflow-x-auto custom-scrollbar shadow-sm">
+                                    <table className="w-full text-sm text-left min-w-[650px]">
                                         <thead className="bg-slate-50 text-slate-500 font-bold text-xs">
                                             <tr>
                                                 <th className="px-4 py-3">Código</th>
@@ -1040,8 +1040,8 @@ export default function AdminPedidosPage() {
                             </div>
 
                             {/* Lista de Items */}
-                            <div className="border border-slate-200 rounded-xl overflow-hidden">
-                                <table className="w-full text-sm text-left">
+                            <div className="border border-slate-200 rounded-xl overflow-x-auto custom-scrollbar">
+                                <table className="w-full text-sm text-left min-w-[480px]">
                                     <thead className="bg-slate-50 text-slate-500 font-bold text-xs border-b border-slate-200">
                                         <tr>
                                             <th className="px-4 py-2">Producto</th>

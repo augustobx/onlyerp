@@ -258,8 +258,8 @@ export default function LiquidacionComisionesPage() {
             </div>
 
             {/* TABLA PRINCIPAL DE VENDEDORES */}
-            <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-                <table className="w-full text-left text-xs">
+            <div className="bg-white dark:bg-zinc-900 rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-sm overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left text-xs min-w-[950px]">
                     <thead>
                         <tr className="border-b border-slate-100 dark:border-zinc-800 bg-slate-50/75 dark:bg-zinc-800/50 text-slate-500 font-bold uppercase tracking-wider">
                             <th className="py-3.5 px-4">VENDEDOR / PREVENTISTA</th>
@@ -524,8 +524,8 @@ export default function LiquidacionComisionesPage() {
                                     </div>
 
                                     {/* TABLA DE OPERACIONES */}
-                                    <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden">
-                                        <table className="w-full text-left text-xs">
+                                    <div className="rounded-2xl border border-slate-200 dark:border-zinc-800 overflow-x-auto custom-scrollbar">
+                                        <table className="w-full text-left text-xs min-w-[850px]">
                                             <thead className="bg-slate-50 dark:bg-zinc-800/70 text-slate-500 uppercase font-bold text-[10px]">
                                                 <tr>
                                                     <th className="py-3 px-4">Fecha / Día</th>

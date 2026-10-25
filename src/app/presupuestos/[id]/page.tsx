@@ -201,8 +201,8 @@ export default function PresupuestoDetallePage({ params }: { params: Promise<{ i
                 <CardHeader className="p-4 border-b border-slate-100 bg-slate-50/50">
                     <CardTitle className="text-base flex items-center gap-2"><Package className="h-4 w-4 text-emerald-600" /> Ítems del Presupuesto ({presupuesto.detalles?.length || 0})</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
-                    <table className="w-full text-sm">
+                <CardContent className="p-0 overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-sm min-w-[650px]">
                         <thead className="bg-slate-50 text-[10px] uppercase text-slate-500 tracking-wider border-b">
                             <tr>
                                 <th className="px-4 py-3 text-left font-semibold">Producto</th>

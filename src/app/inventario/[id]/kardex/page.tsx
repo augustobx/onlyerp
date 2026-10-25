@@ -231,8 +231,8 @@ export default function KardexProductoPage({ params }: { params: Promise<{ id: s
 
             {/* TABLA KARDEX CRONOLÓGICA */}
             <Card className="border-slate-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left border-collapse">
+                <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-sm text-left border-collapse min-w-[800px]">
                         <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-500 tracking-wider border-b border-slate-200">
                             <tr>
                                 <th className="p-3.5">Fecha / Hora</th>

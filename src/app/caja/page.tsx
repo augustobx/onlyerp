@@ -223,8 +223,8 @@ export default function CajaDiariaPage() {
                             <CalendarDays className="h-5 w-5 text-indigo-500" /> Historial de Turnos Anteriores
                         </CardTitle>
                     </CardHeader>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-sm text-left min-w-[750px]">
                             <thead className="text-[10px] uppercase tracking-wider bg-slate-50 dark:bg-zinc-800/50 text-slate-500 border-b border-slate-200 dark:border-zinc-800">
                                 <tr>
                                     <th className="px-6 py-3 font-semibold">Apertura (Horario)</th>
@@ -351,8 +351,8 @@ export default function CajaDiariaPage() {
                 <CardHeader className="bg-slate-50/50 dark:bg-zinc-900 border-b border-slate-100 dark:border-zinc-800 py-3 px-4">
                     <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-300">Auditoría del Turno</CardTitle>
                 </CardHeader>
-                <div className="flex-1 overflow-auto">
-                    <table className="w-full text-sm text-left">
+                <div className="flex-1 overflow-auto custom-scrollbar">
+                    <table className="w-full text-sm text-left min-w-[750px]">
                         <thead className="text-[10px] uppercase tracking-wider bg-slate-50 dark:bg-zinc-800/50 sticky top-0 z-10 text-slate-500 border-b border-slate-200 dark:border-zinc-800">
                             <tr>
                                 <th className="px-6 py-3 font-semibold">Hora</th>
@@ -464,13 +464,13 @@ export default function CajaDiariaPage() {
                         </div>
                         <Button variant="ghost" onClick={() => setShowModalHistorial(false)}>Cerrar</Button>
                     </CardHeader>
-                    <CardContent className="p-0 flex-1 overflow-auto bg-slate-50">
+                    <CardContent className="p-0 flex-1 overflow-auto custom-scrollbar bg-slate-50">
                         {/* Acá podríamos colocar los movimientos, pero requerirá un endpoint si no los trajimos.
                             Por simplicidad y dado que ya incluímos "movimientos" en la consulta si lo modificamos, lo renderizamos aquí. */}
                         {!cajaHistoricaSeleccionada.movimientos ? (
                             <div className="p-8 text-center text-slate-500">Los movimientos completos deben ser solicitados al servidor (cargar en actions).</div>
                         ) : (
-                            <table className="w-full text-sm text-left">
+                            <table className="w-full text-sm text-left min-w-[650px]">
                                 <thead className="text-[10px] uppercase tracking-wider bg-slate-100 sticky top-0 z-10 text-slate-500">
                                     <tr>
                                         <th className="px-6 py-3 font-semibold">Hora</th>
