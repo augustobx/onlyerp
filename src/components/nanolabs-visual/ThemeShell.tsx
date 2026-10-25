@@ -20,9 +20,11 @@ export interface ThemeShellProps {
 export function ThemeShell(props: ThemeShellProps) {
   const { theme } = useERPTheme();
 
-  if (theme === '2') {
-    return <LayoutNanoLabs {...props}>{props.children}</LayoutNanoLabs>;
+  // Tema 1 clásico conservado como respaldo histórico si se solicita explícitamente
+  if (theme === '1-legacy') {
+    return <AppShell {...props}>{props.children}</AppShell>;
   }
 
-  return <AppShell {...props}>{props.children}</AppShell>;
+  // Tema 2 (NanoLabs Visual) oficial y predeterminado para todo el sistema
+  return <LayoutNanoLabs {...props}>{props.children}</LayoutNanoLabs>;
 }

@@ -4,6 +4,7 @@ export { ThemeShell } from './ThemeShell';
 export type { ThemeShellProps } from './ThemeShell';
 
 export { PaletteSelector } from './PaletteSelector';
+export { ConfiguracionApariencia } from './ConfiguracionApariencia';
 export {
   ERPThemeProvider,
   useERPTheme,

@@ -20,7 +20,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     hover: '#E25700',
     subtle: '#FFAD75',
     subtlest: '#FFF4EA',
-    darkSubtlest: '#381A05',
+    darkSubtlest: 'rgba(255, 102, 0, 0.18)',
     gradient: 'linear-gradient(135deg, #FF8A2B, #E25700)',
     glow: 'rgba(226, 87, 0, 0.35)',
   },
@@ -32,7 +32,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     hover: '#1D4ED8',
     subtle: '#60A5FA',
     subtlest: '#EFF6FF',
-    darkSubtlest: '#0F2347',
+    darkSubtlest: 'rgba(37, 99, 235, 0.18)',
     gradient: 'linear-gradient(135deg, #3B82F6, #1D4ED8)',
     glow: 'rgba(37, 99, 235, 0.35)',
   },
@@ -44,7 +44,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     hover: '#047857',
     subtle: '#34D399',
     subtlest: '#ECFDF5',
-    darkSubtlest: '#062E20',
+    darkSubtlest: 'rgba(5, 150, 105, 0.18)',
     gradient: 'linear-gradient(135deg, #10B981, #047857)',
     glow: 'rgba(16, 185, 129, 0.35)',
   },
@@ -56,7 +56,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     hover: '#6D28D9',
     subtle: '#A78BFA',
     subtlest: '#F5F3FF',
-    darkSubtlest: '#2B124C',
+    darkSubtlest: 'rgba(124, 58, 237, 0.18)',
     gradient: 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
     glow: 'rgba(124, 58, 237, 0.35)',
   },
@@ -68,7 +68,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     hover: '#B91C1C',
     subtle: '#F87171',
     subtlest: '#FEF2F2',
-    darkSubtlest: '#3B0F0F',
+    darkSubtlest: 'rgba(220, 38, 38, 0.18)',
     gradient: 'linear-gradient(135deg, #EF4444, #B91C1C)',
     glow: 'rgba(220, 38, 38, 0.35)',
   },
@@ -80,7 +80,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     hover: '#B45309',
     subtle: '#FBBF24',
     subtlest: '#FFFBEB',
-    darkSubtlest: '#3D2405',
+    darkSubtlest: 'rgba(217, 119, 6, 0.18)',
     gradient: 'linear-gradient(135deg, #F59E0B, #B45309)',
     glow: 'rgba(217, 119, 6, 0.35)',
   },
@@ -92,7 +92,7 @@ export const PALETTES: Record<string, ColorPalette> = {
     hover: '#334155',
     subtle: '#94A3B8',
     subtlest: '#F8FAFC',
-    darkSubtlest: '#1E293B',
+    darkSubtlest: 'rgba(100, 116, 139, 0.22)',
     gradient: 'linear-gradient(135deg, #64748B, #334155)',
     glow: 'rgba(71, 85, 105, 0.35)',
   },
@@ -114,11 +114,17 @@ export function applyPaletteToDOM(palette: ColorPalette, isDark = false) {
   root.style.setProperty('--bg-primary-subtle', palette.subtle);
   root.style.setProperty('--bg-primary-subtlest', isDark ? palette.darkSubtlest : palette.subtlest);
   root.style.setProperty('--text-primary-default', isDark ? palette.subtle : palette.primary);
-  root.style.setProperty('--text-primary-subtle', palette.hover);
+  root.style.setProperty('--text-primary-subtle', isDark ? palette.subtle : palette.hover);
   root.style.setProperty('--border-primary-default', palette.primary);
   root.style.setProperty('--color-brand', palette.primary);
   root.style.setProperty('--color-brand-hover', palette.hover);
+  root.style.setProperty('--color-brand-subtle', palette.subtle);
+  root.style.setProperty('--color-brand-subtlest', isDark ? palette.darkSubtlest : palette.subtlest);
   root.style.setProperty('--color-brand-ring', palette.glow);
   root.style.setProperty('--nl-mark-gradient', palette.gradient);
   root.style.setProperty('--nl-mark-glow', palette.glow);
+  root.style.setProperty('--btn-bg-enabled', palette.primary);
+  root.style.setProperty('--btn-bg-hover', palette.hover);
+  root.style.setProperty('--btn-border-enabled', isDark ? palette.subtle : palette.primary);
+  root.style.setProperty('--btn-text-enabled', isDark ? palette.subtle : palette.primary);
 }

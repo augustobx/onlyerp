@@ -193,22 +193,8 @@ export function LayoutNanoLabs({
             <ModuleHelpButton moduloId={getModuloActivo()} />
           </div>
 
-          {/* Selector de Paletas de color */}
+          {/* Selector de Paletas de color oficial */}
           <PaletteSelector />
-
-          {/* Selector interactivo de Tema 1 vs Tema 2 */}
-          <button
-            type="button"
-            onClick={() => setTheme('1')}
-            className="bh-btn bh-btn-secondary bh-btn--small flex items-center gap-1.5 font-bold cursor-pointer"
-            title="Estás en Tema 2 (NanoLabs Visual). Clic para volver a Tema 1 (Clásico)"
-          >
-            <Palette size={14} className="text-amber-500 shrink-0" />
-            <span className="hidden md:inline text-xs">Tema 2</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 font-extrabold uppercase tracking-wider">
-              Volver a Tema 1
-            </span>
-          </button>
 
           {/* Info del usuario y rol */}
           <div className="ot-usuario" title={`${nombreUsuario} (${rolUsuario})`}>
@@ -754,8 +740,24 @@ export function LayoutNanoLabs({
                         </Link>
 
                         <Link
+                          href="/configuracion/apariencia"
+                          className={`bh-sidebar__item${isActive('/configuracion/apariencia') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
+                          onMouseEnter={(e) => {
+                            if (!plegado) return;
+                            const r = e.currentTarget.getBoundingClientRect();
+                            setTooltip({ texto: 'Colores & Apariencia', top: r.top + r.height / 2 });
+                          }}
+                          onMouseLeave={() => setTooltip(null)}
+                        >
+                          <span className="bh-sidebar__icon-chip">
+                            <Palette size={17} strokeWidth={2} />
+                          </span>
+                          {!plegado && <span className="truncate">Colores & Tema</span>}
+                        </Link>
+
+                        <Link
                           href="/configuracion"
-                          className={`bh-sidebar__item${isActive('/configuracion') && !isActive('/configuracion/comercial') && !isActive('/configuracion/sucursales') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
+                          className={`bh-sidebar__item${isActive('/configuracion') && !isActive('/configuracion/comercial') && !isActive('/configuracion/sucursales') && !isActive('/configuracion/apariencia') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                           onMouseEnter={(e) => {
                             if (!plegado) return;
                             const r = e.currentTarget.getBoundingClientRect();

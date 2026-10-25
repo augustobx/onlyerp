@@ -42,8 +42,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   }
 
   const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE_NAME)?.value;
-  const themeCookie = (cookieStore.get("onlyerp_theme")?.value as ERPTheme) || "1";
+  const rawTheme = cookieStore.get("onlyerp_theme")?.value;
+  const themeCookie: ERPTheme = rawTheme === "1-legacy" ? "1-legacy" : "2";
   const paletteCookie = cookieStore.get("onlyerp_palette")?.value || "orange";
 
   // Resolver contexto del Tenant actual

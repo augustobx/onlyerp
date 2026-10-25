@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { ColorPalette, PALETTES, DEFAULT_PALETTE_ID, getPalette, applyPaletteToDOM } from './palettes';
 
-export type ERPTheme = '1' | '2';
+export type ERPTheme = '1' | '2' | '1-legacy';
 
 interface ERPThemeContextType {
   theme: ERPTheme;
@@ -16,7 +16,7 @@ interface ERPThemeContextType {
 }
 
 const ERPThemeContext = createContext<ERPThemeContextType>({
-  theme: '1',
+  theme: '2',
   setTheme: () => {},
   toggleERPTheme: () => {},
   palette: PALETTES[DEFAULT_PALETTE_ID],
@@ -28,7 +28,7 @@ const ERPThemeContext = createContext<ERPThemeContextType>({
 export const useERPTheme = () => useContext(ERPThemeContext);
 
 export function ERPThemeProvider({
-  initialTheme = '1',
+  initialTheme = '2',
   initialPaletteId = DEFAULT_PALETTE_ID,
   children,
 }: {
@@ -36,27 +36,27 @@ export function ERPThemeProvider({
   initialPaletteId?: string;
   children: ReactNode;
 }) {
-  const [theme, setThemeState] = useState<ERPTheme>(initialTheme);
+  const [theme, setThemeState] = useState<ERPTheme>(initialTheme || '2');
   const [palette, setPaletteState] = useState<ColorPalette>(getPalette(initialPaletteId));
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    // 1. Theme 1 vs 2 resolution (URL > Cookie / LocalStorage > initialTheme)
+    // 1. Theme 2 (NanoLabs Visual) oficial y predeterminado
     const searchParams = new URLSearchParams(window.location.search);
     const urlTheme = searchParams.get('theme');
-    let resolvedTheme = initialTheme;
+    let resolvedTheme: ERPTheme = '2';
 
-    if (urlTheme === '1' || urlTheme === '2') {
-      resolvedTheme = urlTheme;
-      document.cookie = `onlyerp_theme=${urlTheme}; path=/; max-age=31536000; SameSite=Lax`;
-      localStorage.setItem('onlyerp_theme', urlTheme);
+    if (urlTheme === '1-legacy') {
+      resolvedTheme = '1-legacy';
+      document.cookie = `onlyerp_theme=1-legacy; path=/; max-age=31536000; SameSite=Lax`;
+      localStorage.setItem('onlyerp_theme', '1-legacy');
     } else {
-      const savedTheme = localStorage.getItem('onlyerp_theme');
-      if (savedTheme === '1' || savedTheme === '2') {
-        resolvedTheme = savedTheme;
-      }
+      // Por defecto Theme 2
+      resolvedTheme = '2';
+      document.cookie = `onlyerp_theme=2; path=/; max-age=31536000; SameSite=Lax`;
+      localStorage.setItem('onlyerp_theme', '2');
     }
     setThemeState(resolvedTheme);
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { toast } from "sonner";
-import { Settings, Save, Loader2, Store, Image as ImageIcon } from "lucide-react";
+import { Settings, Save, Loader2, Store, Image as ImageIcon, Palette, Sparkles } from "lucide-react";
 
 import { getDatosEmpresa, actualizarDatosEmpresa } from "@/app/actions/configuracion-empresa";
 
@@ -10,10 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ConfiguracionApariencia } from "@/components/nanolabs-visual";
 
 export default function ConfiguracionPage() {
     const [isPending, startTransition] = useTransition();
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'empresa' | 'apariencia'>('empresa');
 
     const [formData, setFormData] = useState({
         razon_social: "",
@@ -33,6 +35,13 @@ export default function ConfiguracionPage() {
     });
 
     useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const sp = new URLSearchParams(window.location.search);
+            if (sp.get('tab') === 'apariencia' || window.location.hash === '#apariencia') {
+                setActiveTab('apariencia');
+            }
+        }
+
         startTransition(async () => {
             const data = await getDatosEmpresa();
             if (data) {
@@ -83,25 +92,63 @@ export default function ConfiguracionPage() {
         <div className="flex flex-col gap-6 max-w-4xl mx-auto min-h-[calc(100vh-6rem)] pb-12">
 
             {/* HEADER */}
-            <div className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-5 rounded-2xl shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-white dark:bg-[#131722] border border-slate-200 dark:border-[#2b3347] p-5 rounded-3xl shadow-sm gap-4">
                 <div className="flex items-center gap-4">
-                    <div className="bg-indigo-50 dark:bg-indigo-500/10 p-3 rounded-xl shrink-0">
-                        <Settings className="h-6 w-6 text-indigo-600" />
+                    <div className="bg-indigo-50 dark:bg-[#181c28] p-3 rounded-2xl text-indigo-600 dark:text-indigo-400 shrink-0">
+                        {activeTab === 'empresa' ? <Settings className="h-6 w-6" /> : <Palette className="h-6 w-6" />}
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Configuración de Empresa</h2>
-                        <p className="text-sm text-slate-500 mt-0.5">Datos legales y comerciales para comprobantes e impresión.</p>
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-[#f8fafc] leading-tight">Configuración del Sistema</h2>
+                        <p className="text-sm text-slate-500 dark:text-[#cbd5e1] mt-0.5">
+                            {activeTab === 'empresa'
+                                ? 'Datos legales y comerciales para comprobantes e impresión AFIP.'
+                                : 'Personalización de paleta corporativa y modo visual de NanoLabs.'}
+                        </p>
                     </div>
                 </div>
-                <Button onClick={handleSubmit} disabled={isPending} className="bg-slate-900 hover:bg-slate-800 text-white font-medium shadow-sm h-10 px-6 hidden sm:flex">
-                    {isPending ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Guardar Cambios
-                </Button>
+
+                {activeTab === 'empresa' && (
+                    <Button onClick={handleSubmit} disabled={isPending} className="bg-slate-900 hover:bg-slate-800 text-white font-medium shadow-sm h-10 px-6 hidden sm:flex rounded-xl">
+                        {isPending ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                        Guardar Cambios
+                    </Button>
+                )}
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            {/* PESTAÑAS DE NAVEGACIÓN */}
+            <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-slate-100 dark:bg-[#181c28] border border-slate-200 dark:border-[#2b3347] w-fit">
+                <button
+                    type="button"
+                    onClick={() => setActiveTab('empresa')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        activeTab === 'empresa'
+                            ? 'bg-white dark:bg-[#131722] text-slate-900 dark:text-[#f8fafc] shadow-xs'
+                            : 'text-slate-600 dark:text-[#cbd5e1] hover:text-slate-900'
+                    }`}
+                >
+                    <Store size={15} /> Empresa & AFIP
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab('apariencia')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        activeTab === 'apariencia'
+                            ? 'bg-white dark:bg-[#131722] text-slate-900 dark:text-[#f8fafc] shadow-xs'
+                            : 'text-slate-600 dark:text-[#cbd5e1] hover:text-slate-900'
+                    }`}
+                >
+                    <Palette size={15} className="text-amber-500" /> Colores & Apariencia
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 font-extrabold uppercase tracking-wider">
+                        Nuevo
+                    </span>
+                </button>
+            </div>
 
-                {/* BLOQUE 1: DATOS FISCALES */}
+            {activeTab === 'apariencia' ? (
+                <ConfiguracionApariencia />
+            ) : (
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* BLOQUE 1: DATOS FISCALES */}
                 <Card className="shadow-sm border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
                     <CardHeader className="bg-slate-50/50 dark:bg-zinc-900 border-b border-slate-100 dark:border-zinc-800 p-5">
                         <CardTitle className="text-base flex items-center gap-2 text-slate-800 dark:text-slate-200">
@@ -196,10 +243,11 @@ export default function ConfiguracionPage() {
                     </CardContent>
                 </Card>
 
-                <Button type="submit" disabled={isPending} className="w-full sm:hidden bg-slate-900 text-white h-12">
-                    {isPending ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : "Guardar Cambios"}
-                </Button>
-            </form>
+                    <Button type="submit" disabled={isPending} className="w-full sm:hidden bg-slate-900 text-white h-12">
+                        {isPending ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : "Guardar Cambios"}
+                    </Button>
+                </form>
+            )}
         </div>
     );
 }
