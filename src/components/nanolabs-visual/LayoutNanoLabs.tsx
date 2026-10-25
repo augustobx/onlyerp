@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, type ReactNode } from 'react';
+import React, { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -35,11 +35,15 @@ import {
   PanelLeftOpen,
   Palette,
   Layers,
+  ArrowRight,
+  Check,
+  X,
 } from 'lucide-react';
 import { PedidosLink } from '@/components/pedidos-link';
 import { ModuleHelpButton } from '@/components/module-help-modal';
 import { PaletteSelector } from './PaletteSelector';
 import { useERPTheme } from './ThemeContext';
+import { PALETTES } from './palettes';
 import './nanolabs-theme.css';
 import './nanolabs-theme-extra.css';
 
@@ -99,10 +103,16 @@ export function LayoutNanoLabs({
   children,
 }: LayoutNanoLabsProps) {
   const pathname = usePathname();
-  const { palette, isDark, toggleDarkMode, setTheme } = useERPTheme();
+  const { palette, setPalette, isDark, toggleDarkMode, setTheme } = useERPTheme();
   const [plegado, setPlegado] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [tooltip, setTooltip] = useState<{ texto: string; top: number } | null>(null);
+
+  // Menú flotante de Configuración rápida en el footer
+  const [menuConfigAbierto, setMenuConfigAbierto] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ bottom: number; left: number }>({ bottom: 70, left: 16 });
+  const configBtnRef = useRef<HTMLButtonElement>(null);
+  const configMenuRef = useRef<HTMLDivElement>(null);
 
   const [seccionesAbiertas, setSeccionesAbiertas] = useState<Record<string, boolean>>({
     mostrador: true,
@@ -122,6 +132,55 @@ export function LayoutNanoLabs({
       if (savedSections) setSeccionesAbiertas(JSON.parse(savedSections));
     } catch {}
   }, []);
+
+  // Cerrar menú de configuración al cambiar de ruta
+  useEffect(() => {
+    setMenuConfigAbierto(false);
+  }, [pathname]);
+
+  // Cerrar menú con clic afuera o con tecla Escape
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        configMenuRef.current &&
+        !configMenuRef.current.contains(e.target as Node) &&
+        configBtnRef.current &&
+        !configBtnRef.current.contains(e.target as Node)
+      ) {
+        setMenuConfigAbierto(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuConfigAbierto(false);
+    };
+
+    if (menuConfigAbierto) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [menuConfigAbierto]);
+
+  const handleToggleConfig = () => {
+    if (!menuConfigAbierto && configBtnRef.current) {
+      const rect = configBtnRef.current.getBoundingClientRect();
+      if (plegado) {
+        setMenuPos({
+          bottom: Math.max(16, window.innerHeight - rect.bottom),
+          left: PLEGADO_W + 12,
+        });
+      } else {
+        setMenuPos({
+          bottom: Math.max(16, window.innerHeight - rect.top + 8),
+          left: Math.max(12, rect.left),
+        });
+      }
+    }
+    setMenuConfigAbierto((prev) => !prev);
+  };
 
   const togglePlegado = () => {
     setPlegado((prev) => {
@@ -739,53 +798,6 @@ export function LayoutNanoLabs({
                           {!plegado && <span className="truncate">Sucursales</span>}
                         </Link>
 
-                        <Link
-                          href="/configuracion/apariencia"
-                          className={`bh-sidebar__item${isActive('/configuracion/apariencia') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
-                          onMouseEnter={(e) => {
-                            if (!plegado) return;
-                            const r = e.currentTarget.getBoundingClientRect();
-                            setTooltip({ texto: 'Colores & Apariencia', top: r.top + r.height / 2 });
-                          }}
-                          onMouseLeave={() => setTooltip(null)}
-                        >
-                          <span className="bh-sidebar__icon-chip">
-                            <Palette size={17} strokeWidth={2} />
-                          </span>
-                          {!plegado && <span className="truncate">Colores & Tema</span>}
-                        </Link>
-
-                        <Link
-                          href="/configuracion"
-                          className={`bh-sidebar__item${isActive('/configuracion') && !isActive('/configuracion/comercial') && !isActive('/configuracion/sucursales') && !isActive('/configuracion/apariencia') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
-                          onMouseEnter={(e) => {
-                            if (!plegado) return;
-                            const r = e.currentTarget.getBoundingClientRect();
-                            setTooltip({ texto: 'Datos Empresa (AFIP)', top: r.top + r.height / 2 });
-                          }}
-                          onMouseLeave={() => setTooltip(null)}
-                        >
-                          <span className="bh-sidebar__icon-chip">
-                            <Settings size={17} strokeWidth={2} />
-                          </span>
-                          {!plegado && <span className="truncate">Empresa (AFIP)</span>}
-                        </Link>
-
-                        <Link
-                          href="/importar"
-                          className={`bh-sidebar__item${isActive('/importar') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
-                          onMouseEnter={(e) => {
-                            if (!plegado) return;
-                            const r = e.currentTarget.getBoundingClientRect();
-                            setTooltip({ texto: 'Importador Excel', top: r.top + r.height / 2 });
-                          }}
-                          onMouseLeave={() => setTooltip(null)}
-                        >
-                          <span className="bh-sidebar__icon-chip">
-                            <HardDrive size={17} strokeWidth={2} />
-                          </span>
-                          {!plegado && <span className="truncate">Importador</span>}
-                        </Link>
                       </>
                     )}
                   </div>
@@ -794,8 +806,26 @@ export function LayoutNanoLabs({
             )}
           </div>
 
-          {/* FOOTER DEL SIDEBAR: MODO OSCURO + PLEGADO */}
+          {/* FOOTER DEL SIDEBAR: CONFIGURACIÓN + MODO OSCURO + PLEGADO */}
           <div className={`bh-sidebar__footer${plegado ? ' bh-sidebar__footer--collapsed' : ''}`}>
+            {/* BOTÓN CONFIGURACIÓN RÁPIDA (COLOR, AFIP, IMPORTADOR) */}
+            <button
+              ref={configBtnRef}
+              type="button"
+              className={`bh-sidebar__icon-btn cursor-pointer ${
+                menuConfigAbierto ? 'active bg-slate-100 dark:bg-[#181c28] text-primary' : ''
+              }`}
+              onClick={handleToggleConfig}
+              aria-label="Configuración rápida (Color, AFIP, Importador)"
+              title="Configuración rápida (Color, AFIP, Importador)"
+            >
+              <Settings
+                size={18}
+                className={menuConfigAbierto ? 'rotate-45 transition-transform' : 'transition-transform'}
+              />
+            </button>
+
+            {/* MODO OSCURO */}
             <button
               type="button"
               className="bh-sidebar__icon-btn cursor-pointer"
@@ -805,6 +835,8 @@ export function LayoutNanoLabs({
             >
               {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
+
+            {/* PLEGADO */}
             <button
               type="button"
               className="bh-sidebar__icon-btn bh-sidebar__desktop-only cursor-pointer"
@@ -822,6 +854,187 @@ export function LayoutNanoLabs({
           {children}
         </main>
       </div>
+
+      {/* POPUP FLOTANTE DE CONFIGURACIÓN (COLOR, AFIP, IMPORTADOR) */}
+      {mounted &&
+        menuConfigAbierto &&
+        createPortal(
+          <>
+            {/* Backdrop para cerrar al hacer clic afuera */}
+            <div
+              className="fixed inset-0 z-[1040] bg-black/15 dark:bg-black/40 backdrop-blur-[1px] transition-opacity"
+              onClick={() => setMenuConfigAbierto(false)}
+            />
+
+            {/* Tarjeta flotante de configuración */}
+            <div
+              ref={configMenuRef}
+              className="fixed z-[1050] w-84 rounded-3xl bg-white dark:bg-[#131722] border border-slate-200 dark:border-[#2b3347] shadow-2xl p-4.5 space-y-3 animate-in fade-in zoom-in-95 duration-150 font-sans"
+              style={{
+                bottom: menuPos.bottom,
+                left: menuPos.left,
+                maxWidth: 'calc(100vw - 24px)',
+              }}
+            >
+              {/* Encabezado */}
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-[#2b3347]">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-white shadow-xs shrink-0"
+                    style={{ background: palette.gradient }}
+                  >
+                    <Settings size={16} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-[#f8fafc]">
+                      Configuración
+                    </h4>
+                    <p className="text-[10px] text-slate-500 dark:text-[#94a3b8]">OnlyERP · Ajustes del Sistema</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMenuConfigAbierto(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-[#f8fafc] hover:bg-slate-100 dark:hover:bg-[#181c28] cursor-pointer"
+                  title="Cerrar"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              {/* 1. CONFIGURACIÓN DE COLOR & APARIENCIA */}
+              <div className="p-3 rounded-2xl bg-slate-50 dark:bg-[#181c28] border border-slate-200/80 dark:border-[#2b3347] space-y-2">
+                <div className="flex items-center justify-between">
+                  <Link
+                    href="/configuracion/apariencia"
+                    onClick={() => setMenuConfigAbierto(false)}
+                    className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-[#f8fafc] hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                  >
+                    <Palette size={15} className="text-amber-500 shrink-0" />
+                    <span>Config de Color & Tema</span>
+                  </Link>
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                    style={{
+                      backgroundColor: isDark ? palette.darkSubtlest : palette.subtlest,
+                      color: palette.primary,
+                    }}
+                  >
+                    {palette.badge}
+                  </span>
+                </div>
+
+                {/* Paletas de 1 clic */}
+                <div className="flex items-center justify-between pt-1">
+                  {Object.values(PALETTES).map((p) => {
+                    const isSelected = p.id === palette.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setPalette(p.id)}
+                        title={`Paleta ${p.name}`}
+                        className={`w-6 h-6 rounded-full transition-all cursor-pointer relative flex items-center justify-center ${
+                          isSelected
+                            ? 'scale-115 ring-2 ring-offset-2 ring-offset-white dark:ring-offset-[#181c28]'
+                            : 'hover:scale-110 opacity-75 hover:opacity-100'
+                        }`}
+                        style={{
+                          background: p.gradient,
+                          boxShadow: isSelected ? `0 2px 8px ${p.glow}` : undefined,
+                        }}
+                      >
+                        {isSelected && <Check size={11} className="text-white" strokeWidth={3} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. CONFIGURACIÓN DE AFIP & EMPRESA */}
+              <Link
+                href="/configuracion"
+                onClick={() => setMenuConfigAbierto(false)}
+                className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                  isActive('/configuracion') &&
+                  !isActive('/configuracion/comercial') &&
+                  !isActive('/configuracion/sucursales') &&
+                  !isActive('/configuracion/apariencia')
+                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 shadow-xs'
+                    : 'bg-white dark:bg-[#131722] border-slate-200 dark:border-[#2b3347] hover:bg-slate-50 dark:hover:bg-[#181c28] text-slate-800 dark:text-[#f8fafc]'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <Store size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold leading-tight">Configuración de AFIP</p>
+                    <p className="text-[10px] text-slate-500 dark:text-[#94a3b8] mt-0.5">
+                      Empresa, CUIT y facturación
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight size={14} className="text-slate-400 dark:text-[#94a3b8] shrink-0" />
+              </Link>
+
+              {/* 3. IMPORTADOR EXCEL */}
+              <Link
+                href="/importar"
+                onClick={() => setMenuConfigAbierto(false)}
+                className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                  isActive('/importar')
+                    ? 'bg-blue-50/70 dark:bg-blue-950/30 border-blue-300 dark:border-blue-800 text-blue-900 dark:text-blue-200 shadow-xs'
+                    : 'bg-white dark:bg-[#131722] border-slate-200 dark:border-[#2b3347] hover:bg-slate-50 dark:hover:bg-[#181c28] text-slate-800 dark:text-[#f8fafc]'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <HardDrive size={16} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold leading-tight">Importador Masivo</p>
+                    <p className="text-[10px] text-slate-500 dark:text-[#94a3b8] mt-0.5">
+                      Planillas Excel de artículos y stock
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight size={14} className="text-slate-400 dark:text-[#94a3b8] shrink-0" />
+              </Link>
+
+              {/* ACCESOS ADMINISTRATIVOS ADICIONALES */}
+              {esAdmin && (
+                <div className="pt-2 border-t border-slate-100 dark:border-[#2b3347] flex items-center justify-between gap-1.5">
+                  <Link
+                    href="/usuarios"
+                    onClick={() => setMenuConfigAbierto(false)}
+                    className="flex-1 py-1.5 px-2 rounded-xl text-[11px] font-bold text-slate-600 dark:text-[#cbd5e1] hover:bg-slate-100 dark:hover:bg-[#181c28] flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <ShieldCheck size={13} className="text-indigo-500" />
+                    <span>Usuarios</span>
+                  </Link>
+                  <Link
+                    href="/configuracion/sucursales"
+                    onClick={() => setMenuConfigAbierto(false)}
+                    className="flex-1 py-1.5 px-2 rounded-xl text-[11px] font-bold text-slate-600 dark:text-[#cbd5e1] hover:bg-slate-100 dark:hover:bg-[#181c28] flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Store size={13} className="text-amber-500" />
+                    <span>Sucursales</span>
+                  </Link>
+                  <Link
+                    href="/configuracion/comercial"
+                    onClick={() => setMenuConfigAbierto(false)}
+                    className="flex-1 py-1.5 px-2 rounded-xl text-[11px] font-bold text-slate-600 dark:text-[#cbd5e1] hover:bg-slate-100 dark:hover:bg-[#181c28] flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Tag size={13} className="text-rose-500" />
+                    <span>Reglas</span>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </>,
+          document.body
+        )}
 
       {/* TOOLTIP FLOTANTE EN SIDEBAR PLEGADO */}
       {mounted &&
