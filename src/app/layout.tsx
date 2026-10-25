@@ -10,7 +10,7 @@ import { getSessionKey } from "@/lib/session-secret";
 import { COOKIE_NAME } from "@/lib/session";
 import { getSuperAdminSession } from "@/lib/superadmin-session";
 import { getTenantContext } from "@/lib/tenant-context";
-import { AppShell } from "@/components/app-sidebar";
+import { ERPThemeProvider, ThemeShell, type ERPTheme } from "@/components/nanolabs-visual";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -43,6 +43,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
+  const themeCookie = (cookieStore.get("onlyerp_theme")?.value as ERPTheme) || "1";
+  const paletteCookie = cookieStore.get("onlyerp_palette")?.value || "orange";
 
   // Resolver contexto del Tenant actual
   const tenant = await getTenantContext();
@@ -80,26 +82,28 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="es">
       <body className={`${inter.className} bg-slate-100 dark:bg-zinc-950 text-slate-900 dark:text-slate-50 antialiased`}>
-        {!isLogueado ? (
-          <main className="w-full min-h-screen">{children}</main>
-        ) : esUsuarioPWA ? (
-          <main className="w-full min-h-screen relative bg-slate-100 dark:bg-zinc-950">
-            {children}
-          </main>
-        ) : (
-          <AppShell
-            nombreUsuario={nombreUsuario}
-            rolUsuario={rolUsuario}
-            esAdmin={esAdmin}
-            permisos={permisos}
-            tenantNombre={tenant?.nombre || "OnlyERP"}
-            tenantSlug={tenant?.slug}
-            modulosActivos={tenant?.modulos}
-            logoutAction={logout}
-          >
-            {children}
-          </AppShell>
-        )}
+        <ERPThemeProvider initialTheme={themeCookie} initialPaletteId={paletteCookie}>
+          {!isLogueado ? (
+            <main className="w-full min-h-screen">{children}</main>
+          ) : esUsuarioPWA ? (
+            <main className="w-full min-h-screen relative bg-slate-100 dark:bg-zinc-950">
+              {children}
+            </main>
+          ) : (
+            <ThemeShell
+              nombreUsuario={nombreUsuario}
+              rolUsuario={rolUsuario}
+              esAdmin={esAdmin}
+              permisos={permisos}
+              tenantNombre={tenant?.nombre || "OnlyERP"}
+              tenantSlug={tenant?.slug}
+              modulosActivos={tenant?.modulos}
+              logoutAction={logout}
+            >
+              {children}
+            </ThemeShell>
+          )}
+        </ERPThemeProvider>
 
         <Toaster position="top-center" richColors />
       </body>

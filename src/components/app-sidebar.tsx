@@ -34,9 +34,11 @@ import {
   Menu,
   X,
   Layers,
+  Palette,
 } from "lucide-react";
 import { PedidosLink } from "@/components/pedidos-link";
 import { ModuleHelpButton } from "@/components/module-help-modal";
+import { PaletteSelector, useERPTheme } from "@/components/nanolabs-visual";
 
 interface AppSidebarProps {
   nombreUsuario: string;
@@ -79,6 +81,7 @@ export function AppShell({
   children,
 }: AppSidebarProps) {
   const pathname = usePathname();
+  const { setTheme } = useERPTheme();
 
   const [sidebarOculto, setSidebarOculto] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -605,8 +608,23 @@ export function AppShell({
             </div>
           </div>
 
-          {/* AYUDA CONTEXTUAL */}
-          <div className="flex items-center gap-2">
+          {/* ACCIONES SUPERIORES: PALETA NANO LABS, SELECTOR DE TEMA Y AYUDA */}
+          <div className="flex items-center gap-2.5">
+            <PaletteSelector />
+
+            <button
+              type="button"
+              onClick={() => setTheme("2")}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 text-xs font-bold text-indigo-700 dark:text-indigo-300 transition-all cursor-pointer shadow-xs"
+              title="Estás en Tema 1 (Clásico). Clic para probar Tema 2 (NanoLabs Visual)"
+            >
+              <Palette className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+              <span className="hidden sm:inline">Tema 1</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-600 text-white font-extrabold uppercase tracking-wider">
+                Probar Tema 2
+              </span>
+            </button>
+
             <ModuleHelpButton moduloId={getModuloActivo()} />
           </div>
         </header>
