@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import prisma from "@/lib/prisma";
 import { getSessionUser } from "@/lib/session";
+import { effectiveModules } from './hub-modules';
 
 export type TenantContext = {
   id: number;
@@ -27,7 +28,7 @@ function mapTenant(tenant: any): TenantContext {
     id: tenant.id,
     slug: tenant.slug,
     nombre: tenant.nombre,
-    estado: tenant.estado,
+    estado: ['ACTIVO', 'PRUEBA'].includes(tenant.estado) && tenant.fecha_vencimiento && tenant.fecha_vencimiento <= new Date() ? 'SUSPENDIDO' : tenant.estado,
     logoUrl: tenant.logo_url,
     cuit: tenant.cuit,
     planId: tenant.planId,
@@ -42,24 +43,7 @@ function mapTenant(tenant: any): TenantContext {
  * combinando los módulos del plan base con los overrides del tenant.
  */
 export function calcularModulosEfectivos(planModulosJson: string, overridesJson?: string | null): string[] {
-  try {
-    const planModulos: string[] = JSON.parse(planModulosJson || "[]");
-    if (!overridesJson) return planModulos;
-
-    const overrides = JSON.parse(overridesJson);
-    if (Array.isArray(overrides)) {
-      return Array.from(new Set([...planModulos, ...overrides]));
-    }
-
-    const modulosSet = new Set(planModulos);
-    for (const [modulo, activo] of Object.entries(overrides)) {
-      if (activo) modulosSet.add(modulo);
-      else modulosSet.delete(modulo);
-    }
-    return Array.from(modulosSet);
-  } catch {
-    return ["VENTAS", "CLIENTES", "PRODUCTOS"];
-  }
+  return effectiveModules(planModulosJson, overridesJson);
 }
 
 /**

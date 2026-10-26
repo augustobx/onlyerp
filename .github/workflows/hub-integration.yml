@@ -1,0 +1,27 @@
+name: OnlyERP Hub integration
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: ['codex/onlyerp-hub-*']
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: node --test scripts/hub-contract.test.cjs
+      - run: npx eslint src/lib/hub-*.ts src/lib/module-access.ts src/lib/session-validation.ts src/lib/tenant-quota.ts src/app/api/integrations/nanolabs/*/route.ts
+      - run: npm run build
+        env:
+          DATABASE_URL: mysql://fixture:fixture@127.0.0.1:3306/fixture
+          SESSION_SECRET: isolated-build-fixture-not-for-production

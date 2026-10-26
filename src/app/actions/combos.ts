@@ -1,10 +1,14 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 export async function getCombos() {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -36,6 +40,8 @@ export async function getCombos() {
 }
 
 export async function getCombosActivos() {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -75,6 +81,8 @@ export async function guardarCombo(data: {
   activo?: boolean;
   items: { productoId: number; cantidad: number }[];
 }) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await requireTenant();
 
@@ -133,6 +141,8 @@ export async function guardarCombo(data: {
 }
 
 export async function eliminarCombo(id: number) {
+  await requireModule('INVENTARIO');
+
   try {
     await prisma.combo.delete({ where: { id: Number(id) } });
     revalidatePath("/combos");
@@ -144,6 +154,8 @@ export async function eliminarCombo(id: number) {
 }
 
 export async function toggleComboActivo(id: number, activo: boolean) {
+  await requireModule('INVENTARIO');
+
   try {
     await prisma.combo.update({
       where: { id: Number(id) },

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getClientSession } from "./auth";
@@ -7,6 +9,8 @@ import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 // 1. Obtener la caja abierta (si existe)
 export async function getCajaActiva(sucursalId: number) {
+  await requireModule('CAJA');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -42,6 +46,8 @@ export async function getCajaActiva(sucursalId: number) {
 
 // 2. Obtener el historial de cajas cerradas
 export async function getHistorialCajas(sucursalId: number) {
+  await requireModule('CAJA');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -80,6 +86,8 @@ export async function getHistorialCajas(sucursalId: number) {
 
 // 3. Abrir el turno de caja
 export async function abrirCaja(saldo_inicial: number, sucursalId: number) {
+  await requireModule('CAJA');
+
   try {
     const tenant = await requireTenant();
 
@@ -127,6 +135,8 @@ export async function registrarMovimientoManual(
   monto: number,
   descripcion: string
 ) {
+  await requireModule('CAJA');
+
   try {
     if (monto <= 0) throw new Error("El monto debe ser mayor a 0.");
 
@@ -153,6 +163,8 @@ export async function registrarMovimientoManual(
 
 // 5. Cierre de Caja
 export async function cerrarCaja(cajaId: number, saldo_real_efectivo: number) {
+  await requireModule('CAJA');
+
   try {
     const tenant = await requireTenant();
 

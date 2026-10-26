@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { emitirComprobanteAFIP } from "./afip";
@@ -11,6 +13,8 @@ import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 // ==========================================
 
 export async function buscarClientes(query: string) {
+  await requireModule('VENTAS');
+
   const tenant = await getTenantContext();
   if (!tenant) return [];
 
@@ -35,6 +39,8 @@ export async function buscarClientes(query: string) {
 }
 
 export async function obtenerListasPrecio() {
+  await requireModule('VENTAS');
+
   const tenant = await getTenantContext();
   if (!tenant) return [];
 
@@ -78,6 +84,8 @@ export async function obtenerListasPrecio() {
 }
 
 export async function obtenerConfiguracionGlobal() {
+  await requireModule('VENTAS');
+
   const tenant = await getTenantContext();
   if (!tenant) return { redondear_a_cinco: false, aplicar_iva_en_precios: false, permitir_stock_negativo: false };
 
@@ -92,6 +100,8 @@ export async function obtenerConfiguracionGlobal() {
 }
 
 export async function obtenerMarcas() {
+  await requireModule('VENTAS');
+
   const tenant = await getTenantContext();
   if (!tenant) return [];
 
@@ -103,6 +113,8 @@ export async function obtenerMarcas() {
 }
 
 export async function obtenerCategorias() {
+  await requireModule('VENTAS');
+
   const tenant = await getTenantContext();
   if (!tenant) return [];
 
@@ -114,6 +126,8 @@ export async function obtenerCategorias() {
 }
 
 export async function buscarProductos(query: string) {
+  await requireModule('VENTAS');
+
   const tenant = await getTenantContext();
   if (!tenant) return [];
 
@@ -168,6 +182,8 @@ export async function buscarProductos(query: string) {
 // ==========================================
 
 export async function getConsumidorFinal() {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return null;
@@ -196,6 +212,8 @@ export async function getConsumidorFinal() {
 // ==========================================
 
 export async function previsualizarProximoComprobante(tipo_comprobante: string, punto_venta: number = 1) {
+  await requireModule('VENTAS');
+
   const tenant = await requireTenant();
 
   const secuencia = await prisma.secuenciaFactura.findUnique({
@@ -222,6 +240,8 @@ export async function previsualizarProximoComprobante(tipo_comprobante: string, 
 // ==========================================
 
 export async function registrarVenta(data: any) {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await requireTenant();
 
@@ -566,6 +586,8 @@ export async function procesarDevolucion(data: {
   montoReembolso: number;
   metodoReembolso: "CAJA" | "CUENTA_CORRIENTE";
 }) {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await requireTenant();
 

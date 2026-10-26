@@ -1,6 +1,7 @@
-import { SignJWT, jwtVerify } from "jose";
-import { cookies } from "next/headers";
+import { SignJWT } from "jose";
+import { cookies, headers } from "next/headers";
 import { getSessionKey } from "@/lib/session-secret";
+import { validateSessionToken } from './session-validation';
 
 export const COOKIE_NAME = 'onlyerp_session';
 
@@ -66,6 +67,7 @@ export async function crearSesion(usuario: any, tenantId?: number) {
     sucursalId: usuario.sucursalId,
     listaPrecioId: usuario.listaPrecioId ?? null,
     listas_permitidas: usuario.listas_permitidas ?? null,
+    sessionVersion: usuario.sessionVersion ?? 0,
   };
 
   const sessionToken = await new SignJWT(payload)
@@ -91,8 +93,8 @@ export async function getSessionUser(): Promise<UserSessionPayload | null> {
   if (!token) return null;
 
   try {
-    const { payload } = await jwtVerify(token, getSessionKey());
-    return payload as unknown as UserSessionPayload;
+    const h = await headers();
+    return await validateSessionToken(token, h.get('x-forwarded-host') || h.get('host') || undefined) as UserSessionPayload | null;
   } catch {
     return null;
   }

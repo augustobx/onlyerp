@@ -1,11 +1,15 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 // --- CATEGORÍAS ---
 export async function getCategorias() {
+  await requireModule('INVENTARIO');
+
   const tenant = await getTenantContext();
   if (!tenant) return [];
 
@@ -16,6 +20,8 @@ export async function getCategorias() {
 }
 
 export async function crearCategoria(formData: FormData) {
+  await requireTenantAdmin();
+
   const tenant = await requireTenant();
   const nombre = formData.get("nombre") as string;
   if (!nombre) return;
@@ -30,6 +36,8 @@ export async function crearCategoria(formData: FormData) {
 
 // --- LISTAS DE PRECIOS ---
 export async function getListasPrecio() {
+  await requireModule('VENTAS');
+
   const tenant = await getTenantContext();
   if (!tenant) return [];
 
@@ -40,6 +48,8 @@ export async function getListasPrecio() {
 }
 
 export async function crearListaPrecio(formData: FormData) {
+  await requireTenantAdmin();
+
   const tenant = await requireTenant();
   const nombre = formData.get("nombre") as string;
   const margen_defecto = parseFloat(formData.get("margen_defecto") as string);
@@ -56,6 +66,8 @@ export async function crearListaPrecio(formData: FormData) {
 
 // --- SUCURSALES Y DEPÓSITOS ---
 export async function getSucursales() {
+  await requireModule('VENTAS');
+
   const tenant = await getTenantContext();
   if (!tenant) return [];
 
@@ -67,6 +79,8 @@ export async function getSucursales() {
 }
 
 export async function getDepositos(sucursalId?: number) {
+  await requireModule('VENTAS');
+
   const tenant = await getTenantContext();
   if (!tenant) return [];
 

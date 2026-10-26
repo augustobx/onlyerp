@@ -234,7 +234,7 @@ export function AppShell({
               {seccionesAbiertas.mostrador && (
                 <div className="p-1 space-y-0.5 animate-in slide-in-from-top-1 duration-150">
                   {hasMod("VENTAS") && (esAdmin || permisos.includes("VENTAS")) && (
-                    <Link
+                    <Link style={{ display: hasMod('VENTAS') ? undefined : 'none' }}
                       href="/ventas"
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -245,7 +245,7 @@ export function AppShell({
                     </Link>
                   )}
                   {hasMod("CAJA") && (esAdmin || permisos.includes("CAJA")) && (
-                    <Link
+                    <Link style={{ display: hasMod('CAJA') ? undefined : 'none' }}
                       href="/caja"
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -256,7 +256,7 @@ export function AppShell({
                     </Link>
                   )}
                   {(esAdmin || permisos.includes("HISTORIAL")) && (
-                    <Link
+                    <Link style={{ display: hasMod('VENTAS') ? undefined : 'none' }}
                       href="/historial"
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -267,7 +267,7 @@ export function AppShell({
                     </Link>
                   )}
                   {hasMod("PRESUPUESTOS") && (esAdmin || permisos.includes("PRESUPUESTOS")) && (
-                    <Link
+                    <Link style={{ display: hasMod('PRESUPUESTOS') ? undefined : 'none' }}
                       href="/presupuestos"
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -298,9 +298,9 @@ export function AppShell({
 
               {seccionesAbiertas.logistica && (
                 <div className="p-1 space-y-0.5 animate-in slide-in-from-top-1 duration-150">
-                  <PedidosLink />
+                  {hasMod('VENTAS') && <PedidosLink />}
                   {hasMod("LOGISTICA") && (
-                    <Link
+                    <Link style={{ display: hasMod('LOGISTICA') ? undefined : 'none' }}
                       href="/logistica/hojas-de-ruta"
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -332,7 +332,7 @@ export function AppShell({
               {seccionesAbiertas.finanzas && (
                 <div className="p-1 space-y-0.5 animate-in slide-in-from-top-1 duration-150">
                   {hasMod("CUENTAS_CORRIENTES") && (
-                    <Link
+                    <Link style={{ display: hasMod('CUENTAS_CORRIENTES') ? undefined : 'none' }}
                       href="/cuentas-corrientes"
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -343,7 +343,7 @@ export function AppShell({
                     </Link>
                   )}
                   {hasMod("CHEQUES") && (
-                    <Link
+                    <Link style={{ display: hasMod('CHEQUES') ? undefined : 'none' }}
                       href="/finanzas/cartera-valores"
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -374,7 +374,7 @@ export function AppShell({
 
               {seccionesAbiertas.stock && (
                 <div className="p-1 space-y-0.5 animate-in slide-in-from-top-1 duration-150">
-                  <Link
+                  <Link style={{ display: hasMod('INVENTARIO') ? undefined : 'none' }}
                     href="/inventario"
                     onClick={() => setMobileMenuOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -385,7 +385,7 @@ export function AppShell({
                   </Link>
                   {hasMod("COMPRAS") && (
                     <>
-                      <Link
+                      <Link style={{ display: hasMod('COMPRAS') ? undefined : 'none' }}
                         href="/compras/sugerido"
                         onClick={() => setMobileMenuOpen(false)}
                         className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -394,7 +394,7 @@ export function AppShell({
                       >
                         <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> Sugerido de Compras
                       </Link>
-                      <Link
+                      <Link style={{ display: hasMod('COMPRAS') ? undefined : 'none' }}
                         href="/compras"
                         onClick={() => setMobileMenuOpen(false)}
                         className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -405,7 +405,7 @@ export function AppShell({
                       </Link>
                     </>
                   )}
-                  <Link
+                  <Link style={{ display: hasMod('INVENTARIO') ? undefined : 'none' }}
                     href="/transferencias"
                     onClick={() => setMobileMenuOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -414,7 +414,7 @@ export function AppShell({
                   >
                     <Replace className="h-3.5 w-3.5 text-slate-400" /> Transferencias Stock
                   </Link>
-                  <Link
+                  <Link style={{ display: hasMod('INVENTARIO') ? undefined : 'none' }}
                     href="/combos"
                     onClick={() => setMobileMenuOpen(false)}
                     className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -424,7 +424,7 @@ export function AppShell({
                     <Sparkles className="h-3.5 w-3.5 text-amber-400" /> Combos y Promociones
                   </Link>
                   {hasMod("LISTAS_PRECIO") && (
-                    <Link
+                    <Link style={{ display: hasMod('LISTAS_PRECIO') ? undefined : 'none' }}
                       href="/listas-precio"
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -435,7 +435,7 @@ export function AppShell({
                     </Link>
                   )}
                   {hasMod("PROVEEDORES") && (
-                    <Link
+                    <Link style={{ display: hasMod('PROVEEDORES') ? undefined : 'none' }}
                       href="/proveedores"
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -467,7 +467,7 @@ export function AppShell({
               {seccionesAbiertas.gerencia && (
                 <div className="p-1 space-y-0.5 animate-in slide-in-from-top-1 duration-150">
                   {hasMod("CLIENTES") && (esAdmin || permisos.includes("CLIENTES")) && (
-                    <Link
+                    <Link style={{ display: hasMod('CLIENTES') ? undefined : 'none' }}
                       href="/clientes"
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -490,7 +490,7 @@ export function AppShell({
                         <BarChart4 className="h-3.5 w-3.5 text-purple-400" /> Reportes & Métricas
                       </Link>
                       {hasMod("COMISIONES") && (
-                        <Link
+                        <Link style={{ display: hasMod('COMISIONES') ? undefined : 'none' }}
                           href="/reportes/comisiones"
                           onClick={() => setMobileMenuOpen(false)}
                           className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -501,7 +501,7 @@ export function AppShell({
                         </Link>
                       )}
                       {hasMod("VENDEDORES_PWA") && (
-                        <Link
+                        <Link style={{ display: hasMod('VENDEDORES_PWA') ? undefined : 'none' }}
                           href="/reportes/vendedores"
                           onClick={() => setMobileMenuOpen(false)}
                           className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${
@@ -552,7 +552,7 @@ export function AppShell({
                       >
                         <Settings className="h-3.5 w-3.5 text-slate-400" /> Datos Empresa (AFIP)
                       </Link>
-                      <Link
+                      <Link style={{ display: hasMod('INVENTARIO') ? undefined : 'none' }}
                         href="/importar"
                         onClick={() => setMobileMenuOpen(false)}
                         className={`flex items-center gap-2.5 px-3 py-1.5 font-semibold rounded-lg transition-colors ${

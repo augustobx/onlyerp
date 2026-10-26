@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant-context";
 
@@ -9,6 +11,8 @@ export async function getHistorialVentas(filtros?: {
   fecha_hasta?: string;
   tipo_comprobante?: string;
 }) {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };

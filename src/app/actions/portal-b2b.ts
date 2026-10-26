@@ -1,10 +1,14 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { resolverMargenYDescuento, calcularPrecioConCascada, resolverPrecioConEscala, redondearPrecio } from "@/lib/utils";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 export async function validarAccesoClienteB2B(identificador: string) {
+  await requireModule('PORTAL_B2B');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Empresa no identificada." };
@@ -62,6 +66,8 @@ export async function validarAccesoClienteB2B(identificador: string) {
 }
 
 export async function obtenerCatalogoB2B(clienteId: number, query?: string) {
+  await requireModule('PORTAL_B2B');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Empresa no identificada" };
@@ -153,6 +159,8 @@ export async function crearPedidoB2B(
   notas?: string,
   fechaEntrega?: string
 ) {
+  await requireModule('PORTAL_B2B');
+
   try {
     if (!items || items.length === 0) {
       return { success: false, error: "El carrito está vacío." };
@@ -273,6 +281,8 @@ export async function crearPedidoB2B(
 }
 
 export async function obtenerEstadoCuentaB2B(clienteId: number) {
+  await requireModule('PORTAL_B2B');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Empresa no identificada" };

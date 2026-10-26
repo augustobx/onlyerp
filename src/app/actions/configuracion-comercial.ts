@@ -1,11 +1,15 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 export async function obtenerConfiguracionComercial() {
+  await requireTenantAdmin();
+
     const tenant = await getTenantContext();
     const config = tenant
         ? await prisma.empresaConfig.findUnique({ where: { tenantId: tenant.id } })
@@ -37,6 +41,8 @@ export async function actualizarReglasGlobales(data: {
     permitir_stock_negativo?: boolean;
     facturar_al_entregar?: boolean;
 }) {
+  await requireTenantAdmin();
+
     try {
         const tenant = await requireTenant();
         await prisma.empresaConfig.upsert({
@@ -74,6 +80,8 @@ export async function actualizarReglasGlobales(data: {
 }
 
 export async function actualizarReglaUsuario(id: number, comision: number | null, limite: number | null) {
+  await requireTenantAdmin();
+
     try {
         await prisma.usuario.update({ where: { id }, data: { comision_personalizada: comision, limite_desc_vendedor: limite } });
         return { success: true };

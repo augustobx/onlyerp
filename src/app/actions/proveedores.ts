@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
@@ -8,6 +10,8 @@ import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 // 1. CRUD DE PROVEEDORES
 // ==========================================
 export async function getProveedoresCompleto() {
+  await requireModule('PROVEEDORES');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -39,6 +43,8 @@ export async function getProveedoresCompleto() {
 }
 
 export async function guardarProveedor(formData: FormData) {
+  await requireModule('PROVEEDORES');
+
   try {
     const tenant = await requireTenant();
 
@@ -80,6 +86,8 @@ export async function guardarProveedor(formData: FormData) {
 // 2. LISTAS DE PRECIOS POR PROVEEDOR
 // ==========================================
 export async function getProveedorListasPrecios(proveedorId: number) {
+  await requireModule('PROVEEDORES');
+
   try {
     return await prisma.proveedorListaPrecio.findMany({
       where: { proveedorId },
@@ -96,6 +104,8 @@ export async function guardarProveedorListaPrecio(
   margen_personalizado: number | null,
   descuento_personalizado: number | null
 ) {
+  await requireModule('PROVEEDORES');
+
   try {
     await prisma.proveedorListaPrecio.upsert({
       where: {
@@ -135,6 +145,8 @@ export async function guardarProveedorListaPrecio(
 // 3. CRUD DE MARCAS
 // ==========================================
 export async function guardarMarca(formData: FormData) {
+  await requireModule('PROVEEDORES');
+
   try {
     const tenant = await requireTenant();
 
@@ -168,6 +180,8 @@ export async function guardarMarca(formData: FormData) {
 }
 
 export async function eliminarMarca(id: number) {
+  await requireModule('PROVEEDORES');
+
   try {
     await prisma.marca.delete({ where: { id } });
     revalidatePath("/proveedores");
@@ -200,6 +214,8 @@ export async function actualizarPreciosMasivos(
   marcaIdLegacy?: number,
   categoriaIdLegacy?: number
 ) {
+  await requireModule('PROVEEDORES');
+
   try {
     const tenant = await requireTenant();
 

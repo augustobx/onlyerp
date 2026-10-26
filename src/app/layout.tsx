@@ -3,11 +3,10 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { cookies, headers } from "next/headers";
-import { jwtVerify } from "jose";
 import { logout } from "@/app/actions/auth";
 import prisma from "@/lib/prisma";
-import { getSessionKey } from "@/lib/session-secret";
 import { COOKIE_NAME } from "@/lib/session";
+import { validateSessionToken } from '@/lib/session-validation';
 import { getSuperAdminSession } from "@/lib/superadmin-session";
 import { getTenantContext } from "@/lib/tenant-context";
 import { ERPThemeProvider, ThemeShell, type ERPTheme } from "@/components/nanolabs-visual";
@@ -59,7 +58,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   if (token) {
     try {
-      const { payload } = await jwtVerify(token, getSessionKey());
+      const h = await headers();
+      const payload = await validateSessionToken(token, h.get('x-forwarded-host') || h.get('host') || undefined);
+      if (!payload) throw Error('Sesión inválida o revocada.');
       const usuarioDB = await prisma.usuario.findUnique({
         where: { id: Number(payload.id) },
         include: { tenant: true },

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant-context";
 
@@ -10,6 +12,8 @@ export async function obtenerRendimiento(filtros: {
   clienteId: number | "TODOS";
   estadoFiltro?: "TODAS" | "ACTIVAS" | "CANCELADAS";
 }) {
+  await requireModule('VENDEDORES_PWA');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado." };

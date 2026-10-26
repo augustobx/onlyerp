@@ -1,11 +1,15 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { productoSchema, ProductoFormValues } from "@/lib/validations";
 import { revalidatePath } from "next/cache";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 export async function getNextCodigoArticulo() {
+  await requireModule('INVENTARIO');
+
   const tenant = await getTenantContext();
   if (!tenant) return "000001";
 
@@ -30,6 +34,8 @@ export async function checkCodigoUnico(
   valor: string,
   excludeId?: number
 ) {
+  await requireModule('INVENTARIO');
+
   if (campo === "codigo_barras" && (!valor || valor === "0")) return true;
 
   const tenant = await getTenantContext();
@@ -52,6 +58,8 @@ export async function checkCodigoUnico(
 }
 
 export async function crearProducto(data: ProductoFormValues) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await requireTenant();
     const validatedData = productoSchema.parse(data);
@@ -141,6 +149,8 @@ export async function crearProducto(data: ProductoFormValues) {
 }
 
 export async function actualizarProducto(id: number, data: ProductoFormValues) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await requireTenant();
     const validatedData = productoSchema.parse(data);
@@ -203,6 +213,8 @@ export async function actualizarProducto(id: number, data: ProductoFormValues) {
 }
 
 export async function getProductos() {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -263,6 +275,8 @@ export async function getProductos() {
 }
 
 export async function getProductoById(id: number) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return null;
@@ -321,6 +335,8 @@ export async function getProductoById(id: number) {
 }
 
 export async function getProveedores() {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -336,6 +352,8 @@ export async function getProveedores() {
 }
 
 export async function crearProveedor(nombre: string) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await requireTenant();
     if (!nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
@@ -369,6 +387,8 @@ export async function crearProveedor(nombre: string) {
 }
 
 export async function getCategorias() {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -385,6 +405,8 @@ export async function getCategorias() {
 }
 
 export async function getMarcas() {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -401,6 +423,8 @@ export async function getMarcas() {
 }
 
 export async function getMarcasPorProveedor(proveedorId: number) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -416,6 +440,8 @@ export async function getMarcasPorProveedor(proveedorId: number) {
 }
 
 export async function getCategoriasPorMarca(marcaId: number) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -431,6 +457,8 @@ export async function getCategoriasPorMarca(marcaId: number) {
 }
 
 export async function crearMarca(data: { nombre: string; proveedorId: number }) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await requireTenant();
     if (!data.nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
@@ -461,6 +489,8 @@ export async function crearMarca(data: { nombre: string; proveedorId: number }) 
 }
 
 export async function getListasPrecioGlobales() {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -476,6 +506,8 @@ export async function getListasPrecioGlobales() {
 }
 
 export async function crearCategoria(nombre: string, marcaId: number, aumento_porcentaje: number = 0) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await requireTenant();
     if (!nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
@@ -498,6 +530,8 @@ export async function crearCategoria(nombre: string, marcaId: number, aumento_po
 }
 
 export async function crearListaPrecioGlobal(data: { nombre: string; margen_defecto: number }) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await requireTenant();
     if (!data.nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
@@ -534,6 +568,8 @@ export async function actualizarStockRapido(
   depositoId: number,
   usuarioId?: number
 ) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await requireTenant();
 
@@ -615,6 +651,8 @@ export async function actualizarStockRapido(
 }
 
 export async function getHistorialProducto(productoId: number) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -632,6 +670,8 @@ export async function getHistorialProducto(productoId: number) {
 }
 
 export async function actualizarCategoria(id: number, nombre: string, marcaId: number, aumento_porcentaje: number = 0) {
+  await requireModule('INVENTARIO');
+
   try {
     if (!nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
     if (!marcaId) return { success: false, error: "La marca padre es obligatoria" };
@@ -654,6 +694,8 @@ export async function actualizarCategoria(id: number, nombre: string, marcaId: n
 }
 
 export async function eliminarCategoria(id: number) {
+  await requireModule('INVENTARIO');
+
   try {
     await prisma.categoria.delete({ where: { id } });
     revalidatePath("/categorias");
@@ -665,6 +707,8 @@ export async function eliminarCategoria(id: number) {
 }
 
 export async function actualizarListaPrecioGlobal(id: number, data: { nombre: string; margen_defecto: number }) {
+  await requireModule('INVENTARIO');
+
   try {
     if (!data.nombre.trim()) return { success: false, error: "El nombre es obligatorio" };
     await prisma.listaPrecio.update({
@@ -680,6 +724,8 @@ export async function actualizarListaPrecioGlobal(id: number, data: { nombre: st
 }
 
 export async function eliminarListaPrecioGlobal(id: number) {
+  await requireModule('INVENTARIO');
+
   try {
     await prisma.listaPrecio.delete({ where: { id } });
     revalidatePath("/listas-precio");

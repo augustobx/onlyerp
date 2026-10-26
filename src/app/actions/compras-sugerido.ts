@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 
 export async function obtenerSugeridoCompras(filtros?: {
@@ -7,6 +9,8 @@ export async function obtenerSugeridoCompras(filtros?: {
     diasCobertura?: number; // Cuántos días de stock se desean asegurar (ej: 30 días)
     diasAnalisis?: number;  // Ventas de cuántos días atrás analizar para medir velocidad (ej: 30 o 60 días)
 }) {
+  await requireModule('COMPRAS');
+
     try {
         const diasCobertura = filtros?.diasCobertura && filtros.diasCobertura > 0 ? Number(filtros.diasCobertura) : 30;
         const diasAnalisis = filtros?.diasAnalisis && filtros.diasAnalisis > 0 ? Number(filtros.diasAnalisis) : 30;

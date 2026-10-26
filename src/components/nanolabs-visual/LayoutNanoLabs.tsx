@@ -326,7 +326,7 @@ export function LayoutNanoLabs({
                 {(plegado || seccionesAbiertas.mostrador) && (
                   <div className="space-y-0.5">
                     {hasMod('VENTAS') && (esAdmin || permisos.includes('VENTAS')) && (
-                      <Link
+                      <Link style={{ display: hasMod('VENTAS') ? undefined : 'none' }}
                         href="/ventas"
                         className={`bh-sidebar__item${isActive('/ventas') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                         onMouseEnter={(e) => {
@@ -344,7 +344,7 @@ export function LayoutNanoLabs({
                     )}
 
                     {hasMod('CAJA') && (esAdmin || permisos.includes('CAJA')) && (
-                      <Link
+                      <Link style={{ display: hasMod('CAJA') ? undefined : 'none' }}
                         href="/caja"
                         className={`bh-sidebar__item${isActive('/caja') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                         onMouseEnter={(e) => {
@@ -362,7 +362,7 @@ export function LayoutNanoLabs({
                     )}
 
                     {(esAdmin || permisos.includes('HISTORIAL')) && (
-                      <Link
+                      <Link style={{ display: hasMod('VENTAS') ? undefined : 'none' }}
                         href="/historial"
                         className={`bh-sidebar__item${isActive('/historial') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                         onMouseEnter={(e) => {
@@ -380,7 +380,7 @@ export function LayoutNanoLabs({
                     )}
 
                     {hasMod('PRESUPUESTOS') && (esAdmin || permisos.includes('PRESUPUESTOS')) && (
-                      <Link
+                      <Link style={{ display: hasMod('PRESUPUESTOS') ? undefined : 'none' }}
                         href="/presupuestos"
                         className={`bh-sidebar__item${isActive('/presupuestos') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                         onMouseEnter={(e) => {
@@ -419,7 +419,7 @@ export function LayoutNanoLabs({
 
                 {(plegado || seccionesAbiertas.logistica) && (
                   <div className="space-y-0.5">
-                    <Link
+                    <Link style={{ display: hasMod('VENTAS') ? undefined : 'none' }}
                       href="/pedidos"
                       className={`bh-sidebar__item${isActive('/pedidos') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                       onMouseEnter={(e) => {
@@ -436,7 +436,7 @@ export function LayoutNanoLabs({
                     </Link>
 
                     {hasMod('LOGISTICA') && (
-                      <Link
+                      <Link style={{ display: hasMod('LOGISTICA') ? undefined : 'none' }}
                         href="/logistica/hojas-de-ruta"
                         className={`bh-sidebar__item${isActive('/logistica') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                         onMouseEnter={(e) => {
@@ -476,7 +476,7 @@ export function LayoutNanoLabs({
                 {(plegado || seccionesAbiertas.finanzas) && (
                   <div className="space-y-0.5">
                     {hasMod('CUENTAS_CORRIENTES') && (
-                      <Link
+                      <Link style={{ display: hasMod('CUENTAS_CORRIENTES') ? undefined : 'none' }}
                         href="/cuentas-corrientes"
                         className={`bh-sidebar__item${isActive('/cuentas-corrientes') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                         onMouseEnter={(e) => {
@@ -494,7 +494,7 @@ export function LayoutNanoLabs({
                     )}
 
                     {hasMod('CHEQUES') && (
-                      <Link
+                      <Link style={{ display: hasMod('CHEQUES') ? undefined : 'none' }}
                         href="/finanzas/cartera-valores"
                         className={`bh-sidebar__item${isActive('/finanzas') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                         onMouseEnter={(e) => {
@@ -533,7 +533,7 @@ export function LayoutNanoLabs({
 
                 {(plegado || seccionesAbiertas.stock) && (
                   <div className="space-y-0.5">
-                    <Link
+                    <Link style={{ display: hasMod('INVENTARIO') ? undefined : 'none' }}
                       href="/inventario"
                       className={`bh-sidebar__item${isActive('/inventario') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                       onMouseEnter={(e) => {
@@ -551,7 +551,7 @@ export function LayoutNanoLabs({
 
                     {hasMod('COMPRAS') && (
                       <>
-                        <Link
+                        <Link style={{ display: hasMod('COMPRAS') ? undefined : 'none' }}
                           href="/compras/sugerido"
                           className={`bh-sidebar__item${isActive('/compras/sugerido') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                           onMouseEnter={(e) => {
@@ -566,7 +566,7 @@ export function LayoutNanoLabs({
                           </span>
                           {!plegado && <span className="truncate">Sugerido Compras</span>}
                         </Link>
-                        <Link
+                        <Link style={{ display: hasMod('COMPRAS') ? undefined : 'none' }}
                           href="/compras"
                           className={`bh-sidebar__item${isActive('/compras') && !isActive('/compras/sugerido') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                           onMouseEnter={(e) => {
@@ -584,7 +584,7 @@ export function LayoutNanoLabs({
                       </>
                     )}
 
-                    <Link
+                    <Link style={{ display: hasMod('INVENTARIO') ? undefined : 'none' }}
                       href="/transferencias"
                       className={`bh-sidebar__item${isActive('/transferencias') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                       onMouseEnter={(e) => {
@@ -600,7 +600,7 @@ export function LayoutNanoLabs({
                       {!plegado && <span className="truncate">Transferencias</span>}
                     </Link>
 
-                    <Link
+                    <Link style={{ display: hasMod('INVENTARIO') ? undefined : 'none' }}
                       href="/combos"
                       className={`bh-sidebar__item${isActive('/combos') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                       onMouseEnter={(e) => {
@@ -617,7 +617,7 @@ export function LayoutNanoLabs({
                     </Link>
 
                     {hasMod('LISTAS_PRECIO') && (
-                      <Link
+                      <Link style={{ display: hasMod('LISTAS_PRECIO') ? undefined : 'none' }}
                         href="/listas-precio"
                         className={`bh-sidebar__item${isActive('/listas-precio') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                         onMouseEnter={(e) => {
@@ -635,7 +635,7 @@ export function LayoutNanoLabs({
                     )}
 
                     {hasMod('PROVEEDORES') && (
-                      <Link
+                      <Link style={{ display: hasMod('PROVEEDORES') ? undefined : 'none' }}
                         href="/proveedores"
                         className={`bh-sidebar__item${isActive('/proveedores') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                         onMouseEnter={(e) => {
@@ -675,7 +675,7 @@ export function LayoutNanoLabs({
                 {(plegado || seccionesAbiertas.gerencia) && (
                   <div className="space-y-0.5">
                     {hasMod('CLIENTES') && (esAdmin || permisos.includes('CLIENTES')) && (
-                      <Link
+                      <Link style={{ display: hasMod('CLIENTES') ? undefined : 'none' }}
                         href="/clientes"
                         className={`bh-sidebar__item${isActive('/clientes') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                         onMouseEnter={(e) => {
@@ -711,7 +711,7 @@ export function LayoutNanoLabs({
                         </Link>
 
                         {hasMod('COMISIONES') && (
-                          <Link
+                          <Link style={{ display: hasMod('COMISIONES') ? undefined : 'none' }}
                             href="/reportes/comisiones"
                             className={`bh-sidebar__item${isActive('/reportes/comisiones') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                             onMouseEnter={(e) => {
@@ -729,7 +729,7 @@ export function LayoutNanoLabs({
                         )}
 
                         {hasMod('VENDEDORES_PWA') && (
-                          <Link
+                          <Link style={{ display: hasMod('VENDEDORES_PWA') ? undefined : 'none' }}
                             href="/reportes/vendedores"
                             className={`bh-sidebar__item${isActive('/reportes/vendedores') ? ' active' : ''}${plegado ? ' bh-sidebar__item--collapsed' : ''}`}
                             onMouseEnter={(e) => {
@@ -969,7 +969,7 @@ export function LayoutNanoLabs({
                     <Store size={16} />
                   </div>
                   <div>
-                    <p className="text-xs font-bold leading-tight">Configuración de AFIP</p>
+                    <p className="text-xs font-bold leading-tight">{hasMod('AFIP') ? 'Configuración de AFIP' : 'Configuración de empresa'}</p>
                     <p className="text-[10px] text-slate-500 dark:text-[#94a3b8] mt-0.5">
                       Empresa, CUIT y facturación
                     </p>
@@ -979,7 +979,7 @@ export function LayoutNanoLabs({
               </Link>
 
               {/* 3. IMPORTADOR EXCEL */}
-              <Link
+              <Link style={{ display: hasMod('INVENTARIO') ? undefined : 'none' }}
                 href="/importar"
                 onClick={() => setMenuConfigAbierto(false)}
                 className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
