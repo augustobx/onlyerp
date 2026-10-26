@@ -68,3 +68,23 @@ Validación local: `node --test scripts/hub-contract.test.cjs`,
 `npx prisma generate`, `npx tsc --noEmit`, lint de archivos nuevos y build.
 Las suites con mutaciones deben exigir DB/hostname de QA y autorización
 `HUB_MANAGEMENT_TEST_ALLOW_MUTATIONS=isolated-only`.
+
+## Estado productivo al 26/10/2026
+
+Desplegado `f23732d1baed2507098f757ce6937d49d9b7d434`, con CI
+`40328552380` aprobado. Hub ejecuta `f52cb09d` y publica
+`https://hub.nanoapps.ar/saas/onlyerp/manage`. QA restaurado: 145 verificaciones
+HTTP y 52 de UI nativa. Los commits posteriores de documentación/fixtures no
+modifican la revisión productiva.
+
+Se conservaron hashes de columnas originales de 81 tablas / 21.509 filas y
+155 FKs; MySQL no se reinició. Los únicos cambios de esquema son los descritos
+arriba. Backup predeploy restaurado; agenda 03/09/15/21 Buenos Aires con restore
+aislado automático probado. Ningún comando de negocio ni factura de prueba en
+producción. Los contenedores y red temporales de QA se eliminaron.
+
+Manifiestos efectivos y rollback privados:
+`/home/augusto/onlyerp-hub-20261026/private/erp-compose.production.json` y
+`erp-compose.rollback.json`. El checkout histórico `/opt/apps/onlyerp` quedó
+intacto; no usar su Compose anterior para recrear la versión integrada.
+Informe completo en NanoHUB: `docs/ONLYERP_INTEGRATION_20261026.md`.

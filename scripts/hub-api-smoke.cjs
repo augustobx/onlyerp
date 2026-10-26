@@ -58,7 +58,7 @@ async function native(url,user,expected,host='onlyerp.fixture.invalid',version=0
  check((await get('tenant',{tenantId:id})).modules.AFIP.enabled===false,'Fiscal module disabled without editing certificates');
  await change(id,'module.set',{key:'AFIP',enabled:null,limit:null});
  await change(id,'admin.revoke',{userId:String(owner.id)});await native('/ventas',owner,307);await native('/ventas',owner,200,'onlyerp.fixture.invalid',1);
- await change(id,'admin.update',{userId:String(owner.id),name:'Updated Owner',username:'updated-owner',password:'Fixture-new-password-2026'});
+ await change(id,'admin.update',{userId:String(owner.id),name:'Updated Owner',username:'updated-'+nonce,password:'Fixture-new-password-2026'});
  await native('/ventas',owner,307,'onlyerp.fixture.invalid',1);await native('/ventas',owner,200,'onlyerp.fixture.invalid',2);
  const stored=await db.usuario.findUniqueOrThrow({where:{id:owner.id}});check(stored.password.includes(':')&&stored.password!=='Fixture-new-password-2026'&&stored.sessionVersion===2,'Native password hashing and revocation');
  const paymentsBefore=await db.suscripcionSaaS.count({where:{tenantId:Number(id)}});
@@ -74,5 +74,5 @@ async function native(url,user,expected,host='onlyerp.fixture.invalid',version=0
  await change(id,'subscription.update',{planId,status:'ACTIVE',start,end});
  const audit=await get('audit',{tenantId:id});check(audit.items.length>20&&!/hash|password|Fixture-new-password/.test(JSON.stringify(audit)),'Sanitized durable audit');
  await native('/api/pedidos/pendientes',owner,200,'onlyerp.fixture.invalid',2);
- console.log(JSON.stringify({success:true,assertions,tenantId:id,otherTenantId:otherId,planId,ownerId:String(owner.id),ownerUsername:'updated-owner',ownerPassword:'Fixture-new-password-2026',sessionVersion:2,sourceMutations:false}));
+ console.log(JSON.stringify({success:true,assertions,tenantId:id,otherTenantId:otherId,planId,ownerId:String(owner.id),ownerUsername:'updated-'+nonce,ownerPassword:'Fixture-new-password-2026',sessionVersion:2,sourceMutations:false}));
 })().catch(e=>{console.error(e.message);process.exitCode=1;}).finally(()=>db.$disconnect());
