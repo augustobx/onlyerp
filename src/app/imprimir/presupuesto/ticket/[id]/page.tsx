@@ -48,17 +48,37 @@ function TicketContent({ id }: { id: string }) {
     const createFormat = presupuesto.createdAt ? new Date(presupuesto.createdAt) : new Date();
 
     return (
-        <div className="w-[80mm] min-h-[100px] bg-white text-black font-mono text-[12px] leading-tight mx-auto print:mx-auto pb-10">
+        <>
+            <style dangerouslySetInnerHTML={{__html: `
+                @media print {
+                    @page {
+                        size: 80mm auto;
+                        margin: 0mm;
+                    }
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        background: #fff;
+                    }
+                }
+            `}} />
+            <div className="w-[80mm] min-h-[100px] bg-white text-black font-mono text-[12px] leading-tight mx-auto print:mx-auto pb-10">
 
-            {/* BOTÓN VOLVER (Oculto al imprimir) */}
-            <div className="print:hidden text-center mb-4 pt-4">
-                <button 
-                    onClick={() => window.history.back()} 
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded shadow-md w-full"
-                >
-                    Volver al Detalle
-                </button>
-            </div>
+                {/* BOTÓN VOLVER E IMPRIMIR (Oculto al imprimir) */}
+                <div className="print:hidden text-center mb-4 pt-4 px-2 space-y-2">
+                    <button 
+                        onClick={() => window.history.back()} 
+                        className="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-xl shadow-md w-full text-xs"
+                    >
+                        ← Volver al Detalle
+                    </button>
+                    <button 
+                        onClick={() => window.print()} 
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2 px-4 rounded-xl shadow-md w-full text-xs"
+                    >
+                        🖨️ IMPRIMIR TICKET (80mm)
+                    </button>
+                </div>
 
             {/* 1. CABECERA: DATOS DE LA EMPRESA */}
             <div className="text-center pt-2 mb-2">
@@ -161,6 +181,7 @@ function TicketContent({ id }: { id: string }) {
             </div>
 
         </div>
+        </>
     );
 }
 

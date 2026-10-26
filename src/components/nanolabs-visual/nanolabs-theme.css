@@ -1515,3 +1515,60 @@ h1, h2, h3 { font-family: var(--font-heading); font-weight: 600; letter-spacing:
 .pry-encabezado h1 { margin: 0; font-family: var(--bh-font-display); font-size: 24px; font-weight: 600; letter-spacing: -.02em;
   color: var(--text-neutral-default);}
 .pry-encabezado p { margin: 2px 0 0; font-size: 13.5px; color: var(--text-neutral-subtle);}
+
+/* ==========================================================================
+   REGLAS OFICIALES DE IMPRESIÓN (NANOLABS VISUAL PRINT SYSTEM)
+   Garantiza que el Sidebar, Header, Botoneras y Fondos nunca salgan al imprimir
+   ========================================================================== */
+@media print {
+  @page {
+    margin: 0mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  .bh-header,
+  .bh-sidebar,
+  .bh-sidebar__footer,
+  aside,
+  header,
+  nav,
+  [data-print-hide],
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  .bh-layout,
+  .bh-layout__body {
+    display: block !important;
+    min-height: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .bh-main {
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: #ffffff !important;
+  }
+}
+

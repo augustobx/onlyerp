@@ -19,7 +19,20 @@ export default async function HojaDeRutaPrintPage({ params }: { params: Promise<
     const totalImporte = (ruta.detalles || []).reduce((acc: number, d: any) => acc + (d.pedido?.total || 0), 0);
 
     return (
-        <div className="p-8 max-w-4xl mx-auto bg-white text-black min-h-screen font-sans">
+        <div className="p-8 print:p-4 max-w-4xl print:max-w-none mx-auto bg-white text-black min-h-screen font-sans">
+            <style dangerouslySetInnerHTML={{__html: `
+                @media print {
+                    @page {
+                        size: A4 portrait;
+                        margin: 0mm;
+                    }
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        background: #fff;
+                    }
+                }
+            `}} />
             {/* Barra de Acciones (Oculta al imprimir) */}
             <div className="print:hidden mb-6 flex justify-between items-center bg-slate-100 p-4 rounded-xl">
                 <div>

@@ -44,6 +44,19 @@ export default function PresupuestoA4PrintPage({ params }: { params: Promise<{ i
 
     return (
         <div className="bg-slate-100 py-6 print:bg-white print:py-0 min-h-screen">
+            <style dangerouslySetInnerHTML={{__html: `
+                @media print {
+                    @page {
+                        size: A4 portrait;
+                        margin: 0mm;
+                    }
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        background: #fff;
+                    }
+                }
+            `}} />
             {/* BOTÓN VOLVER E IMPRIMIR (Oculto al imprimir) */}
             <div className="print:hidden max-w-[210mm] mx-auto mb-4 flex justify-between items-center bg-slate-900 text-white p-3 rounded-2xl shadow-lg">
                 <button

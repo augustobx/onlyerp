@@ -225,9 +225,9 @@ export function LayoutNanoLabs({
   };
 
   return (
-    <div className="bh-layout theme-nanolabs" data-nl-theme="2">
+    <div className="bh-layout theme-nanolabs print:block print:min-h-0 print:h-auto print:bg-white" data-nl-theme="2">
       {/* HEADER 80px */}
-      <header className="bh-header bh-header--retail">
+      <header className="bh-header bh-header--retail print:hidden">
         <Link href="/" className="bh-logo" style={{ textDecoration: 'none' }}>
           <div className="bh-logo__mark">
             <span
@@ -283,9 +283,9 @@ export function LayoutNanoLabs({
       </header>
 
       {/* BODY CON SIDEBAR PLEGABLE */}
-      <div className="bh-layout__body">
+      <div className="bh-layout__body print:block print:w-full">
         <aside
-          className={`bh-sidebar${plegado ? ' bh-sidebar--collapsed' : ''}`}
+          className={`bh-sidebar print:hidden${plegado ? ' bh-sidebar--collapsed' : ''}`}
           aria-label="Menú de Navegación OnlyERP"
           style={plegado ? { ['--bh-sidebar-width' as string]: `${PLEGADO_W}px` } : undefined}
         >
@@ -850,7 +850,7 @@ export function LayoutNanoLabs({
         </aside>
 
         {/* CONTENIDO PRINCIPAL */}
-        <main className="bh-main bh-cascada ot-pagina min-w-0 flex-1 overflow-y-auto p-4 md:p-6">
+        <main className="bh-main bh-cascada ot-pagina min-w-0 flex-1 overflow-y-auto p-4 md:p-6 print:overflow-visible print:p-0 print:m-0 print:bg-white print:w-full print:block">
           {children}
         </main>
       </div>
@@ -862,14 +862,14 @@ export function LayoutNanoLabs({
           <>
             {/* Backdrop para cerrar al hacer clic afuera */}
             <div
-              className="fixed inset-0 z-[1040] bg-black/15 dark:bg-black/40 backdrop-blur-[1px] transition-opacity"
+              className="fixed inset-0 z-[1040] bg-black/15 dark:bg-black/40 backdrop-blur-[1px] transition-opacity print:hidden"
               onClick={() => setMenuConfigAbierto(false)}
             />
 
             {/* Tarjeta flotante de configuración */}
             <div
               ref={configMenuRef}
-              className="fixed z-[1050] w-84 rounded-3xl bg-white dark:bg-[#131722] border border-slate-200 dark:border-[#2b3347] shadow-2xl p-4.5 space-y-3 animate-in fade-in zoom-in-95 duration-150 font-sans"
+              className="fixed z-[1050] w-84 rounded-3xl bg-white dark:bg-[#131722] border border-slate-200 dark:border-[#2b3347] shadow-2xl p-4.5 space-y-3 animate-in fade-in zoom-in-95 duration-150 font-sans print:hidden"
               style={{
                 bottom: menuPos.bottom,
                 left: menuPos.left,
@@ -1041,7 +1041,7 @@ export function LayoutNanoLabs({
         tooltip &&
         createPortal(
           <span
-            className="bh-sidebar__tooltip ot-tooltip"
+            className="bh-sidebar__tooltip ot-tooltip print:hidden"
             style={{ top: tooltip.top, left: PLEGADO_W + 10, zIndex: 1000 }}
           >
             {tooltip.texto}

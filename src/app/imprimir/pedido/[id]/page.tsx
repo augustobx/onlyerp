@@ -271,6 +271,19 @@ export default function PedidoA4PrintPage({ params }: { params: Promise<{ id: st
 
     return (
         <div className="bg-slate-200 py-4 print:bg-white print:py-0 min-h-screen">
+            <style dangerouslySetInnerHTML={{__html: `
+                @media print {
+                    @page {
+                        size: A4 portrait;
+                        margin: 0mm;
+                    }
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        background: #fff;
+                    }
+                }
+            `}} />
             {/* BARRA DE ACCIONES (Oculta al imprimir) */}
             <div className="print:hidden max-w-[210mm] mx-auto mb-3 flex flex-wrap gap-2 justify-between items-center bg-slate-900 text-white p-3 rounded-2xl shadow-lg">
                 <div className="flex items-center gap-2">

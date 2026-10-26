@@ -129,3 +129,45 @@
     @apply font-sans;
   }
 }
+
+@media print {
+  @page {
+    margin: 0mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+  }
+
+  aside,
+  header,
+  nav,
+  .bh-header,
+  .bh-sidebar,
+  .bh-sidebar__footer,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:block {
+    display: block !important;
+  }
+
+  .bh-layout,
+  .bh-layout__body,
+  .bh-main {
+    display: block !important;
+    min-height: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}
