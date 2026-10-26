@@ -23,7 +23,8 @@ export async function getDatosEmpresa() {
       },
     });
   }
-  return config;
+  const afipEnabled = tenant.modulos.includes('AFIP');
+  return { ...config, afipEnabled, ...(!afipEnabled ? { certificado_crt: null, clave_privada: null, cuit_facturacion: null, modo_produccion_afip: false } : {}) };
 }
 
 // Busca la venta exacta para imprimirla
@@ -61,11 +62,13 @@ export async function actualizarDatosEmpresa(formData: FormData) {
       telefono: formData.get("telefono") as string,
       redes_sociales: formData.get("redes_sociales") as string,
       logo_url: formData.get("logo_url") as string,
-      punto_venta: parseInt(formData.get("punto_venta") as string) || 1,
-      cuit_facturacion: formData.get("cuit_facturacion") as string,
-      certificado_crt: formData.get("certificado_crt") as string,
-      clave_privada: formData.get("clave_privada") as string,
-      modo_produccion_afip: formData.get("modo_produccion_afip") === "true",
+      ...(tenant.modulos.includes('AFIP') ? {
+        punto_venta: parseInt(formData.get("punto_venta") as string) || 1,
+        cuit_facturacion: formData.get("cuit_facturacion") as string,
+        certificado_crt: formData.get("certificado_crt") as string,
+        clave_privada: formData.get("clave_privada") as string,
+        modo_produccion_afip: formData.get("modo_produccion_afip") === "true",
+      } : {}),
     };
 
     await prisma.empresaConfig.upsert({

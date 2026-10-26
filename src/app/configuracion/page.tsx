@@ -15,6 +15,7 @@ import { ConfiguracionApariencia } from "@/components/nanolabs-visual";
 export default function ConfiguracionPage() {
     const [isPending, startTransition] = useTransition();
     const [loading, setLoading] = useState(true);
+    const [afipEnabled, setAfipEnabled] = useState(false);
     const [activeTab, setActiveTab] = useState<'empresa' | 'apariencia'>('empresa');
 
     const [formData, setFormData] = useState({
@@ -45,6 +46,7 @@ export default function ConfiguracionPage() {
         startTransition(async () => {
             const data = await getDatosEmpresa();
             if (data) {
+                setAfipEnabled(data.afipEnabled);
                 // Formateamos los datos para evitar que pase 'null' a los inputs de React
                 setFormData({
                     razon_social: data.razon_social || "",
@@ -208,7 +210,7 @@ export default function ConfiguracionPage() {
                 </Card>
 
                 {/* BLOQUE 3: AFIP FACTURACIÓN ELECTRÓNICA */}
-                <Card className="shadow-sm border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
+                {afipEnabled && <Card className="shadow-sm border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
                     <CardHeader className="bg-slate-50/50 dark:bg-zinc-900 border-b border-slate-100 dark:border-zinc-800 p-5">
                         <CardTitle className="text-base flex items-center gap-2 text-slate-800 dark:text-slate-200">
                             <Store className="h-4 w-4 text-emerald-500" /> Facturación Electrónica AFIP
@@ -241,7 +243,7 @@ export default function ConfiguracionPage() {
                             <textarea name="clave_privada" value={formData.clave_privada} onChange={(e: any) => handleChange(e)} className="w-full h-32 p-3 text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-emerald-500" placeholder={"-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"} />
                         </div>
                     </CardContent>
-                </Card>
+                </Card>}
 
                     <Button type="submit" disabled={isPending} className="w-full sm:hidden bg-slate-900 text-white h-12">
                         {isPending ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : "Guardar Cambios"}
