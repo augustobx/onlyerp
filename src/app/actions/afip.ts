@@ -3,9 +3,11 @@ import prisma from "@/lib/prisma";
 import os from "os";
 import fs from "fs";
 import path from "path";
+import { requireModule } from '@/lib/module-access';
 
 export async function getAfipClient() {
-    const config = await prisma.empresaConfig.findFirst();
+    const tenant = await requireModule('AFIP');
+    const config = await prisma.empresaConfig.findUnique({ where: { tenantId: tenant.id } });
 
     const cuitStr = config?.cuit_facturacion?.replace(/[^0-9]/g, '') || "";
     const crt = config?.certificado_crt;
@@ -26,8 +28,8 @@ export async function getAfipClient() {
     const keyPath = path.join(tmpDir, `key_${cuitNumber}.key`);
 
     // Escribir los certificados en el disco temporal para que la librería los lea
-    fs.writeFileSync(certPath, crt);
-    fs.writeFileSync(keyPath, key);
+    fs.writeFileSync(certPath, crt, { mode: 0o600 });
+    fs.writeFileSync(keyPath, key, { mode: 0o600 });
 
     // 3. INSTANCIACIÓN DE AFIP
     return new Afip({
@@ -76,6 +78,8 @@ export async function emitirComprobanteAFIP(
     if (!["FACTURA_A", "FACTURA_B", "FACTURA_C"].includes(tipoComprobante)) {
         return null;
     }
+
+    await requireModule('AFIP');
 
     try {
         // --- MODO SIMULADOR (Para desarrollo sin conexión a AFIP) ---

@@ -1,11 +1,15 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 // Obtiene los datos de la empresa para el encabezado
 export async function getDatosEmpresa() {
+  await requireTenantAdmin();
+
   const tenant = await getTenantContext();
   if (!tenant) return null;
 
@@ -24,6 +28,8 @@ export async function getDatosEmpresa() {
 
 // Busca la venta exacta para imprimirla
 export async function getVentaParaTicket(ventaId: number) {
+  await requireModule('VENTAS');
+
   const tenant = await getTenantContext();
   if (!tenant) return null;
 
@@ -40,6 +46,8 @@ export async function getVentaParaTicket(ventaId: number) {
 
 // Guarda los datos de la empresa desde la pantalla de configuración
 export async function actualizarDatosEmpresa(formData: FormData) {
+  await requireTenantAdmin();
+
   try {
     const tenant = await requireTenant();
 

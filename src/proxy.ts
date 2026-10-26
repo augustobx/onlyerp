@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { jwtVerify } from 'jose';
-import { getSessionKey } from '@/lib/session-secret';
+import { validateSessionToken } from '@/lib/session-validation';
+import { moduleForPath } from '@/lib/module-access';
 
 // Este diccionario conecta las rutas de la URL con los permisos que creamos en la base de datos
 const RUTAS_MODULOS: Record<string, string> = {
@@ -44,10 +44,11 @@ export async function proxy(request: NextRequest) {
     // Si ya existe una sesión tenant válida, /login no debe volver a mostrarse.
     // Esto evita renderizar AppShell + formulario de login simultáneamente.
     const existingSessionToken = request.cookies.get('onlyerp_session')?.value;
+    const sessionPayload = existingSessionToken ? await validateSessionToken(existingSessionToken, request.headers.get('x-forwarded-host') || request.headers.get('host') || undefined) : null;
 
-    if (pathname === '/login' && existingSessionToken) {
+    if (pathname === '/login' && sessionPayload) {
         try {
-            const { payload } = await jwtVerify(existingSessionToken, getSessionKey());
+            const payload = sessionPayload;
             if (ROLES_PWA.includes(payload.rol as string)) {
                 return NextResponse.redirect(new URL('/vendedor', request.url));
             }
@@ -65,7 +66,6 @@ export async function proxy(request: NextRequest) {
         pathname === '/login' ||
         pathname === '/suspendido' ||
         pathname.startsWith('/superadmin') ||
-        pathname.startsWith('/imprimir') ||
         pathname === '/manifest.json' ||
         pathname === '/sw.js' ||
         pathname === '/favicon.ico' ||
@@ -85,7 +85,10 @@ export async function proxy(request: NextRequest) {
 
     try {
         // 3. Desencriptar el token y leer quién es
-        const { payload } = await jwtVerify(sessionToken, getSessionKey());
+        const payload = sessionPayload;
+        if (!payload) throw Error('Sesión inválida o revocada.');
+        const requiredModule = moduleForPath(pathname);
+        if ((requiredModule && !payload.modules.includes(requiredModule)) || (ROLES_PWA.includes(payload.rol) && !payload.modules.includes('VENDEDORES_PWA'))) return NextResponse.json({ error: 'Módulo no habilitado para esta empresa.' }, { status: 403 });
         const rol = payload.rol as string;
         const permisos = (payload.permisos as string[]) || [];
 
@@ -93,7 +96,7 @@ export async function proxy(request: NextRequest) {
         // REGLA #1: ROLES PWA (VENDEDOR, REPARTIDOR, MIXTO) — Solo pueden acceder a /vendedor
         // ============================================================
         if (ROLES_PWA.includes(rol)) {
-            const permitido = RUTAS_PWA_PERMITIDAS.some(ruta => pathname.startsWith(ruta));
+            const permitido = RUTAS_PWA_PERMITIDAS.some(ruta => pathname.startsWith(ruta)) || pathname.startsWith('/imprimir/');
             if (!permitido) {
                 // Si intenta ir a cualquier otra ruta del ERP, lo mandamos a /vendedor
                 return NextResponse.redirect(new URL('/vendedor', request.url));

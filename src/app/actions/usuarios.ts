@@ -1,18 +1,23 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
+import { withTenantQuota, assertQuota } from '@/lib/tenant-quota';
 import prisma from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
 import { revalidatePath } from "next/cache";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 export async function getUsuarios() {
+  await requireTenantAdmin();
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
 
     return await prisma.usuario.findMany({
       where: { tenantId: tenant.id },
-      include: { sucursal: true, lista_precio: true },
+      select: { id:true, tenantId:true, nombre:true, username:true, rol:true, permisos:true, activo:true, telefono:true, comision_personalizada:true, limite_desc_vendedor:true, sucursalId:true, listaPrecioId:true, listas_permitidas:true, sucursal:true, lista_precio:true },
       orderBy: { id: "asc" },
     });
   } catch {
@@ -21,6 +26,8 @@ export async function getUsuarios() {
 }
 
 export async function getVendedoresActivos() {
+  await requireModule('VENDEDORES_PWA');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -40,6 +47,8 @@ export async function getVendedoresActivos() {
 }
 
 export async function getRepartidoresActivos() {
+  await requireModule('VENDEDORES_PWA');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -59,8 +68,13 @@ export async function getRepartidoresActivos() {
 }
 
 export async function guardarUsuario(formData: FormData, permisosJSON: string) {
+  await requireTenantAdmin();
+
   try {
     const tenant = await requireTenant();
+    return await withTenantQuota(tenant.id, async (prisma) => {
+      
+
 
     const id = formData.get("id") ? Number(formData.get("id")) : null;
     const nombre = formData.get("nombre") as string;
@@ -97,6 +111,7 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
 
     if (id) {
       const dataUpdate: any = {
+        sessionVersion: { increment: 1 },
         nombre,
         username,
         telefono,
@@ -113,10 +128,11 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
       }
 
       await prisma.usuario.update({
-        where: { id },
+        where: { id, tenantId: tenant.id },
         data: dataUpdate,
       });
     } else {
+      await assertQuota(prisma, tenant.id, 'users');
       if (!password) throw new Error("La contraseña es obligatoria para un nuevo usuario.");
 
       await prisma.usuario.create({
@@ -137,32 +153,38 @@ export async function guardarUsuario(formData: FormData, permisosJSON: string) {
     }
 
     revalidatePath("/usuarios");
-    return { success: true };
-  } catch (error: any) {
-    if (error.code === "P2002") return { success: false, error: "El nombre de usuario ya está en uso en tu empresa." };
-    return { success: false, error: error.message || "Error al guardar el usuario." };
+    return { success: true as const };
+  
+    });
+} catch (error: any) {
+    if (error.code === "P2002") return { success: false as const, error: "El nombre de usuario ya está en uso en tu empresa." };
+    return { success: false as const, error: error.message || "Error al guardar el usuario." };
   }
 }
 
 export async function eliminarUsuario(id: number) {
+  await requireTenantAdmin();
+
   try {
-    await prisma.usuario.delete({ where: { id } });
+    await prisma.usuario.update({ where: { id, tenantId: (await requireTenantAdmin()).id }, data: {activo:false,sessionVersion:{increment:1}} });
     revalidatePath("/usuarios");
-    return { success: true };
+    return { success: true as const };
   } catch {
-    return { success: false, error: "No se pudo eliminar el usuario." };
+    return { success: false as const, error: "No se pudo eliminar el usuario." };
   }
 }
 
 export async function toggleActivoUsuario(id: number, estadoActual: boolean) {
+  await requireTenantAdmin();
+
   try {
     await prisma.usuario.update({
-      where: { id },
-      data: { activo: !estadoActual },
+      where: { id, tenantId: (await requireTenantAdmin()).id },
+      data: { activo: !estadoActual, sessionVersion: { increment: 1 } },
     });
     revalidatePath("/usuarios");
-    return { success: true };
+    return { success: true as const };
   } catch {
-    return { success: false, error: "No se pudo cambiar el estado del usuario." };
+    return { success: false as const, error: "No se pudo cambiar el estado del usuario." };
   }
 }

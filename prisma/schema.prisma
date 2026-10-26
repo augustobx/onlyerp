@@ -195,6 +195,7 @@ model Usuario {
   rol      String   @default("CAJERO")
   permisos String   @default("[\"VENTAS\", \"CLIENTES\"]")
   activo   Boolean  @default(true)
+  sessionVersion Int @default(0)
   creadoEn DateTime @default(now())
 
   comision_personalizada Float?
@@ -220,6 +221,18 @@ model Usuario {
 
   @@unique([tenantId, username])
   @@index([tenantId])
+}
+
+// Atomic idempotency receipts and sanitized control-plane audit, no business payloads.
+model HubCommand {
+  id String @id @db.VarChar(191)
+  hash String @db.Char(64)
+  actor String @db.VarChar(120)
+  operation String @db.VarChar(50)
+  tenantId Int?
+  result Json
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  @@index([tenantId, createdAt])
 }
 
 // ============================================================================

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
@@ -11,6 +13,8 @@ export async function registrarTransferencia(
   cantidad: number,
   usuarioId: number
 ) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await requireTenant();
 
@@ -64,6 +68,8 @@ export async function registrarTransferencia(
 }
 
 export async function getUltimasTransferencias() {
+  await requireModule('INVENTARIO');
+
   const tenant = await getTenantContext();
   if (!tenant) return [];
 

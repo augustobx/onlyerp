@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getClientSession } from "./auth";
@@ -14,6 +16,8 @@ export async function getClientesDeudores(filtros?: {
   fecha_desde?: string;
   fecha_hasta?: string;
 }) {
+  await requireModule('CUENTAS_CORRIENTES');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -74,6 +78,8 @@ export async function getClientesDeudores(filtros?: {
 // 2. FICHA COMPLETA DEL CLIENTE
 // ==========================================
 export async function getFichaCuentaCorriente(clienteId: number) {
+  await requireModule('CUENTAS_CORRIENTES');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -111,6 +117,8 @@ export async function registrarPagoCC(data: {
   notas: string;
   descuento_porcentaje?: number;
 }) {
+  await requireModule('CUENTAS_CORRIENTES');
+
   try {
     const tenant = await requireTenant();
 
@@ -193,6 +201,8 @@ export async function registrarPagoCC(data: {
 // 4. RECALCULAR DEUDA POR INFLACIÓN
 // ==========================================
 export async function recalcularVentaVencida(ventaId: number) {
+  await requireModule('CUENTAS_CORRIENTES');
+
   try {
     const tenant = await requireTenant();
 

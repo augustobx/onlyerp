@@ -19,7 +19,6 @@ export async function getClientSession() {
 
     if (userFresh && userFresh.tenant) {
       if (userFresh.tenant.estado === "SUSPENDIDO" || userFresh.tenant.estado === "CANCELADO") {
-        await cerrarSesion();
         return null;
       }
 

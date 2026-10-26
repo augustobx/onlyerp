@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
@@ -20,6 +22,8 @@ export type CompraData = {
 };
 
 export async function registrarCompra(data: CompraData) {
+  await requireModule('COMPRAS');
+
   try {
     const tenant = await requireTenant();
     const { fecha, productoId, costo_base, costo_final, notas, impuestos } = data;
@@ -119,6 +123,8 @@ export async function getHistorialCompras(filtros?: {
   hasta?: string;
   productoId?: number;
 }) {
+  await requireModule('COMPRAS');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -160,6 +166,8 @@ export async function getHistorialCompras(filtros?: {
 }
 
 export async function getUltimaCompra(productoId: number) {
+  await requireModule('COMPRAS');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return null;

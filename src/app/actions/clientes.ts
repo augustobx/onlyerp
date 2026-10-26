@@ -1,17 +1,23 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { emitirComprobanteAFIP, getDatosClientePorCUIT } from "./afip";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 export async function buscarCuitEnAfip(cuitStr: string) {
+  await requireModule('CLIENTES');
+
   const cuitNum = Number(cuitStr.replace(/[^0-9]/g, ""));
   if (!cuitNum) return { success: false, error: "CUIT inválido" };
   return await getDatosClientePorCUIT(cuitNum);
 }
 
 export async function getClientes() {
+  await requireModule('CLIENTES');
+
   const tenant = await getTenantContext();
   if (!tenant) return [];
 
@@ -23,6 +29,8 @@ export async function getClientes() {
 }
 
 export async function crearCliente(formData: FormData) {
+  await requireModule('CLIENTES');
+
   try {
     const tenant = await requireTenant();
 
@@ -90,6 +98,8 @@ export async function crearCliente(formData: FormData) {
 }
 
 export async function getHistorialCliente(clienteId: number) {
+  await requireModule('CLIENTES');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -147,6 +157,8 @@ export async function getHistorialCliente(clienteId: number) {
 }
 
 export async function actualizarCliente(id: number, formData: FormData) {
+  await requireModule('CLIENTES');
+
   try {
     const tenant = await requireTenant();
 
@@ -197,6 +209,8 @@ export async function actualizarCliente(id: number, formData: FormData) {
 }
 
 export async function eliminarCliente(id: number) {
+  await requireModule('CLIENTES');
+
   try {
     const tenant = await requireTenant();
     await prisma.cliente.delete({
@@ -214,6 +228,8 @@ export async function eliminarCliente(id: number) {
 // ==========================================
 
 export async function getResumenFinancieroCliente(id: number) {
+  await requireModule('CLIENTES');
+
   try {
     const tenant = await requireTenant();
 
@@ -253,6 +269,8 @@ export async function cobrarCuentaCorriente(
   pagos: { metodo_pago: string; monto: number }[],
   notas: string
 ) {
+  await requireModule('CLIENTES');
+
   try {
     const tenant = await requireTenant();
 
@@ -331,6 +349,9 @@ export async function registrarClientePWA(data: {
   direccion?: string;
   telefono?: string;
 }) {
+  await requireModule('VENDEDORES_PWA');
+  await requireModule('CLIENTES');
+
   try {
     const tenant = await requireTenant();
 

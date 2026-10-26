@@ -1,9 +1,13 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant-context";
 
 export async function getReporteMaestro(filtros: { fecha_desde?: string; fecha_hasta?: string }) {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };

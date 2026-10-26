@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getClientSession } from "./auth";
@@ -63,6 +65,9 @@ async function resolverDepositoId(
 // 1. REGISTRAR NUEVO PEDIDO
 // ============================================================================
 export async function registrarPedidoPWA(data: any) {
+  await requireModule('VENDEDORES_PWA');
+  await requireModule('VENTAS');
+
   try {
     const tenant = await requireTenant();
 
@@ -323,6 +328,9 @@ async function adjuntarVentasAPedidos(pedidos: any[]) {
 // 2. OBTENER EL HISTORIAL DEL VENDEDOR
 // ============================================================================
 export async function obtenerPedidosVendedor() {
+  await requireModule('VENDEDORES_PWA');
+  await requireModule('VENTAS');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -401,6 +409,9 @@ export async function accionarPedidoVendedor(
   motivoCancelacion?: string,
   descontarMontoVenta?: boolean
 ): Promise<{ success: boolean; data?: any; error?: string }> {
+  await requireModule('VENDEDORES_PWA');
+  await requireModule('VENTAS');
+
   if (accion === "CANCELAR") {
     return await cambiarEstadoPedidoAdmin(
       pedidoId,
@@ -492,6 +503,8 @@ export async function accionarPedidoVendedor(
 // 4. FUNCIONES DE ADMINISTRACIÓN (OFICINA)
 // ============================================================================
 export async function obtenerTodosLosPedidos() {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -554,6 +567,8 @@ export async function cambiarEstadoPedidoAdmin(
   descontarMontoVenta?: boolean,
   notasEntrega?: string
 ): Promise<{ success: boolean; data?: any; error?: string }> {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await requireTenant();
 
@@ -1226,6 +1241,8 @@ export async function editarPedidoAdmin(
   notas: string,
   fechaEntrega?: string | Date | null
 ) {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await requireTenant();
 
@@ -1399,6 +1416,8 @@ export async function editarPedidoAdmin(
 // 6. RECALCULAR PRECIOS DE PEDIDOS PENDIENTES
 // ============================================================================
 export async function recalcularPreciosPendientes() {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await requireTenant();
 
@@ -1511,6 +1530,8 @@ export async function recalcularPreciosPendientes() {
 // ============================================================================
 
 export async function obtenerRepartidores() {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -1530,6 +1551,8 @@ export async function marcarPedidoListoEntrega(
   repartidorId?: number | null,
   fechaEntrega?: Date | string | null
 ) {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await requireTenant();
     const fechaHora = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
@@ -1581,6 +1604,8 @@ export async function marcarPedidoListoEntrega(
 }
 
 export async function marcarPedidoEntregado(pedidoId: number, notas?: string) {
+  await requireModule('VENTAS');
+
   try {
     const res = await cambiarEstadoPedidoAdmin(
       pedidoId,
@@ -1601,6 +1626,8 @@ export async function marcarPedidoEntregado(pedidoId: number, notas?: string) {
 }
 
 export async function marcarPedidoNoEntregado(pedidoId: number, motivo: string) {
+  await requireModule('VENTAS');
+
   try {
     if (!motivo || !motivo.trim()) return { success: false, error: "Debe indicar el motivo por el cual no se entregó." };
     const tenant = await requireTenant();
@@ -1637,6 +1664,8 @@ export async function marcarPedidoNoEntregado(pedidoId: number, motivo: string) 
 }
 
 export async function obtenerPedidosArmados(filtroFecha?: string, repartidorId?: number) {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -1677,6 +1706,8 @@ export async function obtenerPedidosArmados(filtroFecha?: string, repartidorId?:
 }
 
 export async function obtenerPedidosParaReparto(repartidorId?: number) {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return [];
@@ -1715,6 +1746,8 @@ export async function actualizarFechaEntregaPedido(
   pedidoId: number,
   fechaEntrega: string | Date | null | undefined
 ) {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await requireTenant();
     const pedido = await prisma.pedido.findFirst({
@@ -1748,10 +1781,14 @@ export async function cancelarPedido(
   depositoId?: number | null,
   descontarMontoVenta?: boolean
 ): Promise<{ success: boolean; data?: any; error?: string }> {
+  await requireModule('VENTAS');
+
   return await cambiarEstadoPedidoAdmin(pedidoId, "CANCELADO", undefined, depositoId, motivo, descontarMontoVenta);
 }
 
 export async function getPedidoParaImprimir(pedidoId: number) {
+  await requireModule('VENTAS');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };

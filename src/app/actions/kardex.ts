@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant-context";
 
@@ -25,6 +27,8 @@ export async function obtenerKardexProducto(
     fechaHasta?: string;
   }
 ) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado." };

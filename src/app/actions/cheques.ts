@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getClientSession } from "./auth";
@@ -17,6 +19,8 @@ export async function obtenerCheques(filtros?: {
   fecha_hasta?: string;
   termino?: string;
 }) {
+  await requireModule('CHEQUES');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -69,6 +73,8 @@ export async function obtenerCheques(filtros?: {
 }
 
 export async function obtenerKpisCarteraValores() {
+  await requireModule('CHEQUES');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -157,6 +163,8 @@ export async function registrarChequeManual(data: {
   clienteId?: number;
   notas?: string;
 }) {
+  await requireModule('CHEQUES');
+
   try {
     const tenant = await requireTenant();
 
@@ -201,6 +209,8 @@ export async function registrarChequeManual(data: {
 }
 
 export async function depositarChequesEnLote(chequesIds: number[], notas?: string) {
+  await requireModule('CHEQUES');
+
   try {
     const tenant = await requireTenant();
     if (!chequesIds || chequesIds.length === 0) throw new Error("Seleccione al menos un cheque.");
@@ -239,6 +249,8 @@ export async function depositarChequesEnLote(chequesIds: number[], notas?: strin
 }
 
 export async function endosarChequesAProveedor(chequesIds: number[], proveedorId: number, notas?: string) {
+  await requireModule('CHEQUES');
+
   try {
     const tenant = await requireTenant();
     if (!chequesIds || chequesIds.length === 0) throw new Error("Seleccione al menos un cheque.");
@@ -285,6 +297,8 @@ export async function endosarChequesAProveedor(chequesIds: number[], proveedorId
 }
 
 export async function marcarChequeRechazado(chequeId: number, motivo: string) {
+  await requireModule('CHEQUES');
+
   try {
     if (!motivo || !motivo.trim()) throw new Error("Debe indicar el motivo de rechazo del cheque.");
 

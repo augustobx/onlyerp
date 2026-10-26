@@ -1,11 +1,15 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import * as xlsx from "xlsx";
 import { revalidatePath } from "next/cache";
 import { requireTenant } from "@/lib/tenant-context";
 
 export async function importarProductosExcel(formData: FormData) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await requireTenant();
 
@@ -216,6 +220,8 @@ export async function importarProductosExcel(formData: FormData) {
 }
 
 export async function importarClientesExcel(formData: FormData) {
+  await requireModule('INVENTARIO');
+
   try {
     const tenant = await requireTenant();
 

@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getClientSession } from "./auth";
@@ -15,6 +17,8 @@ export async function obtenerHojasDeRuta(filtros?: {
   repartidorId?: number;
   estado?: string;
 }) {
+  await requireModule('LOGISTICA');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -67,6 +71,8 @@ export async function obtenerHojasDeRuta(filtros?: {
 }
 
 export async function obtenerHojaDeRutaDetalle(id: number) {
+  await requireModule('LOGISTICA');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -124,6 +130,8 @@ export async function obtenerHojaDeRutaDetalle(id: number) {
 }
 
 export async function obtenerPedidosParaAsignarRuta(repartidorId?: number) {
+  await requireModule('LOGISTICA');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -184,6 +192,8 @@ export async function crearHojaDeRuta(data: {
   notas?: string;
   pedidosIds: number[];
 }) {
+  await requireModule('LOGISTICA');
+
   try {
     if (!data.pedidosIds || data.pedidosIds.length === 0) {
       throw new Error("Debe seleccionar al menos un pedido para armar la hoja de ruta.");
@@ -249,6 +259,8 @@ export async function cambiarEstadoHojaDeRuta(
   id: number,
   nuevoEstado: "EN_PREPARACION" | "EN_RUTA" | "CANCELADA"
 ) {
+  await requireModule('LOGISTICA');
+
   try {
     const tenant = await requireTenant();
 
@@ -298,6 +310,8 @@ export async function cambiarEstadoHojaDeRuta(
 // ============================================================================
 
 export async function obtenerConsolidadoCarga(hojaDeRutaId: number) {
+  await requireModule('LOGISTICA');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -423,6 +437,8 @@ export async function procesarRendicionChofer(data: {
   observaciones?: string;
   cobros: RendicionItemPayload[];
 }) {
+  await requireModule('LOGISTICA');
+
   try {
     const tenant = await requireTenant();
     const session = await getClientSession();

@@ -1,9 +1,13 @@
 "use server";
 
+import { requireSessionTenant } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { getTenantContext } from "@/lib/tenant-context";
 
 export async function getDashboardMetrics() {
+  await requireSessionTenant();
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };

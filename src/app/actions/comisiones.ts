@@ -1,5 +1,7 @@
 "use server";
 
+import { requireModule, requireTenantAdmin } from "@/lib/module-access";
+
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
@@ -13,6 +15,8 @@ export async function calcularPreliquidacionVendedores(
   anio: number,
   baseCalculo: "FACTURACION" | "COBRANZA" = "FACTURACION"
 ) {
+  await requireModule('COMISIONES');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -134,6 +138,8 @@ export async function obtenerDetalleLiquidacionVendedor(
   anio: number,
   baseCalculo: "FACTURACION" | "COBRANZA" = "FACTURACION"
 ) {
+  await requireModule('COMISIONES');
+
   try {
     const tenant = await getTenantContext();
     if (!tenant) return { success: false, error: "Tenant no encontrado" };
@@ -339,6 +345,8 @@ export async function guardarLiquidacion(data: {
   monto_comision: number;
   notas?: string;
 }) {
+  await requireModule('COMISIONES');
+
   try {
     const tenant = await requireTenant();
 
@@ -379,6 +387,8 @@ export async function guardarLiquidacion(data: {
 }
 
 export async function pagarLiquidacion(id: number, notas?: string) {
+  await requireModule('COMISIONES');
+
   try {
     const liq = await prisma.liquidacionComision.update({
       where: { id: Number(id) },
