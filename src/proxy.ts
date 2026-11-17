@@ -66,6 +66,7 @@ export async function proxy(request: NextRequest) {
         pathname === '/suspendido' ||
         pathname.startsWith('/superadmin') ||
         pathname.startsWith('/imprimir') ||
+        pathname.startsWith('/portal-b2b') ||
         pathname === '/manifest.json' ||
         pathname === '/sw.js' ||
         pathname === '/favicon.ico' ||
