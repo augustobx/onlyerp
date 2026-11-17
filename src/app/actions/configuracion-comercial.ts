@@ -6,22 +6,19 @@ import { revalidatePath } from "next/cache";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
 export async function obtenerConfiguracionComercial() {
-    const tenant = await getTenantContext();
-    const config = tenant
-        ? await prisma.empresaConfig.findUnique({ where: { tenantId: tenant.id } })
-        : await prisma.empresaConfig.findFirst();
+    const tenant = await requireTenant();
+    const config = await prisma.empresaConfig.findUnique({ where: { tenantId: tenant.id } });
 
-    const tenantFilter = tenant ? { tenantId: tenant.id } : {};
     const vendedores = await prisma.usuario.findMany({
-        where: { activo: true, ...tenantFilter },
+        where: { activo: true, tenantId: tenant.id },
         select: { id: true, nombre: true, rol: true, comision_personalizada: true, limite_desc_vendedor: true }
     });
     const clientes = await prisma.cliente.findMany({
-        where: tenantFilter,
+        where: { tenantId: tenant.id },
         select: { id: true, nombre_razon_social: true, limite_desc_cliente: true }
     });
     const categorias = await prisma.categoria.findMany({
-        where: tenantFilter,
+        where: { tenantId: tenant.id },
         select: { id: true, nombre: true, limite_desc_categoria: true }
     });
 

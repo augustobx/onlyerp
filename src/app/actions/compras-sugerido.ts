@@ -1,6 +1,7 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 
 export async function obtenerSugeridoCompras(filtros?: {
     proveedorId?: number;
@@ -8,18 +9,21 @@ export async function obtenerSugeridoCompras(filtros?: {
     diasAnalisis?: number;  // Ventas de cuántos días atrás analizar para medir velocidad (ej: 30 o 60 días)
 }) {
     try {
+        const tenant = await getTenantContext();
+        if (!tenant) return { success: false, error: "Tenant no encontrado" };
+
         const diasCobertura = filtros?.diasCobertura && filtros.diasCobertura > 0 ? Number(filtros.diasCobertura) : 30;
         const diasAnalisis = filtros?.diasAnalisis && filtros.diasAnalisis > 0 ? Number(filtros.diasAnalisis) : 30;
 
         const fechaDesdeAnalisis = new Date();
         fechaDesdeAnalisis.setDate(fechaDesdeAnalisis.getDate() - diasAnalisis);
 
-        const whereProducto: any = {};
+        const whereProducto: any = { tenantId: tenant.id };
         if (filtros?.proveedorId && Number(filtros.proveedorId) > 0) {
             whereProducto.proveedorId = Number(filtros.proveedorId);
         }
 
-        // 1. Obtener productos con stock y proveedor
+        // 1. Obtener productos con stock y proveedor del tenant actual
         const productos = await prisma.producto.findMany({
             where: whereProducto,
             include: {
@@ -29,13 +33,13 @@ export async function obtenerSugeridoCompras(filtros?: {
                 stocks: { select: { cantidad: true } },
                 detalles_pedido: {
                     where: {
-                        pedido: { estado: { in: ['PENDIENTE', 'APROBADO', 'ARMADO', 'LISTO_ENTREGA'] } }
+                        pedido: { tenantId: tenant.id, estado: { in: ['PENDIENTE', 'APROBADO', 'ARMADO', 'LISTO_ENTREGA'] } }
                     },
                     select: { cantidad: true }
                 },
                 detalles_venta: {
                     where: {
-                        venta: { fecha_emision: { gte: fechaDesdeAnalisis } }
+                        venta: { tenantId: tenant.id, fecha_emision: { gte: fechaDesdeAnalisis } }
                     },
                     select: { cantidad: true }
                 }

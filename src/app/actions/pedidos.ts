@@ -295,8 +295,14 @@ async function adjuntarVentasAPedidos(pedidos: any[]) {
     return pedidos.map((p) => ({ ...p, venta: null }));
   }
 
+  const tenant = await getTenantContext();
+  const whereVentas: any = { id: { in: Array.from(new Set(ventaIds)) } };
+  if (tenant) {
+    whereVentas.tenantId = tenant.id;
+  }
+
   const ventas = await prisma.venta.findMany({
-    where: { id: { in: Array.from(new Set(ventaIds)) } },
+    where: whereVentas,
     select: {
       id: true,
       tipo_comprobante: true,

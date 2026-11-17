@@ -13,6 +13,7 @@ import {
     registrarPagoCC,
     recalcularVentaVencida
 } from "@/app/actions/cuentas-corrientes";
+import { getDatosEmpresa } from "@/app/actions/configuracion-empresa";
 import { generarLinkWhatsAppSaldoCC } from "@/lib/whatsapp";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export default function CuentasCorrientesPage() {
     const [isPending, startTransition] = useTransition();
     const [deudores, setDeudores] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [nombreEmpresa, setNombreEmpresa] = useState<string>("");
 
     // Filtros
     const [termino, setTermino] = useState("");
@@ -60,6 +62,14 @@ export default function CuentasCorrientesPage() {
             setLoading(false);
         });
     };
+
+    useEffect(() => {
+        getDatosEmpresa().then((emp) => {
+            if (emp) {
+                setNombreEmpresa(emp.nombre_fantasia || emp.razon_social || "");
+            }
+        }).catch(() => {});
+    }, []);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -290,7 +300,7 @@ export default function CuentasCorrientesPage() {
                                                             clienteNombre: d.nombre,
                                                             saldoDeuda: d.total_deuda,
                                                             facturasVencidas: d.ventas_vencidas,
-                                                            nombreEmpresa: "Sanu Distribuidora"
+                                                            nombreEmpresa: nombreEmpresa || "Nuestra Empresa"
                                                         })}
                                                         target="_blank"
                                                         rel="noopener noreferrer"

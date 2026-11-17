@@ -270,9 +270,9 @@ export function ProductoForm({ initialData, providers: initialProviders, categor
         try {
           const prodId = isEdit ? initialData.id : (res.data?.id || null);
           if (prodId) {
-            const saved = sessionStorage.getItem("sanu_stock_table_updated_ids");
+            const saved = sessionStorage.getItem("onlyerp_stock_table_updated_ids");
             const prev = saved ? JSON.parse(saved) : [];
-            sessionStorage.setItem("sanu_stock_table_updated_ids", JSON.stringify([prodId, ...prev]));
+            sessionStorage.setItem("onlyerp_stock_table_updated_ids", JSON.stringify([prodId, ...prev]));
           }
         } catch (e) {}
 

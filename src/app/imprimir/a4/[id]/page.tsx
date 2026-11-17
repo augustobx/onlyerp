@@ -91,7 +91,7 @@ export default function FacturaA4PrintPage({ params }: { params: Promise<{ id: s
                 {copiaEtiqueta && (
                     <div className="flex justify-between items-center bg-slate-900 text-white px-3 py-0.5 rounded text-[10px] font-black uppercase tracking-wider mb-2">
                         <span>{copiaEtiqueta}</span>
-                        <span>{empresa?.nombre_fantasia || "Sanu Distribuidora"}</span>
+                        <span>{empresa?.nombre_fantasia || empresa?.razon_social || "Distribuidora Mayorista"}</span>
                     </div>
                 )}
 
@@ -261,7 +261,7 @@ export default function FacturaA4PrintPage({ params }: { params: Promise<{ id: s
                     </div>
                     <div className="text-right text-[9px] text-slate-500">
                         <span className="font-bold block">Emisor: {venta.usuario ? (venta.usuario.nombre || venta.usuario.nombre_completo) : "Sistema"}</span>
-                        <span>{empresa?.nombre_fantasia || "Sanu Distribuidora"}</span>
+                        <span>{empresa?.nombre_fantasia || empresa?.razon_social || "Distribuidora Mayorista"}</span>
                     </div>
                 </div>
             </div>

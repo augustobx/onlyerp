@@ -53,14 +53,18 @@ export async function crearSucursal(nombre: string, direccion: string, telefono:
 
 export async function editarSucursal(id: number, nombre: string, direccion: string, telefono: string, estado: boolean) {
   try {
+    const tenant = await requireTenant();
+    const existe = await prisma.sucursal.findFirst({ where: { id, tenantId: tenant.id } });
+    if (!existe) throw new Error("Sucursal no encontrada o no autorizada.");
+
     await prisma.sucursal.update({
       where: { id },
       data: { nombre, direccion, telefono, estado },
     });
     revalidatePath("/configuracion/sucursales");
     return { success: true };
-  } catch {
-    return { success: false, error: "Error al actualizar la sucursal." };
+  } catch (error: any) {
+    return { success: false, error: error.message || "Error al actualizar la sucursal." };
   }
 }
 
@@ -101,13 +105,17 @@ export async function crearDeposito(nombre: string, sucursalId: number) {
 
 export async function editarDeposito(id: number, nombre: string, estado: boolean) {
   try {
+    const tenant = await requireTenant();
+    const existe = await prisma.deposito.findFirst({ where: { id, tenantId: tenant.id } });
+    if (!existe) throw new Error("Depósito no encontrado o no autorizado.");
+
     await prisma.deposito.update({
       where: { id },
       data: { nombre, estado },
     });
     revalidatePath("/configuracion/sucursales");
     return { success: true };
-  } catch {
-    return { success: false, error: "Error al actualizar el depósito." };
+  } catch (error: any) {
+    return { success: false, error: error.message || "Error al actualizar el depósito." };
   }
 }

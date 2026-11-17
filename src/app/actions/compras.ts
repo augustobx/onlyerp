@@ -25,6 +25,23 @@ export async function registrarCompra(data: CompraData) {
     const { fecha, productoId, costo_base, costo_final, notas, impuestos } = data;
 
     const compra = await prisma.$transaction(async (tx) => {
+      // Validar aislamiento estricto: el producto debe pertenecer al tenant actual
+      const prodExiste = await tx.producto.findFirst({
+        where: { id: productoId, tenantId: tenant.id },
+      });
+      if (!prodExiste) {
+        throw new Error("El producto seleccionado no pertenece a tu empresa.");
+      }
+
+      if (data.depositoId) {
+        const depoExiste = await tx.deposito.findFirst({
+          where: { id: data.depositoId, tenantId: tenant.id },
+        });
+        if (!depoExiste) {
+          throw new Error("El depósito seleccionado no pertenece a tu empresa.");
+        }
+      }
+
       const compra = await tx.compra.create({
         data: {
           tenantId: tenant.id,

@@ -4,6 +4,38 @@ import prisma from "@/lib/prisma";
 import { resolverMargenYDescuento, calcularPrecioConCascada, resolverPrecioConEscala, redondearPrecio } from "@/lib/utils";
 import { requireTenant, getTenantContext } from "@/lib/tenant-context";
 
+export async function obtenerInfoEmpresaB2B() {
+  try {
+    const tenant = await getTenantContext();
+    if (!tenant) return { success: false, error: "Empresa no identificada" };
+
+    const config = await prisma.empresaConfig.findUnique({
+      where: { tenantId: tenant.id },
+      select: {
+        nombre_fantasia: true,
+        razon_social: true,
+        telefono: true,
+        direccion: true,
+        logo_url: true,
+      },
+    });
+
+    return {
+      success: true,
+      data: {
+        nombre: config?.nombre_fantasia || config?.razon_social || tenant.nombre,
+        telefono: config?.telefono || "Atención al cliente",
+        direccion: config?.direccion || "",
+        logoUrl: config?.logo_url || tenant.logoUrl || null,
+        slug: tenant.slug,
+      },
+    };
+  } catch (error: any) {
+    console.error("Error al obtener info empresa B2B:", error);
+    return { success: false, error: "Error al cargar información de la empresa." };
+  }
+}
+
 export async function validarAccesoClienteB2B(identificador: string) {
   try {
     const tenant = await getTenantContext();
@@ -34,11 +66,14 @@ export async function validarAccesoClienteB2B(identificador: string) {
     if (!cliente) {
       return {
         success: false,
-        error: "No encontramos un cliente mayorista registrado con ese CUIT. Por favor contactá a tu ejecutivo de cuentas.",
+        error: "No encontramos un cliente mayorista registrado con ese CUIT en esta empresa. Por favor contactá a tu ejecutivo de cuentas.",
       };
     }
 
     const saldoDeuda = cliente.ventas.reduce((acc, v) => acc + v.saldo_pendiente, 0);
+
+    const defaultLista = await prisma.listaPrecio.findFirst({ where: { tenantId: tenant.id } });
+    const listaPrecioId = cliente.lista_default_id || defaultLista?.id || 0;
 
     return {
       success: true,
@@ -51,8 +86,8 @@ export async function validarAccesoClienteB2B(identificador: string) {
         condicion_iva: cliente.condicion_iva,
         limite_credito: cliente.limite_credito || 0,
         saldo_cc: saldoDeuda,
-        listaPrecioId: cliente.lista_default_id || 1,
-        listaNombre: cliente.lista_default?.nombre || "Lista General",
+        listaPrecioId: listaPrecioId,
+        listaNombre: cliente.lista_default?.nombre || defaultLista?.nombre || "Lista General",
       },
     };
   } catch (error: any) {
@@ -73,7 +108,8 @@ export async function obtenerCatalogoB2B(clienteId: number, query?: string) {
 
     if (!cliente) return { success: false, error: "Cliente no encontrado" };
 
-    const listaId = cliente.lista_default_id || 1;
+    const defaultLista = await prisma.listaPrecio.findFirst({ where: { tenantId: tenant.id } });
+    const listaId = cliente.lista_default_id || defaultLista?.id || 0;
     const lista = await prisma.listaPrecio.findFirst({ where: { id: listaId, tenantId: tenant.id } });
     const configGlobal = await prisma.empresaConfig.findUnique({ where: { tenantId: tenant.id } });
 
@@ -167,12 +203,18 @@ export async function crearPedidoB2B(
 
     if (!cliente) return { success: false, error: "Cliente no válido." };
 
-    const adminUser = await prisma.usuario.findFirst({
+    const adminUser = (await prisma.usuario.findFirst({
+      where: { tenantId: tenant.id, rol: "ADMIN" },
+    })) || (await prisma.usuario.findFirst({
       where: { tenantId: tenant.id },
-    });
-    const fallbackUsuarioId = adminUser?.id || 1;
+    }));
+    if (!adminUser) {
+      return { success: false, error: "No hay usuarios configurados en la empresa para procesar el pedido." };
+    }
+    const fallbackUsuarioId = adminUser.id;
 
-    const listaId = cliente.lista_default_id || 1;
+    const defaultLista = await prisma.listaPrecio.findFirst({ where: { tenantId: tenant.id } });
+    const listaId = cliente.lista_default_id || defaultLista?.id || 0;
     const lista = await prisma.listaPrecio.findFirst({ where: { id: listaId, tenantId: tenant.id } });
     const configGlobal = await prisma.empresaConfig.findUnique({ where: { tenantId: tenant.id } });
 

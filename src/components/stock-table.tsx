@@ -275,8 +275,8 @@ interface StockTableProps {
   configGlobal?: any;
 }
 
-const STORAGE_KEY_STATE = "sanu_stock_table_state";
-const STORAGE_KEY_UPDATED = "sanu_stock_table_updated_ids";
+const STORAGE_KEY_STATE = "onlyerp_stock_table_state";
+const STORAGE_KEY_UPDATED = "onlyerp_stock_table_updated_ids";
 
 export function StockTable({ data, proveedores, listasGlobales, depositos, usuarioId, configGlobal }: StockTableProps) {
   const [isPending, startTransition] = useTransition();

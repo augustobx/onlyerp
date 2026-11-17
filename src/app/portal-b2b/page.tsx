@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { validarAccesoClienteB2B, obtenerCatalogoB2B, crearPedidoB2B, obtenerEstadoCuentaB2B } from "@/app/actions/portal-b2b";
+import { validarAccesoClienteB2B, obtenerCatalogoB2B, crearPedidoB2B, obtenerEstadoCuentaB2B, obtenerInfoEmpresaB2B } from "@/app/actions/portal-b2b";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,15 @@ import {
 
 export default function PortalB2BPage() {
     const [isPending, startTransition] = useTransition();
+
+    // Información de la empresa/tenant para branding y aislamiento
+    const [empresaInfo, setEmpresaInfo] = useState<{
+        nombre: string;
+        telefono: string;
+        direccion: string;
+        logoUrl?: string | null;
+        slug?: string;
+    } | null>(null);
 
     // Sesión B2B del cliente
     const [cuitInput, setCuitInput] = useState("");
@@ -33,15 +42,27 @@ export default function PortalB2BPage() {
     // Cuenta Corriente
     const [estadoCuenta, setEstadoCuenta] = useState<any>(null);
 
-    // Cargar sesión guardada localmente
+    // Cargar datos de la empresa y sesión guardada localmente por tenant
     useEffect(() => {
-        const saved = localStorage.getItem("sanu_b2b_cliente");
-        if (saved) {
-            const cli = JSON.parse(saved);
-            setCliente(cli);
-            cargarCatalogo(cli.id);
-            cargarCuenta(cli.id);
-        }
+        const init = async () => {
+            const empRes = await obtenerInfoEmpresaB2B();
+            if (empRes.success && empRes.data) {
+                setEmpresaInfo(empRes.data);
+                const storageKey = `b2b_cliente_${empRes.data.slug || "default"}`;
+                const saved = localStorage.getItem(storageKey);
+                if (saved) {
+                    try {
+                        const cli = JSON.parse(saved);
+                        setCliente(cli);
+                        cargarCatalogo(cli.id);
+                        cargarCuenta(cli.id);
+                    } catch {
+                        localStorage.removeItem(storageKey);
+                    }
+                }
+            }
+        };
+        init();
     }, []);
 
     const handleLogin = (e: React.FormEvent) => {
@@ -52,7 +73,8 @@ export default function PortalB2BPage() {
             const res = await validarAccesoClienteB2B(cuitInput);
             if (res.success && res.data) {
                 setCliente(res.data);
-                localStorage.setItem("sanu_b2b_cliente", JSON.stringify(res.data));
+                const storageKey = `b2b_cliente_${empresaInfo?.slug || "default"}`;
+                localStorage.setItem(storageKey, JSON.stringify(res.data));
                 toast.success(`¡Bienvenido/a, ${res.data.nombre}!`);
                 cargarCatalogo(res.data.id);
                 cargarCuenta(res.data.id);
@@ -63,6 +85,8 @@ export default function PortalB2BPage() {
     };
 
     const handleLogout = () => {
+        const storageKey = `b2b_cliente_${empresaInfo?.slug || "default"}`;
+        localStorage.removeItem(storageKey);
         localStorage.removeItem("sanu_b2b_cliente");
         setCliente(null);
         setCarrito({});
@@ -168,7 +192,9 @@ export default function PortalB2BPage() {
                         <div className="inline-flex p-3 bg-indigo-600/20 border border-indigo-500/30 rounded-2xl text-indigo-400 mb-2">
                             <Building2 className="h-10 w-10" />
                         </div>
-                        <h1 className="text-3xl font-black text-white tracking-tight">Portal Clientes Mayoristas</h1>
+                        <h1 className="text-3xl font-black text-white tracking-tight">
+                            {empresaInfo?.nombre ? `${empresaInfo.nombre} · Portal Mayorista` : "Portal Clientes Mayoristas"}
+                        </h1>
                         <p className="text-slate-400 text-sm">Autogestión de pedidos y cuenta corriente 24/7</p>
                     </div>
 
@@ -176,7 +202,7 @@ export default function PortalB2BPage() {
                         <CardHeader className="pb-4">
                             <CardTitle className="text-lg font-bold text-slate-200">Acceso Rápido con CUIT</CardTitle>
                             <CardDescription className="text-slate-400 text-xs">
-                                Ingresá el CUIT o DNI con el que estás registrado como cliente de Sanu Distribuidora.
+                                Ingresá el CUIT o DNI con el que estás registrado como cliente{empresaInfo?.nombre ? ` de ${empresaInfo.nombre}` : ""}.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -205,7 +231,7 @@ export default function PortalB2BPage() {
                     </Card>
 
                     <div className="text-center text-xs text-slate-500">
-                        ¿Aún no tenés cuenta mayorista? Contactá a ventas al <span className="text-indigo-400 font-bold">03329-425566</span>.
+                        ¿Aún no tenés cuenta mayorista? Contactá a ventas{empresaInfo?.telefono ? <> al <span className="text-indigo-400 font-bold">{empresaInfo.telefono}</span></> : "."}
                     </div>
                 </div>
             </div>
@@ -231,6 +257,11 @@ export default function PortalB2BPage() {
                                 <Badge className="bg-indigo-500/20 text-indigo-300 border-indigo-500/40 text-[10px] font-bold">
                                     {cliente.listaNombre}
                                 </Badge>
+                                {empresaInfo?.nombre && (
+                                    <span className="hidden sm:inline-block text-[11px] font-bold text-slate-400 border-l border-slate-700 pl-2">
+                                        {empresaInfo.nombre}
+                                    </span>
+                                )}
                             </div>
                             <p className="text-[11px] text-slate-400 font-mono">CUIT: {cliente.cuit}</p>
                         </div>

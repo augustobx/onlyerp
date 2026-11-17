@@ -1,11 +1,16 @@
 import Afip from '@afipsdk/afip.js';
 import prisma from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 import os from "os";
 import fs from "fs";
 import path from "path";
 
 export async function getAfipClient() {
-    const config = await prisma.empresaConfig.findFirst();
+    const tenant = await getTenantContext();
+    if (!tenant) {
+        throw new Error("FACTURACION: No se encontró el contexto del tenant para AFIP.");
+    }
+    const config = await prisma.empresaConfig.findUnique({ where: { tenantId: tenant.id } });
 
     const cuitStr = config?.cuit_facturacion?.replace(/[^0-9]/g, '') || "";
     const crt = config?.certificado_crt;

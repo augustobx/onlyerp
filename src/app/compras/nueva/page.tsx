@@ -1,9 +1,20 @@
 import { CompraForm } from "./compra-form";
 import { PackagePlus } from "lucide-react";
 import prisma from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant-context";
 
 export default async function NuevaCompraPage() {
+  const tenant = await getTenantContext();
+  if (!tenant) {
+    return (
+      <div className="p-8 text-center text-red-500 font-bold">
+        Error: Empresa no identificada para registrar compras.
+      </div>
+    );
+  }
+
   const productos = await prisma.producto.findMany({
+    where: { tenantId: tenant.id },
     select: {
       id: true,
       nombre_producto: true,
@@ -18,10 +29,28 @@ export default async function NuevaCompraPage() {
     }
   });
 
-  const proveedores = await prisma.proveedor.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } });
-  const marcas = await prisma.marca.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } });
-  const categorias = await prisma.categoria.findMany({ select: { id: true, nombre: true }, orderBy: { nombre: 'asc' } });
-  const depositos = await prisma.deposito.findMany({ where: { estado: true }, select: { id: true, nombre: true } });
+  const proveedores = await prisma.proveedor.findMany({
+    where: { tenantId: tenant.id },
+    select: { id: true, nombre: true },
+    orderBy: { nombre: 'asc' }
+  });
+
+  const marcas = await prisma.marca.findMany({
+    where: { tenantId: tenant.id },
+    select: { id: true, nombre: true },
+    orderBy: { nombre: 'asc' }
+  });
+
+  const categorias = await prisma.categoria.findMany({
+    where: { tenantId: tenant.id },
+    select: { id: true, nombre: true },
+    orderBy: { nombre: 'asc' }
+  });
+
+  const depositos = await prisma.deposito.findMany({
+    where: { tenantId: tenant.id, estado: true },
+    select: { id: true, nombre: true }
+  });
 
   return (
     <div className="space-y-6 w-full">

@@ -1,4 +1,5 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "@/lib/prisma";
+import { requireTenant } from "@/lib/tenant-context";
 import { Store, Warehouse } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -6,10 +7,11 @@ import { Badge } from "@/components/ui/badge";
 
 import { ABMSucursalesClient } from "./abm-sucursales-client";
 
-const prisma = new PrismaClient();
-
 export default async function SucursalesConfigPage() {
+    const tenant = await requireTenant();
+
     const sucursales = await prisma.sucursal.findMany({
+        where: { tenantId: tenant.id },
         include: { depositos: true },
         orderBy: { nombre: 'asc' }
     });
