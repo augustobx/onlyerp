@@ -107,11 +107,11 @@ export function AlertaCambioCriticoModal({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200"
             role="dialog"
             aria-modal="true"
         >
-            <div className="bg-white dark:bg-zinc-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200">
+            <div className="bg-white dark:bg-zinc-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200 relative z-[10000]">
                 
                 {/* CABECERA CON RADIAL GRADIENT */}
                 <div className={`p-6 bg-gradient-to-b ${configTipo.headerBg} border-b border-slate-100 dark:border-zinc-800 relative`}>
