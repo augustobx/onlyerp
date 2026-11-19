@@ -38,6 +38,7 @@ import {
 } from "@/lib/utils";
 import { actualizarStockRapido, getHistorialProducto } from "@/app/actions/productos";
 import { actualizarPreciosMasivos } from "@/app/actions/proveedores";
+import { AlertaCambioCriticoModal, CambioDetalleItem } from "@/components/alerta-cambio-critico-modal";
 
 export type ProductoColumn = {
   id: number;
@@ -312,6 +313,26 @@ export function StockTable({ data, proveedores, listasGlobales, depositos, usuar
     valor: "",
   });
 
+  // Estado para Alerta de Cambio Crítico
+  const [alertaCritica, setAlertaCritica] = useState<{
+    open: boolean;
+    titulo: string;
+    subtitulo: string;
+    entidadAfectada: string;
+    detalles: CambioDetalleItem[];
+    advertencias: string[];
+    textoConfirmar?: string;
+    onConfirm: () => Promise<void> | void;
+  }>({
+    open: false,
+    titulo: "",
+    subtitulo: "",
+    entidadAfectada: "",
+    detalles: [],
+    advertencias: [],
+    onConfirm: () => {}
+  });
+
   const marcas = React.useMemo(() => {
     const mSet = new Set<string>();
     data.forEach(p => {
@@ -442,27 +463,70 @@ export function StockTable({ data, proveedores, listasGlobales, depositos, usuar
       }
     }
 
-    if (!confirm(`⚠️ ¿Está seguro de ${txtAccion} ${txtTipo} en ${txtDestino} para ${txtProv} / ${txtMarca}?`)) return;
+    const totalAfectados = targetProductIds ? targetProductIds.length : data.length;
 
-    startTransition(async () => {
-      const res = await actualizarPreciosMasivos({
-        destino: aumentoForm.destino === "COSTO_BASE" ? "COSTO_BASE" : Number(aumentoForm.destino),
-        proveedorId: provObj?.id || null,
-        productoIds: targetProductIds,
-        tipoAumento: aumentoForm.tipo,
-        valor: valorNum,
-        accion: aumentoForm.accion
-      });
+    const detalles: CambioDetalleItem[] = [
+      {
+        etiqueta: "Destino del Ajuste",
+        nuevo: txtDestino,
+        destacado: true
+      },
+      {
+        etiqueta: "Filtro de Proveedor",
+        nuevo: txtProv
+      },
+      {
+        etiqueta: "Filtro de Marca",
+        nuevo: txtMarca
+      },
+      {
+        etiqueta: "Operación de Precio",
+        nuevo: `${aumentoForm.accion === "AUMENTO" ? "+" : "-"}${txtTipo} (${txtAccion})`,
+        destacado: true
+      },
+      {
+        etiqueta: "Artículos Afectados",
+        nuevo: `${totalAfectados} productos`,
+        nota: "Cantidad de productos en catálogo que se modificarán",
+        destacado: true
+      }
+    ];
 
-      if (res.success) {
-        toast.success("¡Ajuste de precios aplicado!", { description: res.message || `Se actualizaron los precios con éxito.` });
-        if (res.updatedIds && Array.isArray(res.updatedIds)) {
-          res.updatedIds.forEach(id => registrarActualizado(id));
-        }
-        setShowAumentoRapidoModal(false);
-        setAumentoForm({ destino: "COSTO_BASE", proveedor: "ALL", marca: "ALL", tipo: "PORCENTAJE", accion: "AUMENTO", valor: "" });
-      } else {
-        toast.error(res.error);
+    setAlertaCritica({
+      open: true,
+      titulo: `¿Confirmar ${txtAccion.toLowerCase()} de precios?`,
+      entidadAfectada: `${txtDestino} · ${txtProv}`,
+      subtitulo: `Vas a ${txtAccion.toLowerCase()} ${txtTipo} en ${txtDestino}. Este cambio impactará en ${totalAfectados} productos del inventario y en las ventas activas.`,
+      detalles,
+      advertencias: [
+        "Los precios se actualizarán de forma inmediata en la base de datos.",
+        "Afectará el mostrador de ventas, pedidos pendientes y cálculos de rentabilidad.",
+        "Quedará registro de este cambio masivo en el kardex e historial de precios."
+      ],
+      textoConfirmar: `Confirmar ${txtAccion} de ${txtTipo}`,
+      onConfirm: () => {
+        startTransition(async () => {
+          const res = await actualizarPreciosMasivos({
+            destino: aumentoForm.destino === "COSTO_BASE" ? "COSTO_BASE" : Number(aumentoForm.destino),
+            proveedorId: provObj?.id || null,
+            productoIds: targetProductIds,
+            tipoAumento: aumentoForm.tipo,
+            valor: valorNum,
+            accion: aumentoForm.accion
+          });
+
+          if (res.success) {
+            toast.success("¡Ajuste de precios aplicado!", { description: res.message || `Se actualizaron los precios con éxito.` });
+            if (res.updatedIds && Array.isArray(res.updatedIds)) {
+              res.updatedIds.forEach(id => registrarActualizado(id));
+            }
+            setShowAumentoRapidoModal(false);
+            setAumentoForm({ destino: "COSTO_BASE", proveedor: "ALL", marca: "ALL", tipo: "PORCENTAJE", accion: "AUMENTO", valor: "" });
+            setAlertaCritica(prev => ({ ...prev, open: false }));
+          } else {
+            toast.error(res.error);
+          }
+        });
       }
     });
   };
@@ -996,6 +1060,20 @@ export function StockTable({ data, proveedores, listasGlobales, depositos, usuar
           </Card>
         </div>
       )}
+      {/* ALERTA DE CAMBIO CRÍTICO */}
+      <AlertaCambioCriticoModal
+        open={alertaCritica.open}
+        onClose={() => setAlertaCritica(prev => ({ ...prev, open: false }))}
+        onConfirmar={alertaCritica.onConfirm}
+        tipo="PRECIOS"
+        titulo={alertaCritica.titulo}
+        entidadAfectada={alertaCritica.entidadAfectada}
+        subtitulo={alertaCritica.subtitulo}
+        detalles={alertaCritica.detalles}
+        advertencias={alertaCritica.advertencias}
+        textoConfirmar={alertaCritica.textoConfirmar}
+        loading={isPending}
+      />
     </div>
   );
 }

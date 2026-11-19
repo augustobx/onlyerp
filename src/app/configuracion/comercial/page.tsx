@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Save, Percent, AlertOctagon, TrendingDown, Users, Calculator, Landmark, ShieldCheck, Boxes, Receipt } from "lucide-react";
+import { AlertaCambioCriticoModal, CambioDetalleItem } from "@/components/alerta-cambio-critico-modal";
 
 export default function ConfiguracionComercialPage() {
     const [isPending, startTransition] = useTransition();
@@ -22,6 +23,27 @@ export default function ConfiguracionComercialPage() {
         aplicar_iva_en_precios: false,
         permitir_stock_negativo: false,
         facturar_al_entregar: false
+    });
+
+    // Estado para Alerta de Cambio Crítico
+    const [alertaCritica, setAlertaCritica] = useState<{
+        open: boolean;
+        tipo: "COMISIONES" | "CONFIGURACION";
+        titulo: string;
+        subtitulo: string;
+        entidadAfectada: string;
+        detalles: CambioDetalleItem[];
+        advertencias: string[];
+        onConfirm: () => Promise<void> | void;
+    }>({
+        open: false,
+        tipo: "COMISIONES",
+        titulo: "",
+        subtitulo: "",
+        entidadAfectada: "",
+        detalles: [],
+        advertencias: [],
+        onConfirm: () => {}
     });
 
     const cargarDatos = () => {
@@ -45,18 +67,133 @@ export default function ConfiguracionComercialPage() {
 
     useEffect(() => { cargarDatos(); }, []);
 
-    const guardarGlobales = () => {
+    const ejecutarGuardarGlobales = () => {
         startTransition(async () => {
             const res = await actualizarReglasGlobales(globales);
-            if (res.success) toast.success("¡Reglas comerciales, tratamiento de IVA y stock actualizados!");
-            else toast.error(res.error);
+            if (res.success) {
+                toast.success("¡Reglas comerciales, tratamiento de IVA y stock actualizados!");
+                setAlertaCritica(prev => ({ ...prev, open: false }));
+                cargarDatos();
+            } else {
+                toast.error(res.error);
+            }
         });
     };
 
-    const guardarUsuario = async (u: any) => {
-        const res = await actualizarReglaUsuario(u.id, u.comision_personalizada, u.limite_desc_vendedor);
-        if (res.success) toast.success(`Reglas guardadas para ${u.nombre}`);
-        else toast.error("Error al guardar");
+    const guardarGlobales = () => {
+        const conf = data?.config;
+        const detalles: CambioDetalleItem[] = [];
+
+        if (conf) {
+            if (conf.comision_base_global !== globales.comision) {
+                const diff = globales.comision - conf.comision_base_global;
+                detalles.push({
+                    etiqueta: "Comisión Base de Vendedores",
+                    anterior: `${conf.comision_base_global}%`,
+                    nuevo: `${globales.comision}%`,
+                    nota: `Variación de ${diff > 0 ? "+" : ""}${diff}% para todos los preventistas`,
+                    destacado: true
+                });
+            }
+            if (conf.limite_desc_global !== globales.limite) {
+                detalles.push({
+                    etiqueta: "Límite Máximo de Descuento Permitido",
+                    anterior: `${conf.limite_desc_global}%`,
+                    nuevo: `${globales.limite}%`
+                });
+            }
+            if (conf.penalizacion_global !== globales.penalizacion) {
+                detalles.push({
+                    etiqueta: "Penalización por Descuento Excesivo",
+                    anterior: `${conf.penalizacion_global}%`,
+                    nuevo: `${globales.penalizacion}%`
+                });
+            }
+            if (conf.aplicar_iva_en_precios !== globales.aplicar_iva_en_precios) {
+                detalles.push({
+                    etiqueta: "Tratamiento de IVA en Precios",
+                    anterior: conf.aplicar_iva_en_precios ? "Precios con IVA incluido" : "Precios Netos / Sin IVA",
+                    nuevo: globales.aplicar_iva_en_precios ? "Precios con IVA incluido" : "Precios Netos / Sin IVA",
+                    destacado: true
+                });
+            }
+            if (conf.permitir_stock_negativo !== globales.permitir_stock_negativo) {
+                detalles.push({
+                    etiqueta: "Política de Stock Negativo",
+                    anterior: conf.permitir_stock_negativo ? "Permitir Negativos" : "Bloquear Ventas sin Stock",
+                    nuevo: globales.permitir_stock_negativo ? "Permitir Negativos" : "Bloquear Ventas sin Stock"
+                });
+            }
+            if (conf.facturar_al_entregar !== globales.facturar_al_entregar) {
+                detalles.push({
+                    etiqueta: "Facturación al Entregar Pedidos",
+                    anterior: conf.facturar_al_entregar ? "Automática (Comprobante X)" : "Manual desde Admin",
+                    nuevo: globales.facturar_al_entregar ? "Automática (Comprobante X)" : "Manual desde Admin"
+                });
+            }
+        }
+
+        if (detalles.length > 0) {
+            setAlertaCritica({
+                open: true,
+                tipo: "COMISIONES",
+                titulo: "¿Confirmar modificación de reglas comerciales y comisiones?",
+                entidadAfectada: "Configuración Comercial Global de la Empresa",
+                subtitulo: "Vas a modificar los parámetros maestros de comisiones, límites y tratamiento de precios. Revisá los cambios antes de confirmar:",
+                detalles,
+                advertencias: [
+                    "Las futuras liquidaciones de comisiones se calcularán aplicando estas nuevas tasas.",
+                    "El cambio en comisiones afectará a todos los vendedores que utilicen la regla global.",
+                    "El cambio de IVA o stock impacta en el comportamiento de ventas en el acto."
+                ],
+                onConfirm: () => ejecutarGuardarGlobales()
+            });
+            return;
+        }
+
+        ejecutarGuardarGlobales();
+    };
+
+    const guardarUsuario = (u: any) => {
+        const comisionVal = u.comision_personalizada !== null && u.comision_personalizada !== undefined && u.comision_personalizada !== ""
+            ? Number(u.comision_personalizada)
+            : null;
+        const limiteVal = u.limite_desc_vendedor !== null && u.limite_desc_vendedor !== undefined && u.limite_desc_vendedor !== ""
+            ? Number(u.limite_desc_vendedor)
+            : null;
+
+        setAlertaCritica({
+            open: true,
+            tipo: "COMISIONES",
+            titulo: "¿Confirmar comisiones del vendedor?",
+            entidadAfectada: `Vendedor: "${u.nombre}"`,
+            subtitulo: `Vas a fijar reglas de liquidación específicas e individuales para ${u.nombre}.`,
+            detalles: [
+                {
+                    etiqueta: "Comisión Específica del Vendedor",
+                    nuevo: comisionVal !== null ? `${comisionVal}% (Personalizada)` : `Regla Global (${globales.comision}%)`,
+                    destacado: true
+                },
+                {
+                    etiqueta: "Límite de Descuento Permitido",
+                    nuevo: limiteVal !== null ? `${limiteVal}% (Personalizado)` : `Regla Global (${globales.limite}%)`
+                }
+            ],
+            advertencias: [
+                `Las comisiones de ventas y cobranzas generadas por ${u.nombre} se liquidarán con estos valores.`,
+                "Tienen prioridad sobre los parámetros globales de la empresa."
+            ],
+            onConfirm: async () => {
+                const res = await actualizarReglaUsuario(u.id, comisionVal, limiteVal);
+                if (res.success) {
+                    toast.success(`Reglas guardadas para ${u.nombre}`);
+                    setAlertaCritica(prev => ({ ...prev, open: false }));
+                    cargarDatos();
+                } else {
+                    toast.error("Error al guardar");
+                }
+            }
+        });
     };
 
     if (!data) return <div className="p-8 text-center text-slate-500 font-bold animate-pulse">Cargando panel comercial...</div>;
@@ -336,6 +473,20 @@ export default function ConfiguracionComercialPage() {
                     </table>
                 </CardContent>
             </Card>
+
+            {/* ALERTA DE CAMBIO CRÍTICO */}
+            <AlertaCambioCriticoModal
+                open={alertaCritica.open}
+                onClose={() => setAlertaCritica(prev => ({ ...prev, open: false }))}
+                onConfirmar={alertaCritica.onConfirm}
+                tipo={alertaCritica.tipo}
+                titulo={alertaCritica.titulo}
+                entidadAfectada={alertaCritica.entidadAfectada}
+                subtitulo={alertaCritica.subtitulo}
+                detalles={alertaCritica.detalles}
+                advertencias={alertaCritica.advertencias}
+                loading={isPending}
+            />
         </div>
     );
 }

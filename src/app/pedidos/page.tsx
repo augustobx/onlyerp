@@ -16,6 +16,7 @@ import {
     RefreshCw, Truck, Printer, ExternalLink, RotateCcw, AlertTriangle, Phone
 } from "lucide-react";
 import { ModuleHelpButton } from "@/components/module-help-modal";
+import { AlertaCambioCriticoModal, CambioDetalleItem } from "@/components/alerta-cambio-critico-modal";
 
 export default function AdminPedidosPage() {
     const [pedidos, setPedidos] = useState<any[]>([]);
@@ -45,6 +46,25 @@ export default function AdminPedidosPage() {
     // Modal de facturación
     const [modalFacturar, setModalFacturar] = useState(false);
     const [tipoComprobanteSeleccionado, setTipoComprobanteSeleccionado] = useState("COMPROBANTE_X");
+
+    // Alerta de confirmación crítica
+    const [alertaCritica, setAlertaCritica] = useState<{
+        open: boolean;
+        titulo: string;
+        subtitulo: string;
+        entidadAfectada: string;
+        detalles: CambioDetalleItem[];
+        advertencias: string[];
+        onConfirm: () => Promise<void> | void;
+    }>({
+        open: false,
+        titulo: "",
+        subtitulo: "",
+        entidadAfectada: "",
+        detalles: [],
+        advertencias: [],
+        onConfirm: () => {}
+    });
 
     useEffect(() => {
         cargarPedidos();
@@ -251,20 +271,46 @@ export default function AdminPedidosPage() {
         setCargando(false);
     };
 
-    const handleRecalcularPendientes = async () => {
-        if (!confirm("¿Estás seguro? Se recalcularán los costos, márgenes y redondeos de todos los pedidos PENDIENTES según las listas de precio actuales. Esto no afectará pedidos aprobados o facturados.")) return;
-
+    const ejecutarRecalculoPendientes = async () => {
         setCargando(true);
         const toastId = toast.loading("Recalculando precios pendientes...");
         
         const res = await recalcularPreciosPendientes();
         if (res.success) {
             toast.success(`Se actualizaron ${res.count} pedidos pendientes.`, { id: toastId });
+            setAlertaCritica(prev => ({ ...prev, open: false }));
             await cargarPedidos();
         } else {
             toast.error(res.error, { id: toastId });
         }
         setCargando(false);
+    };
+
+    const handleRecalcularPendientes = () => {
+        const pendientesCount = pedidos.filter(p => p.estado === 'PENDIENTE').length;
+
+        setAlertaCritica({
+            open: true,
+            titulo: "¿Recalcular precios de pedidos pendientes?",
+            entidadAfectada: `${pendientesCount} pedidos pendientes en cola`,
+            subtitulo: "Se recalcularán los costos, márgenes y redondeos de todos los pedidos pendientes según las listas de precios actuales del sistema.",
+            detalles: [
+                {
+                    etiqueta: "Pedidos a Recalcular",
+                    nuevo: `${pendientesCount} pedidos pendientes`,
+                    destacado: true
+                },
+                {
+                    etiqueta: "Regla de Actualización",
+                    nuevo: "Listas de precios y costos base vigentes hoy"
+                }
+            ],
+            advertencias: [
+                "Los totales de los pedidos pendientes se modificarán si los artículos sufrieron aumentos o rebajas recientes.",
+                "No afectará pedidos ya aprobados, armados, despachados o facturados."
+            ],
+            onConfirm: () => ejecutarRecalculoPendientes()
+        });
     };
 
     const abrirModalFacturar = () => {
@@ -1124,6 +1170,19 @@ export default function AdminPedidosPage() {
                     </div>
                 </div>
             )}
+            {/* ALERTA DE CAMBIO CRÍTICO */}
+            <AlertaCambioCriticoModal
+                open={alertaCritica.open}
+                onClose={() => setAlertaCritica(prev => ({ ...prev, open: false }))}
+                onConfirmar={alertaCritica.onConfirm}
+                tipo="PRECIOS"
+                titulo={alertaCritica.titulo}
+                entidadAfectada={alertaCritica.entidadAfectada}
+                subtitulo={alertaCritica.subtitulo}
+                detalles={alertaCritica.detalles}
+                advertencias={alertaCritica.advertencias}
+                loading={cargando}
+            />
         </div>
     );
 }

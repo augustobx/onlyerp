@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertaCambioCriticoModal, CambioDetalleItem } from "@/components/alerta-cambio-critico-modal";
 
 export default function CategoriasPage() {
     const [isPending, startTransition] = useTransition();
@@ -28,6 +29,27 @@ export default function CategoriasPage() {
     const [nombreEdicion, setNombreEdicion] = useState("");
     const [marcaIdEdicion, setMarcaIdEdicion] = useState<string>("");
     const [aumentoPorcentajeEdicion, setAumentoPorcentajeEdicion] = useState<string>("");
+
+    // Estado para Alerta de Cambio Crítico
+    const [alertaCritica, setAlertaCritica] = useState<{
+        open: boolean;
+        tipo: "PRECIOS" | "ELIMINAR";
+        titulo: string;
+        subtitulo: string;
+        entidadAfectada: string;
+        detalles: CambioDetalleItem[];
+        advertencias: string[];
+        onConfirm: () => Promise<void> | void;
+    }>({
+        open: false,
+        tipo: "PRECIOS",
+        titulo: "",
+        subtitulo: "",
+        entidadAfectada: "",
+        detalles: [],
+        advertencias: [],
+        onConfirm: () => {}
+    });
 
     const cargarDatos = () => {
         setLoading(true);
@@ -65,15 +87,13 @@ export default function CategoriasPage() {
         });
     };
 
-    const handleGuardarEdicion = () => {
-        if (!nombreEdicion.trim()) return toast.error("El nombre no puede estar vacío");
-        if (!marcaIdEdicion) return toast.error("La marca es obligatoria");
-
+    const ejecutarGuardarEdicion = () => {
         startTransition(async () => {
             const res = await actualizarCategoria(catEditando.id, nombreEdicion, Number(marcaIdEdicion), Number(aumentoPorcentajeEdicion || 0));
             if (res.success) {
                 toast.success("Categoría actualizada");
                 setCatEditando(null);
+                setAlertaCritica(prev => ({ ...prev, open: false }));
                 cargarDatos();
             } else {
                 toast.error(res.error);
@@ -81,16 +101,72 @@ export default function CategoriasPage() {
         });
     };
 
-    const handleEliminar = (id: number, nombreCat: string) => {
-        if (!confirm(`¿Estás seguro de eliminar la categoría "${nombreCat}"?`)) return;
+    const handleGuardarEdicion = () => {
+        if (!nombreEdicion.trim()) return toast.error("El nombre no puede estar vacío");
+        if (!marcaIdEdicion) return toast.error("La marca es obligatoria");
 
-        startTransition(async () => {
-            const res = await eliminarCategoria(id);
-            if (res.success) {
-                toast.success("Categoría eliminada");
-                cargarDatos();
-            } else {
-                toast.error(res.error);
+        const prevPorcentaje = Number(catEditando?.aumento_porcentaje || 0);
+        const nuevoPorcentaje = Number(aumentoPorcentajeEdicion || 0);
+        const marcaObj = marcas.find(m => String(m.id) === marcaIdEdicion);
+
+        if (prevPorcentaje !== nuevoPorcentaje) {
+            const diff = nuevoPorcentaje - prevPorcentaje;
+            setAlertaCritica({
+                open: true,
+                tipo: "PRECIOS",
+                titulo: "¿Confirmar cambio en el porcentaje de esta categoría?",
+                entidadAfectada: `Categoría: "${nombreEdicion}" ${marcaObj ? `(Marca: ${marcaObj.nombre})` : ""}`,
+                subtitulo: `Vas a modificar el porcentaje de aumento de la categoría "${nombreEdicion}". Este valor impactará en el precio de venta de todos los productos vinculados.`,
+                detalles: [
+                    {
+                        etiqueta: "Aumento Propio de Categoría",
+                        anterior: `${prevPorcentaje}%`,
+                        nuevo: `${nuevoPorcentaje}%`,
+                        nota: `Variación de ${diff > 0 ? "+" : ""}${diff.toFixed(1)}%`,
+                        destacado: true
+                    }
+                ],
+                advertencias: [
+                    "Todos los productos pertenecientes a esta categoría recalcularán su precio de venta de forma inmediata.",
+                    "Afecta precios en mostrador, ventas presenciales y catálogo B2B."
+                ],
+                onConfirm: () => ejecutarGuardarEdicion()
+            });
+            return;
+        }
+
+        ejecutarGuardarEdicion();
+    };
+
+    const handleEliminar = (id: number, nombreCat: string) => {
+        setAlertaCritica({
+            open: true,
+            tipo: "ELIMINAR",
+            titulo: "¿Eliminar categoría?",
+            entidadAfectada: `Categoría: "${nombreCat}"`,
+            subtitulo: "Estás por borrar de forma definitiva esta categoría del sistema.",
+            detalles: [
+                {
+                    etiqueta: "Categoría a Eliminar",
+                    nuevo: nombreCat,
+                    destacado: true
+                }
+            ],
+            advertencias: [
+                "Los productos vinculados a esta categoría deberán reasignarse.",
+                "Esta acción no se puede deshacer."
+            ],
+            onConfirm: () => {
+                startTransition(async () => {
+                    const res = await eliminarCategoria(id);
+                    if (res.success) {
+                        toast.success("Categoría eliminada");
+                        setAlertaCritica(prev => ({ ...prev, open: false }));
+                        cargarDatos();
+                    } else {
+                        toast.error(res.error);
+                    }
+                });
             }
         });
     };
@@ -303,6 +379,20 @@ export default function CategoriasPage() {
                     </Card>
                 </div>
             )}
+
+            {/* ALERTA DE CAMBIO CRÍTICO */}
+            <AlertaCambioCriticoModal
+                open={alertaCritica.open}
+                onClose={() => setAlertaCritica(prev => ({ ...prev, open: false }))}
+                onConfirmar={alertaCritica.onConfirm}
+                tipo={alertaCritica.tipo}
+                titulo={alertaCritica.titulo}
+                entidadAfectada={alertaCritica.entidadAfectada}
+                subtitulo={alertaCritica.subtitulo}
+                detalles={alertaCritica.detalles}
+                advertencias={alertaCritica.advertencias}
+                loading={isPending}
+            />
 
         </div>
     );

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { AlertaCambioCriticoModal, CambioDetalleItem } from "@/components/alerta-cambio-critico-modal";
 
 export default function ListasPrecioPage() {
     const [isPending, startTransition] = useTransition();
@@ -23,6 +24,27 @@ export default function ListasPrecioPage() {
     const [listaEditando, setListaEditando] = useState<any | null>(null);
     const [nombreEdicion, setNombreEdicion] = useState("");
     const [margenEdicion, setMargenEdicion] = useState("");
+
+    // Estado para Alerta de Cambio Crítico
+    const [alertaCritica, setAlertaCritica] = useState<{
+        open: boolean;
+        tipo: "PRECIOS" | "ELIMINAR";
+        titulo: string;
+        subtitulo: string;
+        entidadAfectada: string;
+        detalles: CambioDetalleItem[];
+        advertencias: string[];
+        onConfirm: () => Promise<void> | void;
+    }>({
+        open: false,
+        tipo: "PRECIOS",
+        titulo: "",
+        subtitulo: "",
+        entidadAfectada: "",
+        detalles: [],
+        advertencias: [],
+        onConfirm: () => {}
+    });
 
     const cargarListas = () => {
         setLoading(true);
@@ -59,10 +81,7 @@ export default function ListasPrecioPage() {
         });
     };
 
-    const handleGuardarEdicion = () => {
-        if (!nombreEdicion.trim()) return toast.error("El nombre no puede estar vacío");
-        if (!margenEdicion || Number(margenEdicion) < 0) return toast.error("Margen inválido");
-
+    const ejecutarGuardarEdicion = () => {
         startTransition(async () => {
             const res = await actualizarListaPrecioGlobal(listaEditando.id, {
                 nombre: nombreEdicion,
@@ -70,8 +89,9 @@ export default function ListasPrecioPage() {
             });
 
             if (res.success) {
-                toast.success("Tarifario actualizado", { description: "Los productos adoptarán este nuevo margen si no tienen uno propio." });
+                toast.success("Tarifario actualizado", { description: "Los productos adoptaron el nuevo margen correctamente." });
                 setListaEditando(null);
+                setAlertaCritica(prev => ({ ...prev, open: false }));
                 cargarListas();
             } else {
                 toast.error(res.error);
@@ -79,16 +99,85 @@ export default function ListasPrecioPage() {
         });
     };
 
-    const handleEliminar = (id: number, nombreLista: string) => {
-        if (!confirm(`¿Estás seguro de eliminar el tarifario "${nombreLista}"? Esto afectará a los clientes que la tengan asignada.`)) return;
+    const handleGuardarEdicion = () => {
+        if (!nombreEdicion.trim()) return toast.error("El nombre no puede estar vacío");
+        if (!margenEdicion || Number(margenEdicion) < 0) return toast.error("Margen inválido");
 
-        startTransition(async () => {
-            const res = await eliminarListaPrecioGlobal(id);
-            if (res.success) {
-                toast.success("Tarifario eliminado");
-                cargarListas();
-            } else {
-                toast.error(res.error);
+        const margenAnt = Number(listaEditando.margen_defecto);
+        const margenNuevo = Number(margenEdicion);
+        const nombreAnt = listaEditando.nombre;
+        const nombreNuevo = nombreEdicion.trim();
+
+        // Si cambió el margen o el nombre, solicitar confirmación explícita
+        if (margenAnt !== margenNuevo || nombreAnt !== nombreNuevo) {
+            const detalles: CambioDetalleItem[] = [];
+            if (margenAnt !== margenNuevo) {
+                const diff = margenNuevo - margenAnt;
+                detalles.push({
+                    etiqueta: "Margen de Ganancia General",
+                    anterior: `+${margenAnt}%`,
+                    nuevo: `+${margenNuevo}%`,
+                    nota: `Variación de ${diff > 0 ? "+" : ""}${diff.toFixed(1)}% sobre el costo`,
+                    destacado: true
+                });
+            }
+            if (nombreAnt !== nombreNuevo) {
+                detalles.push({
+                    etiqueta: "Nombre de la Lista",
+                    anterior: nombreAnt,
+                    nuevo: nombreNuevo
+                });
+            }
+
+            setAlertaCritica({
+                open: true,
+                tipo: "PRECIOS",
+                titulo: "¿Confirmar cambio en toda esta lista de precios?",
+                entidadAfectada: `Tarifario: "${nombreAnt}"`,
+                subtitulo: `Vas a modificar el margen de ganancia de toda la lista "${nombreAnt}". Esto recalculará de forma inmediata el precio de venta de todos los productos que pertenezcan a este tarifario.`,
+                detalles,
+                advertencias: [
+                    "Todos los artículos asignados a esta lista adoptarán el nuevo margen automáticamente.",
+                    "El cambio impactará de inmediato en el mostrador de ventas y en el portal mayorista B2B.",
+                    "Los clientes asignados a este tarifario verán los precios actualizados en su próxima consulta."
+                ],
+                onConfirm: () => ejecutarGuardarEdicion()
+            });
+            return;
+        }
+
+        ejecutarGuardarEdicion();
+    };
+
+    const handleEliminar = (id: number, nombreLista: string) => {
+        setAlertaCritica({
+            open: true,
+            tipo: "ELIMINAR",
+            titulo: "¿Eliminar lista de precios?",
+            entidadAfectada: `Tarifario: "${nombreLista}"`,
+            subtitulo: "Estás por borrar de forma definitiva este tarifario del sistema.",
+            detalles: [
+                {
+                    etiqueta: "Lista de Precios a Borrar",
+                    nuevo: nombreLista,
+                    destacado: true
+                }
+            ],
+            advertencias: [
+                "Los clientes y ventas asignados a esta lista deberán utilizar el precio base o reasignarse a otra lista.",
+                "Esta acción no se puede deshacer si no hay productos bloqueándola."
+            ],
+            onConfirm: () => {
+                startTransition(async () => {
+                    const res = await eliminarListaPrecioGlobal(id);
+                    if (res.success) {
+                        toast.success("Tarifario eliminado");
+                        setAlertaCritica(prev => ({ ...prev, open: false }));
+                        cargarListas();
+                    } else {
+                        toast.error(res.error);
+                    }
+                });
             }
         });
     };
@@ -270,6 +359,20 @@ export default function ListasPrecioPage() {
                     </Card>
                 </div>
             )}
+
+            {/* ALERTA DE CAMBIO CRÍTICO */}
+            <AlertaCambioCriticoModal
+                open={alertaCritica.open}
+                onClose={() => setAlertaCritica(prev => ({ ...prev, open: false }))}
+                onConfirmar={alertaCritica.onConfirm}
+                tipo={alertaCritica.tipo}
+                titulo={alertaCritica.titulo}
+                entidadAfectada={alertaCritica.entidadAfectada}
+                subtitulo={alertaCritica.subtitulo}
+                detalles={alertaCritica.detalles}
+                advertencias={alertaCritica.advertencias}
+                loading={isPending}
+            />
 
         </div>
     );

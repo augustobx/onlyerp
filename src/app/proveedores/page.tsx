@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertaCambioCriticoModal, CambioDetalleItem } from "@/components/alerta-cambio-critico-modal";
 
 export default function ProveedoresPage() {
     const [isPending, startTransition] = useTransition();
@@ -48,6 +49,28 @@ export default function ProveedoresPage() {
     const [categoriaSeleccionadaMasiva, setCategoriaSeleccionadaMasiva] = useState<string>("");
     const [porcentajeMasivo, setPorcentajeMasivo] = useState<string>("");
     const [accionMasiva, setAccionMasiva] = useState<"AUMENTO" | "REBAJA">("AUMENTO");
+
+    // Estado para Alerta de Cambio Crítico
+    const [alertaCritica, setAlertaCritica] = useState<{
+        open: boolean;
+        tipo: "PRECIOS" | "MARCA" | "ELIMINAR";
+        titulo: string;
+        subtitulo: string;
+        entidadAfectada: string;
+        detalles: CambioDetalleItem[];
+        advertencias: string[];
+        textoConfirmar?: string;
+        onConfirm: () => Promise<void> | void;
+    }>({
+        open: false,
+        tipo: "PRECIOS",
+        titulo: "",
+        subtitulo: "",
+        entidadAfectada: "",
+        detalles: [],
+        advertencias: [],
+        onConfirm: () => {}
+    });
 
     const cargarDatos = () => {
         startTransition(async () => {
@@ -103,16 +126,13 @@ export default function ProveedoresPage() {
         setShowModal(true);
     };
 
-    const handleGuardarProveedor = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        if (provEditando) formData.append("id", String(provEditando.id));
-
+    const ejecutarGuardarProveedor = (formData: FormData) => {
         startTransition(async () => {
             const res = await guardarProveedor(formData);
             if (res.success) {
                 toast.success("Proveedor guardado correctamente.");
                 setShowModal(false);
+                setAlertaCritica(prev => ({ ...prev, open: false }));
                 cargarDatos();
             } else {
                 toast.error(res.error);
@@ -120,38 +140,130 @@ export default function ProveedoresPage() {
         });
     };
 
-    // Marca CRUD handlers
-    const handleGuardarMarca = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleGuardarProveedor = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
-        formData.append("proveedorId", String(marcaProvId));
-        if (marcaEditando) formData.append("id", String(marcaEditando.id));
+        if (provEditando) formData.append("id", String(provEditando.id));
+
+        const nombre = (formData.get("nombre") as string) || "Proveedor";
+        const nuevoPorcentaje = Number(formData.get("aumento_porcentaje") || 0);
+        const prevPorcentaje = Number(provEditando?.aumento_porcentaje || 0);
+
+        if (provEditando && prevPorcentaje !== nuevoPorcentaje) {
+            const diff = nuevoPorcentaje - prevPorcentaje;
+            setAlertaCritica({
+                open: true,
+                tipo: "PRECIOS",
+                titulo: "¿Confirmar cambio en el porcentaje de este proveedor?",
+                entidadAfectada: `Proveedor: "${nombre}"`,
+                subtitulo: `Vas a modificar el porcentaje de aumento del proveedor "${nombre}". Se aplicará en cascada a todos los artículos asociados.`,
+                detalles: [
+                    {
+                        etiqueta: "Aumento General del Proveedor",
+                        anterior: `${prevPorcentaje}%`,
+                        nuevo: `${nuevoPorcentaje}%`,
+                        nota: `Variación de ${diff > 0 ? "+" : ""}${diff.toFixed(1)}% en cascada`,
+                        destacado: true
+                    }
+                ],
+                advertencias: [
+                    "Se recalculará el precio de venta en cascada para todos los productos de este proveedor.",
+                    "Afecta ventas presenciales en mostrador, pedidos preventistas y portal B2B."
+                ],
+                onConfirm: () => ejecutarGuardarProveedor(formData)
+            });
+            return;
+        }
+
+        ejecutarGuardarProveedor(formData);
+    };
+
+    // Marca CRUD handlers
+    const ejecutarGuardarMarca = (formData: FormData) => {
         startTransition(async () => {
             const res = await guardarMarca(formData);
             if (res.success) {
                 toast.success("Marca guardada.");
                 setShowMarcaModal(false);
+                setAlertaCritica(prev => ({ ...prev, open: false }));
                 cargarDatos();
-            } else { toast.error(res.error); }
+            } else {
+                toast.error(res.error);
+            }
         });
     };
 
-    const handleEliminarMarca = (id: number) => {
-        if (!confirm("¿Eliminar esta marca?")) return;
-        startTransition(async () => {
-            const res = await eliminarMarca(id);
-            if (res.success) { toast.success("Marca eliminada."); cargarDatos(); }
-            else toast.error(res.error);
+    const handleGuardarMarca = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        formData.append("proveedorId", String(marcaProvId));
+        if (marcaEditando) formData.append("id", String(marcaEditando.id));
+
+        const nombre = (formData.get("nombre") as string) || "Marca";
+        const nuevoPorcentaje = Number(formData.get("aumento_porcentaje") || 0);
+        const prevPorcentaje = Number(marcaEditando?.aumento_porcentaje || 0);
+        const provPadre = proveedores.find(p => p.id === marcaProvId);
+
+        // Si cambió el porcentaje de la marca, solicitar confirmación explícita
+        if (marcaEditando && prevPorcentaje !== nuevoPorcentaje) {
+            const diff = nuevoPorcentaje - prevPorcentaje;
+            setAlertaCritica({
+                open: true,
+                tipo: "MARCA",
+                titulo: "¿Confirmar cambio en el % de esta marca?",
+                entidadAfectada: `Marca: "${nombre}" ${provPadre ? `(Proveedor: ${provPadre.nombre})` : ""}`,
+                subtitulo: `Vas a cambiar el porcentaje de aumento de la marca "${nombre}". Este valor impactará de forma automática en el precio de venta de todos los productos vinculados a esta marca.`,
+                detalles: [
+                    {
+                        etiqueta: "Porcentaje de Aumento de Marca",
+                        anterior: `${prevPorcentaje}%`,
+                        nuevo: `${nuevoPorcentaje}%`,
+                        nota: `Variación de ${diff > 0 ? "+" : ""}${diff.toFixed(1)}% sobre los productos de la marca`,
+                        destacado: true
+                    }
+                ],
+                advertencias: [
+                    "Todos los productos de esta marca recalcularán su precio de venta inmediatamente.",
+                    "El cambio impacta en el mostrador de ventas, pedidos preventistas y catálogo B2B.",
+                    "Se acumula con el aumento propio del proveedor y categoría si corresponden."
+                ],
+                onConfirm: () => ejecutarGuardarMarca(formData)
+            });
+            return;
+        }
+
+        ejecutarGuardarMarca(formData);
+    };
+
+    const handleEliminarMarca = (id: number, nombreMarca?: string) => {
+        setAlertaCritica({
+            open: true,
+            tipo: "ELIMINAR",
+            titulo: "¿Eliminar marca?",
+            entidadAfectada: nombreMarca ? `Marca: "${nombreMarca}"` : "Marca seleccionada",
+            subtitulo: "Estás a punto de borrar esta marca del catálogo.",
+            detalles: [{ etiqueta: "Marca a Eliminar", nuevo: nombreMarca || `#${id}`, destacado: true }],
+            advertencias: [
+                "Los productos que pertenezcan a esta marca no podrán ser eliminados si tienen movimientos.",
+                "Esta acción es irreversible."
+            ],
+            onConfirm: () => {
+                startTransition(async () => {
+                    const res = await eliminarMarca(id);
+                    if (res.success) {
+                        toast.success("Marca eliminada.");
+                        setAlertaCritica(prev => ({ ...prev, open: false }));
+                        cargarDatos();
+                    } else {
+                        toast.error(res.error);
+                    }
+                });
+            }
         });
     };
 
     // Categoria CRUD handlers inside Proveedor UI
-    const handleGuardarCategoria = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        const nombre = formData.get("nombre") as string;
-        const aumento_porcentaje = Number(formData.get("aumento_porcentaje") || 0);
-
+    const ejecutarGuardarCategoria = (nombre: string, aumento_porcentaje: number) => {
         startTransition(async () => {
             let res;
             if (categoriaEditando) {
@@ -163,6 +275,7 @@ export default function ProveedoresPage() {
             if (res.success) {
                 toast.success("Categoría guardada.");
                 setShowCategoriaModal(false);
+                setAlertaCritica(prev => ({ ...prev, open: false }));
                 cargarDatos();
             } else {
                 toast.error(res.error);
@@ -170,12 +283,65 @@ export default function ProveedoresPage() {
         });
     };
 
-    const handleEliminarCategoria = (id: number) => {
-        if (!confirm("¿Eliminar esta categoría?")) return;
-        startTransition(async () => {
-            const res = await eliminarCategoria(id);
-            if (res.success) { toast.success("Categoría eliminada."); cargarDatos(); }
-            else toast.error(res.error);
+    const handleGuardarCategoria = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const nombre = formData.get("nombre") as string;
+        const aumento_porcentaje = Number(formData.get("aumento_porcentaje") || 0);
+        const prevPorcentaje = Number(categoriaEditando?.aumento_porcentaje || 0);
+
+        if (categoriaEditando && prevPorcentaje !== aumento_porcentaje) {
+            const diff = aumento_porcentaje - prevPorcentaje;
+            setAlertaCritica({
+                open: true,
+                tipo: "PRECIOS",
+                titulo: "¿Confirmar cambio en el % de esta categoría?",
+                entidadAfectada: `Categoría: "${nombre}"`,
+                subtitulo: `Vas a modificar el porcentaje de aumento de la categoría "${nombre}".`,
+                detalles: [
+                    {
+                        etiqueta: "Aumento Propio de Categoría",
+                        anterior: `${prevPorcentaje}%`,
+                        nuevo: `${aumento_porcentaje}%`,
+                        nota: `Variación de ${diff > 0 ? "+" : ""}${diff.toFixed(1)}%`,
+                        destacado: true
+                    }
+                ],
+                advertencias: [
+                    "Se recalculará el precio de venta de todos los productos pertenecientes a esta categoría."
+                ],
+                onConfirm: () => ejecutarGuardarCategoria(nombre, aumento_porcentaje)
+            });
+            return;
+        }
+
+        ejecutarGuardarCategoria(nombre, aumento_porcentaje);
+    };
+
+    const handleEliminarCategoria = (id: number, nombreCat?: string) => {
+        setAlertaCritica({
+            open: true,
+            tipo: "ELIMINAR",
+            titulo: "¿Eliminar categoría?",
+            entidadAfectada: nombreCat ? `Categoría: "${nombreCat}"` : "Categoría seleccionada",
+            subtitulo: "Estás a punto de borrar esta categoría del catálogo.",
+            detalles: [{ etiqueta: "Categoría a Eliminar", nuevo: nombreCat || `#${id}`, destacado: true }],
+            advertencias: [
+                "Los productos vinculados a esta categoría deberán ser reasignados.",
+                "Esta acción es irreversible."
+            ],
+            onConfirm: () => {
+                startTransition(async () => {
+                    const res = await eliminarCategoria(id);
+                    if (res.success) {
+                        toast.success("Categoría eliminada.");
+                        setAlertaCritica(prev => ({ ...prev, open: false }));
+                        cargarDatos();
+                    } else {
+                        toast.error(res.error);
+                    }
+                });
+            }
         });
     };
 
@@ -189,27 +355,72 @@ export default function ProveedoresPage() {
         if (!provSeleccionadoMasivo) return toast.error("Debe seleccionar un proveedor.");
         if (!porcentajeMasivo || Number(porcentajeMasivo) <= 0) return toast.error("Ingrese un porcentaje válido.");
 
-        const provNombre = provMasivo?.nombre;
+        const provNombre = provMasivo?.nombre || "Proveedor seleccionado";
         const txtAccion = accionMasiva === "AUMENTO" ? "AUMENTAR" : "REBAJAR";
+        const marcaNombre = marcaMasiva?.nombre;
+        const catNombre = categoriasMasivo.find((c: any) => String(c.id) === categoriaSeleccionadaMasiva)?.nombre;
 
-        if (!confirm(`⚠️ ATENCIÓN: ¿Está seguro de ${txtAccion} un ${porcentajeMasivo}% el costo de los productos seleccionados de ${provNombre}? Esto afectará los precios de mostrador inmediatamente.`)) return;
+        const detalles: CambioDetalleItem[] = [
+            {
+                etiqueta: "Proveedor Afectado",
+                nuevo: provNombre,
+                destacado: true
+            }
+        ];
 
-        startTransition(async () => {
-            const res = await actualizarPreciosMasivos(
-                Number(provSeleccionadoMasivo),
-                Number(porcentajeMasivo),
-                accionMasiva,
-                marcaSeleccionadaMasiva ? Number(marcaSeleccionadaMasiva) : undefined,
-                categoriaSeleccionadaMasiva ? Number(categoriaSeleccionadaMasiva) : undefined
-            );
-            if (res.success) {
-                toast.success(`¡Actualización completada!`, { description: `Se modificaron ${res.count} productos.` });
-                setPorcentajeMasivo("");
-                setProvSeleccionadoMasivo("");
-                setMarcaSeleccionadaMasiva("");
-                setCategoriaSeleccionadaMasiva("");
-            } else {
-                toast.error(res.error);
+        if (marcaNombre) {
+            detalles.push({
+                etiqueta: "Filtro por Marca",
+                nuevo: marcaNombre
+            });
+        }
+
+        if (catNombre) {
+            detalles.push({
+                etiqueta: "Filtro por Categoría",
+                nuevo: catNombre
+            });
+        }
+
+        detalles.push({
+            etiqueta: "Operación sobre Costo Base",
+            nuevo: `${accionMasiva === "AUMENTO" ? "+" : "-"}${porcentajeMasivo}% (${txtAccion})`,
+            destacado: true
+        });
+
+        setAlertaCritica({
+            open: true,
+            tipo: "PRECIOS",
+            titulo: `¿Confirmar ${txtAccion.toLowerCase()} masivo de precios?`,
+            entidadAfectada: `Proveedor: ${provNombre} ${marcaNombre ? `· Marca: ${marcaNombre}` : ""}`,
+            subtitulo: `Vas a ${txtAccion.toLowerCase()} un ${porcentajeMasivo}% el costo base de los productos seleccionados de ${provNombre}. Esto recalculará de inmediato los precios de venta de mostrador y pedidos.`,
+            detalles,
+            advertencias: [
+                "Los precios de costo se actualizarán de forma inmediata en la base de datos.",
+                "Todas las listas de precios calculadas sobre el costo base se actualizarán al instante.",
+                "Los cambios quedarán auditados en el historial de precios y kardex."
+            ],
+            textoConfirmar: `Confirmar ${txtAccion} de ${porcentajeMasivo}%`,
+            onConfirm: () => {
+                startTransition(async () => {
+                    const res = await actualizarPreciosMasivos(
+                        Number(provSeleccionadoMasivo),
+                        Number(porcentajeMasivo),
+                        accionMasiva,
+                        marcaSeleccionadaMasiva ? Number(marcaSeleccionadaMasiva) : undefined,
+                        categoriaSeleccionadaMasiva ? Number(categoriaSeleccionadaMasiva) : undefined
+                    );
+                    if (res.success) {
+                        toast.success(`¡Actualización completada!`, { description: `Se modificaron ${res.count} productos.` });
+                        setPorcentajeMasivo("");
+                        setProvSeleccionadoMasivo("");
+                        setMarcaSeleccionadaMasiva("");
+                        setCategoriaSeleccionadaMasiva("");
+                        setAlertaCritica(prev => ({ ...prev, open: false }));
+                    } else {
+                        toast.error(res.error);
+                    }
+                });
             }
         });
     };
@@ -631,6 +842,21 @@ export default function ProveedoresPage() {
                     </Card>
                 </div>
             )}
+
+            {/* ALERTA DE CAMBIO CRÍTICO */}
+            <AlertaCambioCriticoModal
+                open={alertaCritica.open}
+                onClose={() => setAlertaCritica(prev => ({ ...prev, open: false }))}
+                onConfirmar={alertaCritica.onConfirm}
+                tipo={alertaCritica.tipo}
+                titulo={alertaCritica.titulo}
+                entidadAfectada={alertaCritica.entidadAfectada}
+                subtitulo={alertaCritica.subtitulo}
+                detalles={alertaCritica.detalles}
+                advertencias={alertaCritica.advertencias}
+                textoConfirmar={alertaCritica.textoConfirmar}
+                loading={isPending}
+            />
 
         </div>
     );
